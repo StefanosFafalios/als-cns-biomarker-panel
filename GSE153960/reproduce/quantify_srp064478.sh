@@ -9,20 +9,20 @@
 #   Salmon index: built from Ensembl GRCh38 release 111 cDNA (see below)
 #
 # Build Salmon index (one-time, ~15 min, ~8 GB disk):
-#   mkdir -p als_analysis/resources/SRP064478/index
+#   mkdir -p resources/SRP064478/index
 #   wget -O /tmp/hg38_cdna.fa.gz \
 #     https://ftp.ensembl.org/pub/release-111/fasta/homo_sapiens/cdna/Homo_sapiens.GRCh38.cdna.all.fa.gz
 #   conda run -n als_pipeline salmon index \
 #     -t /tmp/hg38_cdna.fa.gz \
-#     -i als_analysis/resources/SRP064478/index/salmon_hg38 \
+#     -i resources/SRP064478/index/salmon_hg38 \
 #     --gencode -p 8
 #
-# Run from coffeeBreak project root:
-#   bash als_analysis/GSE153960/reproduce/quantify_srp064478.sh
+# Run from repository root:
+#   bash GSE153960/reproduce/quantify_srp064478.sh
 # =============================================================================
 set -euo pipefail
 
-PIPELINE="$(cd "$(dirname "$0")/../../.." && pwd)/als_analysis/resources/SRP064478/run_parallel.sh"
+PIPELINE="$(cd "$(dirname "$0")/../.." && pwd)/resources/SRP064478/run_parallel.sh"
 
 if [[ ! -f "$PIPELINE" ]]; then
     echo "ERROR: run_parallel.sh not found at $PIPELINE"

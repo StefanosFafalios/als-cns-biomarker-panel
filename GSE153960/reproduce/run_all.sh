@@ -7,26 +7,26 @@
 #   manuscript.tex
 #   supplementary.tex
 #
-# Usage (from coffeeBreak project root):
-#   bash als_analysis/GSE153960/reproduce/run_all.sh           # run everything
-#   bash als_analysis/GSE153960/reproduce/run_all.sh fast      # skip Steps 1, 2b (~15h budget)
-#   bash als_analysis/GSE153960/reproduce/run_all.sh from 24   # resume from step 24
+# Usage (from repository root):
+#   bash GSE153960/reproduce/run_all.sh           # run everything
+#   bash GSE153960/reproduce/run_all.sh fast      # skip Step 2 (feature-matrix rebuild)
+#   bash GSE153960/reproduce/run_all.sh from 24   # resume from step 24
 #
 # Prerequisites:
-#   1. conda env: conda env create -f als_analysis/GSE153960/reproduce/environment_als.yml
-#   2. GEO data in als_analysis/resources/    (bash download_geo_data.sh)
+#   1. conda env: conda env create -f GSE153960/reproduce/environment_als.yml
+#   2. GEO data in resources/    (bash download_geo_data.sh)
 #   3. SRP064478 Salmon quantification         (bash quantify_srp064478.sh) -- Step 22 only
 #
-# Each step writes its outputs to als_analysis/GSE153960/ alongside the script.
+# Each step writes its outputs to GSE153960/ alongside the script.
 # Step-by-step runtimes are indicated next to each invocation (wall-clock,
-# 24-core workstation). Steps 1 and 2b run BayesianOptimizer (~10h and ~5h).
+# 24-core workstation). The two BayesianOptimizer steps are omitted (outputs cached as JSON); Step 2 regenerates lgbm_prefilter_X.npy (~2h).
 # =============================================================================
 set -euo pipefail
 
-PROJ_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+PROJ_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CONDA_ENV="als-cns-panel"
 RUN="conda run -n $CONDA_ENV python"
-SCRIPT_DIR="$PROJ_ROOT/als_analysis/GSE153960"
+SCRIPT_DIR="$PROJ_ROOT/GSE153960"
 LOG_DIR="$SCRIPT_DIR/reproduce/logs"
 mkdir -p "$LOG_DIR"
 
@@ -98,7 +98,7 @@ run_step "05_external_gse76220"       external_validation_gse76220.py       "~5m
 run_step "05b_additional_gse122649"   additional_cohort_gse122649.py        "~10m (with-replacement dict mirrors step 29)"
 
 # Step 22: SRP064478 requires prior Salmon quantification (see quantify_srp064478.sh)
-if find "$PROJ_ROOT/als_analysis/resources/SRP064478/quant" -name "quant.sf" 2>/dev/null | \
+if find "$PROJ_ROOT/resources/SRP064478/quant" -name "quant.sf" 2>/dev/null | \
    wc -l | grep -q "^15$"; then
     run_step "22_external_srp064478"  srp064478_validation.py               "~5m"
     run_step "22a_srp064478_figure"   srp064478_figure.py                   "<5m"
@@ -209,7 +209,7 @@ run_step "29_adaptive_panel"          adaptive_panel_validation.py          "~10
 # composition, #4 random-panel null for transfer, #6 OpenTargets genetic support.
 # Prereq for #3/#2: BRETIGEA R package + exported markers --
 #   Rscript -e 'install.packages("BRETIGEA"); library(BRETIGEA); \
-#     write.csv(markers_df_brain,"als_analysis/GSE153960/bretigea_markers.csv",row.names=FALSE)'
+#     write.csv(markers_df_brain,"GSE153960/bretigea_markers.csv",row.names=FALSE)'
 # #3 depends on 11 (legacy z-score concordance); #2 imports the estimator from #3.
 # =============================================================================
 run_step "11b_deconv_bretigea"        deconv_reference_bretigea.py          "~5m (needs bretigea_markers.csv + step 11)"

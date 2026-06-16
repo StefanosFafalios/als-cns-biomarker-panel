@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Download all GEO datasets required for the ALS analysis.
-# Run from the coffeeBreak project root before running run_all.sh.
+# Run from the repository root before running run_all.sh.
 #
 # Total download size: ~2 GB (series matrices + supplementary count files)
 # =============================================================================
 set -euo pipefail
 
-RES="$(cd "$(dirname "$0")/../../.." && pwd)/als_analysis/resources"
+RES="$(cd "$(dirname "$0")/../.." && pwd)/resources"
 
 dl() {
     local dest="$1"; local url="$2"
@@ -54,4 +54,4 @@ dl "$RES/GSE67196/GSE67196_rawcount.txt.gz" \
    "$GEO_FTP/GSE67nnn/GSE67196/suppl/GSE67196_rawcount.txt.gz"
 
 echo "Done. All GEO files downloaded to $RES"
-echo "Next: run als_analysis/GSE153960/reproduce/run_all.sh"
+echo "Next: run GSE153960/reproduce/run_all.sh"
