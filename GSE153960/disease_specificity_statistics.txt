@@ -1,0 +1,25 @@
+Disease Specificity Analysis — GSE153960 GPL24676
+=================================================================
+Training set : ALS Spectrum MND (pure + ALS-FTD) vs Non-Neurological Control
+  ALS in training : 684 (pure ALS=522, ALS-FTD=162)
+  Control         : 190
+Panel genes used  : 25/25
+
+Group score distributions (honest: OOF for training groups, zero-shot for FTLD/PSP):
+  ALS (pure)                     n=522  median=0.9997  mean=0.9434  IQR=[0.9942,1.0000]
+  ALS-FTD                        n=162  median=0.9996  mean=0.9122  IQR=[0.9881,1.0000]
+  Control                        n=190  median=0.1096  mean=0.3172  IQR=[0.0091,0.6471]
+  FTLD/PSP                       n=125  median=0.5683  mean=0.5748  IQR=[0.2816,0.9292]
+
+Train 5-fold CV AUC          : 0.9621
+AUC ALS (pure) vs FTLD/PSP   : 0.9067
+Bootstrap 95% CI             : [0.8807, 0.9305]  (n=2000)
+AUC ALS vs Control (5-fold CV): 0.9348  Bootstrap 95% CI [0.9157, 0.9512]  (reference)
+
+Mann-Whitney U (FTLD/PSP < ALS pure) : p=1.098e-45
+Mann-Whitney U (FTLD/PSP > Control)  : p=9.228e-11
+Mann-Whitney U (ALS-FTD ≠ ALS pure)  : p=3.642e-01
+
+Caution: 'Other Neurological Disorders' in GEO is a mixed group
+(FTLD-TDP + PSP not sub-typed). Sub-type breakdown requires
+paper supplementary metadata (Prudencio et al. 2020, PNAS).

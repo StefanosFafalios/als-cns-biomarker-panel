@@ -1,0 +1,13 @@
+LR vs LGBM baseline — discrimination and calibration
+============================================================
+           cohort model   n    AUC  brier  log_loss  mean_pos  mean_neg
+ GPL24676_5foldCV  LGBM 874 0.9605 0.0657    0.2897    0.9522    0.2446
+ GPL24676_5foldCV LR_L2 874 0.9265 0.0829    0.2769    0.8919    0.3670
+GPL16791_zeroshot  LGBM 636 0.7824 0.1351    0.9354    0.9149    0.5891
+GPL16791_zeroshot LR_L2 636 0.7709 0.1291    0.4454    0.8388    0.4998
+
+Interpretation:
+  - If LR matches or beats LGBM on GPL16791 zero-shot, the LGBM
+    advantage is GPL24676-specific (non-transferable interactions).
+  - If LGBM clearly beats LR, the gradient-boosted non-linear
+    structure is genuine cross-platform signal.

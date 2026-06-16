@@ -1,0 +1,33 @@
+name: als-cns-panel
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.13
+  - numpy>=2.4
+  - scipy>=1.14
+  - scikit-learn>=1.5
+  - pandas>=2.2
+  - matplotlib>=3.9
+  - lightgbm>=4.5
+  - joblib>=1.3
+  - h5py>=3.0               # 10x .h5 snRNA matrices (single-nucleus validation, Step 31)
+  - pip>=24
+  - pip:
+      - shap>=0.52.0           # SHAP values (Steps 2, 2c, 2d)
+      - gseapy>=1.2.0          # GSEA / ORA (Steps 6, 13)
+      - mygene>=3.2.0          # gene annotation (Step 3a)
+      - networkx>=3.6          # network analysis (string_network)
+      - requests>=2.30         # REST APIs (DGIdb, OpenTargets — Step 7)
+      - causal-learn>=0.1.4    # IAMB Markov Blanket (Step 19)
+      - optuna>=3.0            # BayesianOptimizer dependency
+      - dask[distributed]>=2024.1
+      - bokeh>=3.1
+      - termcolor>=2.4
+
+# External (non-Python) prerequisite for the reference-based deconvolution
+# (Step 11b, deconv_reference_bretigea.py): R with the BRETIGEA package, used
+# only to export the validated brain cell-type marker table. Install once:
+#   Rscript -e 'install.packages("BRETIGEA", repos="https://cloud.r-project.org"); \
+#     library(BRETIGEA); write.csv(markers_df_brain, \
+#     "als_analysis/GSE153960/bretigea_markers.csv", row.names=FALSE)'

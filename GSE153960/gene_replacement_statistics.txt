@@ -1,0 +1,42 @@
+Gene Replacement Analysis — Core 25-Gene ALS Panel
+========================================================================
+Baseline panel AUC (5-fold CV):    0.9469
+Non-inferiority tolerance DELTA:   0.002
+Replacement threshold AUC:         0.9449
+Correlation FWER:                  α = 0.01 (Bonferroni)
+Bonferroni α per test:             2.092e-07
+|r| Bonferroni threshold:          0.1745
+|r| effect-size threshold (R_MIN): 0.5  [r² ≥ 0.25]
+MAX_CORR_CANDS cap:               200
+SHAP non-panel pool:               475 genes
+
+Gene              n_corr  n_shap   n_tot  n_repl   repl%       best_replacement   best_AUC
+----------------------------------------------------------------------------------------
+MECOM                  8     474     481     479  99.6%        ENSG00000166884     0.9693
+HERC2P8               75     474     545     362  66.4%        ENSG00000223821     0.9658
+SMG1P5               201     474     674     336  49.9%        ENSG00000223821     0.9671
+SERTAD1              201     474     670     162  24.2%        ENSG00000250252     0.9653
+RPL21P75               1     474     474     379  80.0%        ENSG00000166884     0.9665
+FCN3                   1     474     474     383  80.8%        ENSG00000171053     0.9671
+PROS1                201     474     668     667  99.9%        ENSG00000166884     0.9656
+ANGPT2                 1     474     474     402  84.8%        ENSG00000171053     0.9676
+MAP3K2-DT              1     474     474     424  89.5%        ENSG00000223821     0.9678
+EMP1                 201     474     665     324  48.7%        ENSG00000223821     0.9659
+SNORD97                1     474     474     448  94.5%        ENSG00000171053     0.9663
+TINAGL1               21     474     493     109  22.1%        ENSG00000223821     0.9652
+CKMT2                201     474     668     109  16.3%        ENSG00000233190     0.9637
+ENSG00000280893        1     474     474     473  99.8%        ENSG00000166884     0.9683
+VWF                   58     474     527     505  95.8%        ENSG00000223821     0.9666
+CLDN5                 10     474     483     350  72.5%        ENSG00000223821     0.9656
+NR4A1                 37     474     509      99  19.4%        ENSG00000223821     0.9659
+RPL15P11               1     474     474     456  96.2%        ENSG00000166884     0.9687
+SOHLH2               201     474     673     483  71.8%        ENSG00000171053     0.9656
+RHOT1P2                4     474     477     302  63.3%        ENSG00000171053     0.9670
+HEXB                 201     474     663     663 100.0%        ENSG00000171053     0.9695
+ENSG00000279656        1     474     474     409  86.3%        ENSG00000166884     0.9679
+LOC112268270          41     474     514     435  84.6%        ENSG00000166884     0.9680
+MCEE                 201     474     674     631  93.6%        ENSG00000223821     0.9646
+SLC37A2              201     474     673     477  70.9%        ENSG00000166884     0.9681
+
+Panel genes with ≥1 valid replacement: 25/25
+Panel genes with 0 valid replacements:  0/25  [uniquely irreplaceable within candidate pool]

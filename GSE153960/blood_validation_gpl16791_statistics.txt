@@ -1,0 +1,26 @@
+Zero-shot Cross-platform Validation: GPL24676 → GPL16791
+=================================================================
+Training set  : GSE153960 GPL24676  n=874  ALS=684  Ctrl=190
+Test set      : GSE153960 GPL16791  n=636  ALS=546  Ctrl=90
+Panel         : 25 genes
+Preprocessing : log1p → CTD compartment regression (erythrocyte/platelet/endothelial PC1)
+
+Train 5-fold CV AUC        : 0.9621
+Test AUC (zero-shot)       : 0.7824
+Bootstrap 95% CI           : [0.7305, 0.8317]  (n=2000)
+Youden threshold           : 0.9986
+Sensitivity                : 0.7344
+Specificity                : 0.7222
+TN=65  FP=25  FN=145  TP=401
+
+Per-tissue AUC (GPL16791):
+  Cortex Temporal                          n=  7  AUC=1.0000
+  Spinal Cord Cervical                     n= 73  AUC=0.9071
+  Spinal Cord Thoracic                     n= 55  AUC=0.8457
+  Cortex Motor Medial                      n= 64  AUC=0.8182
+  Spinal Cord Lumbar                       n= 61  AUC=0.8059
+  Cortex Frontal                           n=105  AUC=0.7982
+  Cerebellum                               n=147  AUC=0.7416
+  Cortex Motor Unspecified                 n=  8  AUC=0.7143
+  Cortex Occipital                         n= 55  AUC=0.6939
+  Cortex Motor Lateral                     n= 61  AUC=0.6508

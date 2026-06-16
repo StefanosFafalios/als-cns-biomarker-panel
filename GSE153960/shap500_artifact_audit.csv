@@ -1,0 +1,476 @@
+rank,feature,mean_abs_shap,ensg_base,symbol,gene_type,biotype,name,mg_found,flag_symbol,flag_biotype,flag_nosym,any_flag,gtex_max_tpm,classification
+26,ENSG00000286065.1,0.2003358509545971,ENSG00000286065,,,,,False,False,False,True,True,-1.0,flagged_no_gtex
+27,ENSG00000268388.5,0.1878316718751276,ENSG00000268388,FENDRR,ncRNA,,FOXF1 adjacent non-coding developmental regulatory RNA,True,False,False,False,False,,clean
+28,ENSG00000255769.7,0.1814018864135606,ENSG00000255769,GOLGA2P10,,,GOLGA2 pseudogene 10,True,False,False,False,False,,clean
+29,ENSG00000131981.16,0.1776194197706663,ENSG00000131981,LGALS3,protein-coding,,galectin 3,True,False,False,False,False,,clean
+30,ENSG00000203620.2,0.1757278872043495,ENSG00000203620,,,,,True,False,False,True,True,0.093001,confirmed_artifact
+31,ENSG00000260644.6,0.1707631230076689,ENSG00000260644,HERC2P5,pseudo,,HERC2 pseudogene 5,True,False,False,False,False,,clean
+32,ENSG00000269296.1,0.1701625997537744,ENSG00000269296,,,,,True,False,False,True,True,1.9886400000000002,borderline
+33,ENSG00000244414.6,0.1683313912288511,ENSG00000244414,CFHR1,protein-coding,,complement factor H related 1,True,False,False,False,False,,clean
+34,ENSG00000285578.1,0.1640954153904744,ENSG00000285578,LIRIL2R,,,lincRNA regulator of IL2RA,True,False,False,False,False,,clean
+35,ENSG00000103023.11,0.1640449473839906,ENSG00000103023,PRSS54,protein-coding,,serine protease 54,True,True,False,False,True,67.1766,flagged_but_expressed
+36,ENSG00000263755.2,0.1626917899437461,ENSG00000263755,RN7SL498P,pseudo,,"RNA, 7SL, cytoplasmic 498, pseudogene",True,False,False,False,False,,clean
+37,ENSG00000254681.6,0.1619931615291716,ENSG00000254681,PKD1P5,pseudo,,"polycystin 1, transient receptor potential channel interacting pseudogene 5",True,False,False,False,False,,clean
+38,ENSG00000125954.12,0.1617302596600494,ENSG00000125954,CHURC1-FNTB,protein-coding,,CHURC1-FNTB readthrough,True,False,False,False,False,,clean
+39,ENSG00000261798.1,0.1597777510237603,ENSG00000261798,LOC101929536,ncRNA,,uncharacterized LOC101929536,True,False,False,False,False,,clean
+40,ENSG00000260776.5,0.1568526485538697,ENSG00000260776,GOLGA6FP,,,"golgin A6 family member F, pseudogene",True,False,False,False,False,,clean
+41,ENSG00000136235.16,0.1562935995928387,ENSG00000136235,GPNMB,protein-coding,,glycoprotein nmb,True,False,False,False,False,,clean
+42,ENSG00000230663.1,0.151421801304098,ENSG00000230663,FAM224B,,,family with sequence similarity 224 member B,True,False,False,False,False,,clean
+43,ENSG00000141682.11,0.1511103327172977,ENSG00000141682,PMAIP1,protein-coding,,phorbol-12-myristate-13-acetate-induced protein 1,True,False,False,False,False,,clean
+44,ENSG00000229828.2,0.150423981952123,ENSG00000229828,PDE4DIPP1,,,PDE4DIP pseudogene 1,True,False,False,False,False,,clean
+45,ENSG00000230178.1,0.1459883585756255,ENSG00000230178,OR4F3,protein-coding,,olfactory receptor family 4 subfamily F member 3,True,True,False,False,True,0.0,confirmed_artifact
+46,ENSG00000259846.1,0.1459309221432033,ENSG00000259846,,,,,True,False,False,True,True,1.4428,borderline
+47,ENSG00000248668.2,0.1447003926957635,ENSG00000248668,OXCT1-AS1,ncRNA,,OXCT1 antisense RNA 1,True,False,False,False,False,,clean
+48,ENSG00000249961.9,0.1444183526840062,ENSG00000249961,TERB1,protein-coding,,telomere repeat binding bouquet formation protein 1,True,False,False,False,False,,clean
+49,ENSG00000250252.1,0.1438632737228146,ENSG00000250252,LINC02430,ncRNA,,long intergenic non-protein coding RNA 2430,True,False,False,False,False,,clean
+50,ENSG00000007038.11,0.1430463244955625,ENSG00000007038,PRSS21,protein-coding,,serine protease 21,True,True,False,False,True,132.696,flagged_but_expressed
+51,ENSG00000132518.6,0.1418381653323762,ENSG00000132518,GUCY2D,protein-coding,,"guanylate cyclase 2D, retinal",True,False,False,False,False,,clean
+52,ENSG00000134184.12,0.1418294265366887,ENSG00000134184,GSTM1,protein-coding,,glutathione S-transferase mu 1,True,False,False,False,False,,clean
+53,ENSG00000236908.2,0.1415031220263675,ENSG00000236908,LINC02827,,,long intergenic non-protein coding RNA 2827,True,False,False,False,False,,clean
+54,ENSG00000237027.1,0.1382626103565041,ENSG00000237027,,,,,True,False,False,True,True,1.97095,borderline
+55,ENSG00000235162.8,0.1344714447811691,ENSG00000235162,C12orf75,protein-coding,,chromosome 12 open reading frame 75,True,False,False,False,False,,clean
+56,ENSG00000169245.6,0.134025837123936,ENSG00000169245,CXCL10,protein-coding,,C-X-C motif chemokine ligand 10,True,False,False,False,False,,clean
+57,ENSG00000284931.1,0.1336098881344541,ENSG00000284931,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+58,ENSG00000182974.3,0.1332290060741839,ENSG00000182974,OR4M2B,protein-coding,,olfactory receptor family 4 subfamily M member 2B,True,True,False,False,True,-1.0,flagged_no_gtex
+59,ENSG00000154760.14,0.1320629520419061,ENSG00000154760,SLFN13,protein-coding,,schlafen family member 13,True,False,False,False,False,,clean
+60,ENSG00000282419.2,0.1313079143161179,ENSG00000282419,TEX13D,protein-coding,,TEX13 family member D,True,False,False,False,False,,clean
+61,ENSG00000279414.1,0.1295855797683675,ENSG00000279414,CDRT15P9,,,CDRT15 pseudogene 9,True,False,False,False,False,,clean
+62,ENSG00000151632.17,0.128909794212298,ENSG00000151632,AKR1C2,protein-coding,,aldo-keto reductase family 1 member C2,True,False,False,False,False,,clean
+63,ENSG00000230267.7,0.1281093338627794,ENSG00000230267,HERC2P4,,,HERC2 pseudogene 4,True,False,False,False,False,,clean
+64,ENSG00000260653.5,0.1276041479530355,ENSG00000260653,MIR3147HG,ncRNA,,MIR3147 host gene,True,False,False,False,False,,clean
+65,ENSG00000237624.1,0.125953551168037,ENSG00000237624,OXCT2P1,pseudo,,3-oxoacid CoA-transferase 2 pseudogene 1,True,False,False,False,False,,clean
+66,ENSG00000166275.15,0.1259384773094579,ENSG00000166275,BORCS7,protein-coding,,BLOC-1 related complex subunit 7,True,False,False,False,False,,clean
+67,ENSG00000285807.1,0.1252218996042429,ENSG00000285807,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+68,ENSG00000196684.12,0.124403884181682,ENSG00000196684,HSH2D,protein-coding,,hematopoietic SH2 domain containing,True,False,False,False,False,,clean
+69,ENSG00000073737.16,0.1234985274943657,ENSG00000073737,DHRS9,protein-coding,,dehydrogenase/reductase 9,True,False,False,False,False,,clean
+70,ENSG00000266524.3,0.123136649253331,ENSG00000266524,GDF10,protein-coding,,growth differentiation factor 10,True,False,False,False,False,,clean
+71,ENSG00000178562.18,0.1223194554463375,ENSG00000178562,CD28,protein-coding,,CD28 molecule,True,False,False,False,False,,clean
+72,ENSG00000272832.1,0.1208886436331014,ENSG00000272832,,,,,True,False,False,True,True,4.46194,borderline
+73,ENSG00000275803.1,0.1208618083578307,ENSG00000275803,RN7SL736P,pseudo,,"RNA, 7SL, cytoplasmic 736, pseudogene",True,False,False,False,False,,clean
+74,ENSG00000204592.9,0.1201858156284097,ENSG00000204592,HLA-E,protein-coding,,"major histocompatibility complex, class I, E",True,False,False,False,False,,clean
+75,ENSG00000176533.13,0.1196039882169769,ENSG00000176533,GNG7,protein-coding,,G protein subunit gamma 7,True,False,False,False,False,,clean
+76,ENSG00000280828.1,0.1181382455371436,ENSG00000280828,,,,,True,False,False,True,True,31.2807,flagged_but_expressed
+77,ENSG00000185291.11_PAR_Y,0.1175136467418219,ENSG00000185291,IL3RA,protein-coding,,interleukin 3 receptor subunit alpha,True,False,False,False,False,,clean
+78,ENSG00000257702.3,0.1162718665324594,ENSG00000257702,LBX2-AS1,ncRNA,,LBX2 antisense RNA 1,True,False,False,False,False,,clean
+79,ENSG00000279058.2,0.1160171477413598,ENSG00000279058,AGAP14P,,,"ArfGAP with GTPase domain, ankyrin repeat and PH domain 14, pseudogene",True,False,False,False,False,,clean
+80,ENSG00000128918.15,0.1154729909043633,ENSG00000128918,ALDH1A2,protein-coding,,aldehyde dehydrogenase 1 family member A2,True,False,False,False,False,,clean
+81,ENSG00000162366.8,0.1154433172354489,ENSG00000162366,PDZK1IP1,protein-coding,,PDZK1 interacting protein 1,True,False,False,False,False,,clean
+82,ENSG00000159618.16,0.1151450373113856,ENSG00000159618,ADGRG5,protein-coding,,adhesion G protein-coupled receptor G5,True,False,False,False,False,,clean
+83,ENSG00000223821.1,0.1147500818733752,ENSG00000223821,,,,,False,False,False,True,True,1.1034899999999999,borderline
+84,ENSG00000272619.1,0.1138961198673998,ENSG00000272619,FAM131B-AS1,,,FAM131B antisense RNA 1,True,False,False,False,False,,clean
+85,ENSG00000233579.1,0.1134738744554472,ENSG00000233579,KRT8P15,pseudo,,keratin 8 pseudogene 15,True,False,False,False,False,,clean
+86,ENSG00000232332.1,0.1130471243274525,ENSG00000232332,ARL5AP5,,,ARL5A pseudogene 5,True,False,False,False,False,,clean
+87,ENSG00000260300.5,0.112689556606843,ENSG00000260300,,,,,False,False,False,True,True,24.8012,flagged_but_expressed
+88,ENSG00000203883.7,0.1115237432640215,ENSG00000203883,SOX18,protein-coding,,SRY-box transcription factor 18,True,False,False,False,False,,clean
+89,ENSG00000118777.12,0.1109716708241528,ENSG00000118777,ABCG2,protein-coding,,ATP binding cassette subfamily G member 2 (JR blood group),True,False,False,False,False,,clean
+90,ENSG00000166884.2,0.1108406655216038,ENSG00000166884,OR4D6,protein-coding,,olfactory receptor family 4 subfamily D member 6,True,True,False,False,True,0.162183,confirmed_artifact
+91,ENSG00000140379.8,0.1101694434447004,ENSG00000140379,BCL2A1,protein-coding,,BCL2 related protein A1,True,False,False,False,False,,clean
+92,ENSG00000230805.6,0.1088360210409331,ENSG00000230805,LOC105370670,ncRNA,,uncharacterized LOC105370670,True,False,False,False,False,,clean
+93,ENSG00000255557.1,0.1076652780568745,ENSG00000255557,,,,,True,False,False,True,True,1.76027,borderline
+94,ENSG00000205578.6,0.1072005778779,ENSG00000205578,POM121B,,,POM121 transmembrane nucleoporin B (pseudogene),True,False,False,False,False,,clean
+95,ENSG00000241155.1,0.1063543588219734,ENSG00000241155,ARHGAP31-AS1,ncRNA,,ARHGAP31 antisense RNA 1,True,False,False,False,False,,clean
+96,ENSG00000138623.10,0.1056416934718405,ENSG00000138623,SEMA7A,protein-coding,,semaphorin 7A (JohnMiltonHagen blood group),True,False,False,False,False,,clean
+97,ENSG00000185614.5,0.1053513919687171,ENSG00000185614,INKA1,protein-coding,,inka box actin regulator 1,True,False,False,False,False,,clean
+98,ENSG00000233296.1,0.1050191886572355,ENSG00000233296,TMEM18-DT,ncRNA,,TMEM18 divergent transcript,True,False,False,False,False,,clean
+99,ENSG00000278765.1,0.1047603575190454,ENSG00000278765,,,,,True,False,False,True,True,2.88422,borderline
+100,ENSG00000112715.21,0.1035538448604621,ENSG00000112715,VEGFA,protein-coding,,vascular endothelial growth factor A,True,False,False,False,False,,clean
+101,ENSG00000267776.1,0.1023594111246004,ENSG00000267776,,,,,False,False,False,True,True,4.74521,borderline
+102,ENSG00000236611.1,0.1022002683464819,ENSG00000236611,LINC02556,ncRNA,,long intergenic non-protein coding RNA 2556,True,False,False,False,False,,clean
+103,ENSG00000231106.2,0.1015421863421585,ENSG00000231106,LINC01436,ncRNA,,long intergenic non-protein coding RNA 1436,True,False,False,False,False,,clean
+104,ENSG00000074211.14,0.1014000116422849,ENSG00000074211,PPP2R2C,protein-coding,,protein phosphatase 2 regulatory subunit Bgamma,True,False,False,False,False,,clean
+105,ENSG00000143162.9,0.1002181503676628,ENSG00000143162,CREG1,protein-coding,,cellular repressor of E1A stimulated genes 1,True,False,False,False,False,,clean
+106,ENSG00000142675.18,0.0990929948303686,ENSG00000142675,CNKSR1,protein-coding,,connector enhancer of kinase suppressor of Ras 1,True,False,False,False,False,,clean
+107,ENSG00000254919.1,0.098564367280809,ENSG00000254919,,,,,True,False,False,True,True,0.39094,confirmed_artifact
+108,ENSG00000137767.14,0.0984288646130314,ENSG00000137767,SQOR,protein-coding,,sulfide quinone oxidoreductase,True,False,False,False,False,,clean
+109,ENSG00000261459.1,0.0976721700304328,ENSG00000261459,,,,,True,False,False,True,True,0.0,confirmed_artifact
+110,ENSG00000137834.15,0.0972748173826847,ENSG00000137834,SMAD6,protein-coding,,SMAD family member 6,True,False,False,False,False,,clean
+111,ENSG00000176532.4,0.0969941529817475,ENSG00000176532,PRR15,protein-coding,,proline rich 15,True,False,False,False,False,,clean
+112,ENSG00000263727.1,0.0966693679466063,ENSG00000263727,,,,,True,False,False,True,True,0.426422,confirmed_artifact
+113,ENSG00000133048.13,0.0959137551623161,ENSG00000133048,CHI3L1,protein-coding,,chitinase 3 like 1,True,False,False,False,False,,clean
+114,ENSG00000174059.16,0.0952883694193785,ENSG00000174059,CD34,protein-coding,,CD34 molecule,True,False,False,False,False,,clean
+115,ENSG00000182183.15,0.094656206421394,ENSG00000182183,SHISAL2A,protein-coding,,shisa like 2A,True,False,False,False,False,,clean
+116,ENSG00000147100.11,0.0941943519135978,ENSG00000147100,SLC16A2,protein-coding,,solute carrier family 16 member 2,True,False,False,False,False,,clean
+117,ENSG00000243173.3,0.0938405821656986,ENSG00000243173,RN7SL861P,pseudo,,"RNA, 7SL, cytoplasmic 861, pseudogene",True,False,False,False,False,,clean
+118,ENSG00000284733.1,0.0937013772395871,ENSG00000284733,OR4F29,protein-coding,,olfactory receptor family 4 subfamily F member 29,True,True,False,False,True,0.06814760000000002,confirmed_artifact
+119,ENSG00000231760.5,0.0932571400104166,ENSG00000231760,,,,,True,False,False,True,True,1.65367,borderline
+120,ENSG00000167600.14,0.0926429191907544,ENSG00000167600,CYP2S1,protein-coding,,cytochrome P450 family 2 subfamily S member 1,True,False,False,False,False,,clean
+121,ENSG00000248909.1,0.0924451163630909,ENSG00000248909,HMGB1P21,,,high mobility group box 1 pseudogene 21,True,False,False,False,False,,clean
+122,ENSG00000113249.12,0.092333515058841,ENSG00000113249,HAVCR1,protein-coding,,hepatitis A virus cellular receptor 1,True,False,False,False,False,,clean
+123,ENSG00000171124.13,0.0922405182096095,ENSG00000171124,FUT3,protein-coding,,fucosyltransferase 3 (Lewis blood group),True,False,False,False,False,,clean
+124,ENSG00000251286.2,0.0919198422395964,ENSG00000251286,LOC100419861,pseudo,,metallophosphoesterase 1 pseudogene,True,False,False,False,False,,clean
+125,ENSG00000252697.1,0.0916363013174499,ENSG00000252697,RN7SKP209,pseudo,,RN7SK pseudogene 209,True,False,False,False,False,,clean
+126,ENSG00000197142.10,0.0915910696781113,ENSG00000197142,ACSL5,protein-coding,,acyl-CoA synthetase long chain family member 5,True,False,False,False,False,,clean
+127,ENSG00000234187.1,0.0912285285057444,ENSG00000234187,AIMP1P1,pseudo,,aminoacyl tRNA synthetase complex interacting multifunctional protein 1 pseudogene 1,True,False,False,False,False,,clean
+128,ENSG00000214485.6,0.0910883707513865,ENSG00000214485,RPL7P1,pseudo,,ribosomal protein L7 pseudogene 1,True,False,False,False,False,,clean
+129,ENSG00000159860.7,0.0908934747674731,ENSG00000159860,TCAF2P1,,,TRPM8 channel associated factor 2 pseudogene 1,True,False,False,False,False,,clean
+130,ENSG00000205502.4,0.0906338808499773,ENSG00000205502,C2CD4B,protein-coding,,C2 calcium dependent domain containing 4B,True,False,False,False,False,,clean
+131,ENSG00000183648.10,0.0905355159405557,ENSG00000183648,NDUFB1,protein-coding,,NADH:ubiquinone oxidoreductase subunit B1,True,False,False,False,False,,clean
+132,ENSG00000214940.8,0.0903874473551895,ENSG00000214940,NPIPA8,protein-coding,,nuclear pore complex interacting protein family member A8,True,False,False,False,False,,clean
+133,ENSG00000230138.1,0.0902696070735242,ENSG00000230138,LINC02812,,,long intergenic non-protein coding RNA 2812,True,False,False,False,False,,clean
+134,ENSG00000268955.2,0.0901066751324735,ENSG00000268955,,,,,False,False,False,True,True,0.0752349,confirmed_artifact
+135,ENSG00000182912.6,0.0900303112635604,ENSG00000182912,,,,,False,False,False,True,True,3.0834200000000003,borderline
+136,ENSG00000169668.11,0.0899418310805614,ENSG00000169668,BCRP2,,,BCR pseudogene 2,True,False,False,False,False,,clean
+137,ENSG00000085491.17,0.088343924730146,ENSG00000085491,SLC25A24,protein-coding,,solute carrier family 25 member 24,True,False,False,False,False,,clean
+138,ENSG00000284662.1,0.0872404203144231,ENSG00000284662,OR4F16,protein-coding,,olfactory receptor family 4 subfamily F member 16,True,True,False,False,True,0.05702430000000001,confirmed_artifact
+139,ENSG00000249781.6,0.0867999773266652,ENSG00000249781,LINC02112,ncRNA,,long intergenic non-protein coding RNA 2112,True,False,False,False,False,,clean
+140,ENSG00000279960.1,0.0853329513243481,ENSG00000279960,,,,,True,False,False,True,True,0.5624439999999999,confirmed_artifact
+141,ENSG00000184616.9,0.0850781649021307,ENSG00000184616,SPDYE12,protein-coding,,speedy/RINGO cell cycle regulator family member E12,True,False,False,False,False,,clean
+142,ENSG00000269038.1,0.0848267842824343,ENSG00000269038,SF1-DT,,,SF1 divergent transcript,True,False,False,False,False,,clean
+143,ENSG00000189196.4,0.0846282849906784,ENSG00000189196,LINC00994,ncRNA,,long intergenic non-protein coding RNA 994,True,False,False,False,False,,clean
+144,ENSG00000225991.1,0.0842628749505371,ENSG00000225991,RPL23AP34,pseudo,,ribosomal protein L23a pseudogene 34,True,False,False,False,False,,clean
+145,ENSG00000116133.13,0.0842170782231186,ENSG00000116133,DHCR24,protein-coding,,24-dehydrocholesterol reductase,True,False,False,False,False,,clean
+146,ENSG00000249996.1,0.0828685299253382,ENSG00000249996,PPIC-AS1,,,PPIC antisense RNA 1,True,False,False,False,False,,clean
+147,ENSG00000257829.1,0.0828078477047526,ENSG00000257829,,,,,True,False,False,True,True,4.28169,borderline
+148,ENSG00000211966.2,0.0827096894021507,ENSG00000211966,IGHV5-51,other,,immunoglobulin heavy variable 5-51,True,False,False,False,False,,clean
+149,ENSG00000249839.1,0.0825424168790052,ENSG00000249839,PPIP5K1P1,,,diphosphoinositol pentakisphosphate kinase 1 pseudogene 1,True,False,False,False,False,,clean
+150,ENSG00000273706.4,0.0823994321810004,ENSG00000273706,LHX1,protein-coding,,LIM homeobox 1,True,False,False,False,False,,clean
+151,ENSG00000242049.1,0.0817808633853937,ENSG00000242049,DNAJB8-AS1,ncRNA,,DNAJB8 antisense RNA 1,True,False,False,False,False,,clean
+152,ENSG00000111331.13,0.0813917977575216,ENSG00000111331,OAS3,protein-coding,,2'-5'-oligoadenylate synthetase 3,True,False,False,False,False,,clean
+153,ENSG00000269930.1,0.0813105676297564,ENSG00000269930,,,,,True,False,False,True,True,2.53792,borderline
+154,ENSG00000278313.1,0.0803452313001573,ENSG00000278313,LOC100420930,pseudo,,SWI5 recombination repair homolog (yeast) pseudogene,True,False,False,False,False,,clean
+155,ENSG00000134612.12,0.0798694302289236,ENSG00000134612,FOLH1B,,,folate hydrolase 1B (pseudogene),True,False,False,False,False,,clean
+156,ENSG00000204006.9,0.0795260892919908,ENSG00000204006,C1orf185,protein-coding,,chromosome 1 open reading frame 185,True,False,False,False,False,,clean
+157,ENSG00000242551.2,0.079437361665735,ENSG00000242551,POU5F1P6,pseudo,,POU class 5 homeobox 1 pseudogene 6,True,False,False,False,False,,clean
+158,ENSG00000078401.7,0.0792931540925593,ENSG00000078401,EDN1,protein-coding,,endothelin 1,True,False,False,False,False,,clean
+159,ENSG00000286241.1,0.0789956680577701,ENSG00000286241,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+160,ENSG00000226777.7,0.0787753120822734,ENSG00000226777,FAM30A,ncRNA,,family with sequence similarity 30 member A,True,False,False,False,False,,clean
+161,ENSG00000280222.1,0.0783940101787545,ENSG00000280222,,,,,True,False,False,True,True,1.26043,borderline
+162,ENSG00000123427.17,0.0783066440094206,ENSG00000123427,EEF1AKMT3,protein-coding,,EEF1A lysine methyltransferase 3,True,False,False,False,False,,clean
+163,ENSG00000198959.12,0.0779052688005029,ENSG00000198959,TGM2,protein-coding,,transglutaminase 2,True,False,False,False,False,,clean
+164,ENSG00000279711.1,0.0778140417526997,ENSG00000279711,,,,,True,False,False,True,True,6.32642,flagged_but_expressed
+165,ENSG00000272735.1,0.0776241015124675,ENSG00000272735,,,,,True,False,False,True,True,5.860580000000001,flagged_but_expressed
+166,ENSG00000163762.7,0.0772780891524459,ENSG00000163762,TM4SF18,protein-coding,,transmembrane 4 L six family member 18,True,False,False,False,False,,clean
+167,ENSG00000148773.14,0.0772767269263132,ENSG00000148773,MKI67,protein-coding,,marker of proliferation Ki-67,True,False,False,False,False,,clean
+168,ENSG00000163217.2,0.0766592968218222,ENSG00000163217,BMP10,protein-coding,,bone morphogenetic protein 10,True,False,False,False,False,,clean
+169,ENSG00000062822.13,0.0764817885407737,ENSG00000062822,POLD1,protein-coding,,"DNA polymerase delta 1, catalytic subunit",True,False,False,False,False,,clean
+170,ENSG00000134042.13,0.0761070381595072,ENSG00000134042,MRO,protein-coding,,maestro,True,False,False,False,False,,clean
+171,ENSG00000248795.1,0.0760577955438079,ENSG00000248795,,,,,True,False,False,True,True,0.743136,confirmed_artifact
+172,ENSG00000168405.17,0.0759323245427712,ENSG00000168405,CMAHP,,,"cytidine monophospho-N-acetylneuraminic acid hydroxylase, pseudogene",True,False,False,False,False,,clean
+173,ENSG00000101951.16,0.075239267867702,ENSG00000101951,PAGE4,protein-coding,,PAGE family member 4,True,False,False,False,False,,clean
+174,ENSG00000132170.21,0.0750987191290327,ENSG00000132170,PPARG,protein-coding,,peroxisome proliferator activated receptor gamma,True,False,False,False,False,,clean
+175,ENSG00000233190.1,0.0750447689239523,ENSG00000233190,RPS24P13,,,ribosomal protein S24 pseudogene 13,True,False,False,False,False,,clean
+176,ENSG00000279107.1,0.0750024988868064,ENSG00000279107,,,,,False,False,False,True,True,0.152534,confirmed_artifact
+177,ENSG00000256588.1,0.0745132422988849,ENSG00000256588,,,,,True,False,False,True,True,1.4280899999999999,borderline
+178,ENSG00000205571.13,0.0741815681712203,ENSG00000205571,SMN2,protein-coding,,"survival of motor neuron 2, centromeric",True,False,False,False,False,,clean
+179,ENSG00000236078.1,0.0741775319207282,ENSG00000236078,LINC01447,ncRNA,,long intergenic non-protein coding RNA 1447,True,False,False,False,False,,clean
+180,ENSG00000248769.1,0.0732889357489203,ENSG00000248769,,,,,True,False,False,True,True,0.0,confirmed_artifact
+181,ENSG00000273226.1,0.0728597689426437,ENSG00000273226,,,,,True,False,False,True,True,23.6827,flagged_but_expressed
+182,ENSG00000241343.9,0.0718731050423862,ENSG00000241343,RPL36A,protein-coding,,ribosomal protein L36a,True,False,False,False,False,,clean
+183,ENSG00000142871.17,0.0714480368330254,ENSG00000142871,CCN1,protein-coding,,cellular communication network factor 1,True,False,False,False,False,,clean
+184,ENSG00000232412.1,0.0710368042712664,ENSG00000232412,STAG2-AS1,,,STAG2 antisense RNA 1,True,False,False,False,False,,clean
+185,ENSG00000182477.5,0.070480188052175,ENSG00000182477,OR2B8,protein-coding,,olfactory receptor family 2 subfamily B member 8 (gene/pseudogene),True,True,False,False,True,-1.0,flagged_no_gtex
+186,ENSG00000240505.8,0.0703277508844904,ENSG00000240505,TNFRSF13B,protein-coding,,TNF receptor superfamily member 13B,True,False,False,False,False,,clean
+187,ENSG00000135185.12,0.0700426377580793,ENSG00000135185,TMEM243,protein-coding,,transmembrane protein 243,True,False,False,False,False,,clean
+188,ENSG00000225630.1,0.0697760697856618,ENSG00000225630,MTND2P28,pseudo,,MT-ND2 pseudogene 28,True,False,False,False,False,,clean
+189,ENSG00000237790.1,0.0694214804447575,ENSG00000237790,LINC01318,ncRNA,,long intergenic non-protein coding RNA 1318,True,False,False,False,False,,clean
+190,ENSG00000266667.1,0.069289516039265,ENSG00000266667,,,,,True,False,False,True,True,0.626049,confirmed_artifact
+191,ENSG00000276846.1,0.068694754916876,ENSG00000276846,,,,,True,False,False,True,True,3.76387,borderline
+192,ENSG00000270077.1,0.0684627754399988,ENSG00000270077,,,,,True,False,False,True,True,0.755861,confirmed_artifact
+193,ENSG00000161640.15,0.0683748129825103,ENSG00000161640,SIGLEC11,protein-coding,,sialic acid binding Ig like lectin 11,True,False,False,False,False,,clean
+194,ENSG00000154102.11,0.0679612238073048,ENSG00000154102,CLMB,protein-coding,,calcimembrin,True,False,False,False,False,,clean
+195,ENSG00000241945.8,0.0678616489960957,ENSG00000241945,PWP2,protein-coding,,PWP2 small subunit processome component,True,False,False,False,False,,clean
+196,ENSG00000042062.12,0.0676714770389603,ENSG00000042062,RIPOR3,protein-coding,,RIPOR family member 3,True,False,False,False,False,,clean
+197,ENSG00000286226.1,0.0674720464940034,ENSG00000286226,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+198,ENSG00000240053.8,0.0672511996566304,ENSG00000240053,LY6G5B,protein-coding,,lymphocyte antigen 6 family member G5B,True,False,False,False,False,,clean
+199,ENSG00000197238.4,0.0672479603675315,ENSG00000197238,H4C11,protein-coding,,H4 clustered histone 11,True,False,False,False,False,,clean
+200,ENSG00000265666.1,0.0671229546893447,ENSG00000265666,RARA-AS1,ncRNA,,RARA antisense RNA 1,True,False,False,False,False,,clean
+201,ENSG00000229414.2,0.0668592008111171,ENSG00000229414,KCNQ1-AS1,ncRNA,,KCNQ1 antisense RNA 1,True,False,False,False,False,,clean
+202,ENSG00000231697.3,0.0665875513822625,ENSG00000231697,NANOGP5,,,Nanog homeobox pseudogene 5,True,False,False,False,False,,clean
+203,ENSG00000160221.18,0.0660981332310686,ENSG00000160221,GATD3,protein-coding,,glutamine amidotransferase class 1 domain containing 3,True,False,False,False,False,,clean
+204,ENSG00000076344.16,0.0656828145293525,ENSG00000076344,RGS11,protein-coding,,regulator of G protein signaling 11,True,False,False,False,False,,clean
+205,ENSG00000271741.1,0.0655356308151636,ENSG00000271741,,,,,True,False,False,True,True,0.0,confirmed_artifact
+206,ENSG00000142627.13,0.0655078890261151,ENSG00000142627,EPHA2,protein-coding,,EPH receptor A2,True,False,False,False,False,,clean
+207,ENSG00000134760.6,0.0652920918619174,ENSG00000134760,DSG1,protein-coding,,desmoglein 1,True,False,False,False,False,,clean
+208,ENSG00000267402.1,0.0650061942479742,ENSG00000267402,TCF4-AS2,,,TCF4 antisense RNA 2,True,False,False,False,False,,clean
+209,ENSG00000188681.11,0.0647764019384778,ENSG00000188681,TEKT4P2,,,tektin 4 pseudogene 2,True,True,False,False,True,8.14402,flagged_but_expressed
+210,ENSG00000123610.5,0.0645570419619137,ENSG00000123610,TNFAIP6,protein-coding,,TNF alpha induced protein 6,True,False,False,False,False,,clean
+211,ENSG00000198931.10,0.0645305876070589,ENSG00000198931,APRT,protein-coding,,adenine phosphoribosyltransferase,True,False,False,False,False,,clean
+212,ENSG00000072840.13,0.0644858313241631,ENSG00000072840,EVC,protein-coding,,EvC ciliary complex subunit 1,True,False,False,False,False,,clean
+213,ENSG00000004799.8,0.064392124271606,ENSG00000004799,PDK4,protein-coding,,pyruvate dehydrogenase kinase 4,True,False,False,False,False,,clean
+214,ENSG00000111335.12,0.0642746680563131,ENSG00000111335,OAS2,protein-coding,,2'-5'-oligoadenylate synthetase 2,True,False,False,False,False,,clean
+215,ENSG00000225725.4,0.0637977641629625,ENSG00000225725,FAM66E,ncRNA,,family with sequence similarity 66 member E,True,False,False,False,False,,clean
+216,ENSG00000173530.6,0.0637363033838983,ENSG00000173530,TNFRSF10D,protein-coding,,TNF receptor superfamily member 10d,True,False,False,False,False,,clean
+217,ENSG00000275221.1,0.0637304137504432,ENSG00000275221,H2AC15,protein-coding,,H2A clustered histone 15,True,False,False,False,False,,clean
+218,ENSG00000185291.11,0.063581124633774,ENSG00000185291,IL3RA,protein-coding,,interleukin 3 receptor subunit alpha,True,False,False,False,False,,clean
+219,ENSG00000166295.9,0.0635125125167447,ENSG00000166295,ANAPC16,protein-coding,,anaphase promoting complex subunit 16,True,False,False,False,False,,clean
+220,ENSG00000225355.1,0.0633901329498135,ENSG00000225355,ARL6IP1P2,,,ARF like GTPase 6 interacting protein 1 pseudogene 2,True,False,False,False,False,,clean
+221,ENSG00000166436.16,0.0633659734592075,ENSG00000166436,TRIM66,protein-coding,,tripartite motif containing 66,True,False,False,False,False,,clean
+222,ENSG00000257183.1,0.0626083181134169,ENSG00000257183,,,,,False,False,False,True,True,1.23118,borderline
+223,ENSG00000233063.2,0.0623741942363069,ENSG00000233063,SAR1AP4,,,secretion associated Ras related GTPase 1A pseudogene 4,True,False,False,False,False,,clean
+224,ENSG00000258459.1,0.0623698560446593,ENSG00000258459,,,,,True,False,False,True,True,0.570369,confirmed_artifact
+225,ENSG00000233426.3,0.0622431747072026,ENSG00000233426,EIF3FP3,pseudo,,eukaryotic translation initiation factor 3 subunit F pseudogene 3,True,False,False,False,False,,clean
+226,ENSG00000227684.2,0.0621632346607519,ENSG00000227684,CROCCP4,pseudo,,CROCC pseudogene 4,True,False,False,False,False,,clean
+227,ENSG00000227191.8,0.0620811238113618,ENSG00000227191,TRGC2,other,,T cell receptor gamma constant 2,True,False,False,False,False,,clean
+228,ENSG00000130518.17,0.0616222607859051,ENSG00000130518,IQCN,protein-coding,,IQ motif containing N,True,False,False,False,False,,clean
+229,ENSG00000254443.1,0.0607120456861489,ENSG00000254443,LOC124902623,ncRNA,,uncharacterized LOC124902623,True,False,False,False,False,,clean
+230,ENSG00000026652.14,0.0604091687120375,ENSG00000026652,AGPAT4,protein-coding,,1-acylglycerol-3-phosphate O-acyltransferase 4,True,False,False,False,False,,clean
+231,ENSG00000232105.1,0.0601167830599359,ENSG00000232105,RPL32P28,,,ribosomal protein L32 pseudogene 28,True,False,False,False,False,,clean
+232,ENSG00000232643.1,0.0599581557667448,ENSG00000232643,LINC00385,ncRNA,,long intergenic non-protein coding RNA 385,True,False,False,False,False,,clean
+233,ENSG00000253846.2,0.0598277579959447,ENSG00000253846,PCDHGA10,protein-coding,,"protocadherin gamma subfamily A, 10",True,False,False,False,False,,clean
+234,ENSG00000235628.1,0.0594974200921188,ENSG00000235628,TNR-IT1,,,TNR intronic transcript 1,True,False,False,False,False,,clean
+235,ENSG00000272123.1,0.0594226435354819,ENSG00000272123,,,,,True,False,False,True,True,5.50223,flagged_but_expressed
+236,ENSG00000105357.16,0.0592374077107948,ENSG00000105357,MYH14,protein-coding,,myosin heavy chain 14,True,False,False,False,False,,clean
+237,ENSG00000225916.1,0.0592153730888089,ENSG00000225916,,,,,False,False,False,True,True,0.639261,confirmed_artifact
+238,ENSG00000273055.1,0.0591060221287868,ENSG00000273055,,,,,True,False,False,True,True,18.4225,flagged_but_expressed
+239,ENSG00000227141.2,0.0590028494837565,ENSG00000227141,,,,,True,False,False,True,True,14.145,flagged_but_expressed
+240,ENSG00000213120.3,0.0589532390199205,ENSG00000213120,LIN28AP1,,,LIN28A pseudogene 1,True,False,False,False,False,,clean
+241,ENSG00000268650.3,0.0586443736165208,ENSG00000268650,,,,,True,False,False,True,True,1.7128,borderline
+242,ENSG00000267074.1,0.0586356604905329,ENSG00000267074,,,,,True,False,False,True,True,8.20993,flagged_but_expressed
+243,ENSG00000127954.12,0.0583836006204288,ENSG00000127954,STEAP4,protein-coding,,STEAP4 metalloreductase,True,False,False,False,False,,clean
+244,ENSG00000214184.3,0.0583135659623686,ENSG00000214184,GCC2-AS1,ncRNA,,GCC2 antisense RNA 1,True,False,False,False,False,,clean
+245,ENSG00000138326.19,0.0576448892542918,ENSG00000138326,RPS24,protein-coding,,ribosomal protein S24,True,False,False,False,False,,clean
+246,ENSG00000180776.15,0.0575201784630726,ENSG00000180776,ZDHHC20,protein-coding,,zDHHC palmitoyltransferase 20,True,False,False,False,False,,clean
+247,ENSG00000155719.17,0.0570074314565592,ENSG00000155719,OTOA,protein-coding,,otoancorin,True,False,False,False,False,,clean
+248,ENSG00000243385.2,0.0568434425326082,ENSG00000243385,,,,,True,False,False,True,True,0.0516884,confirmed_artifact
+249,ENSG00000271361.1,0.0568009410339578,ENSG00000271361,HTATSF1P2,,,HIV-1 Tat specific factor 1 pseudogene 2,True,False,False,False,False,,clean
+250,ENSG00000254995.4,0.0567952220035453,ENSG00000254995,STX16-NPEPL1,ncRNA,,STX16-NPEPL1 readthrough (NMD candidate),True,False,False,False,False,,clean
+251,ENSG00000273675.1,0.0567803855165223,ENSG00000273675,LOC100419913,pseudo,,zinc finger protein 678 pseudogene,True,False,False,False,False,,clean
+252,ENSG00000213513.3,0.0567456689089281,ENSG00000213513,IMPDH1P5,,,inosine monophosphate dehydrogenase 1 pseudogene 5,True,False,False,False,False,,clean
+253,ENSG00000023445.14,0.0566862510183733,ENSG00000023445,BIRC3,protein-coding,,baculoviral IAP repeat containing 3,True,False,False,False,False,,clean
+254,ENSG00000164363.10,0.0559906080400784,ENSG00000164363,SLC6A18,protein-coding,,solute carrier family 6 member 18,True,False,False,False,False,,clean
+255,ENSG00000273142.1,0.0558975569248355,ENSG00000273142,LINC02604,,,long intergenic non-protein coding RNA 2604,True,False,False,False,False,,clean
+256,ENSG00000283458.1,0.05585359374696,ENSG00000283458,LOC101927879,ncRNA,,uncharacterized LOC101927879,True,False,False,False,False,,clean
+257,ENSG00000257878.1,0.0556763353182255,ENSG00000257878,,,,,True,False,False,True,True,19.7611,flagged_but_expressed
+258,ENSG00000187922.13,0.0555604884139512,ENSG00000187922,LCN10,protein-coding,,lipocalin 10,True,False,False,False,False,,clean
+259,ENSG00000255221.3,0.0553327361923992,ENSG00000255221,CARD17P,,,"caspase recruitment domain family member 17, pseudogene",True,False,False,False,False,,clean
+260,ENSG00000070614.15,0.0552214440254298,ENSG00000070614,NDST1,protein-coding,,N-deacetylase and N-sulfotransferase 1,True,False,False,False,False,,clean
+261,ENSG00000105699.16,0.0550315246368423,ENSG00000105699,LSR,protein-coding,,lipolysis stimulated lipoprotein receptor,True,False,False,False,False,,clean
+262,ENSG00000224557.7,0.0550157940458829,ENSG00000224557,HLA-DPB2,pseudo,,"major histocompatibility complex, class II, DP beta 2 (pseudogene)",True,False,False,False,False,,clean
+263,ENSG00000224598.1,0.0541310850509008,ENSG00000224598,RPS5P2,pseudo,,RPS5 pseudogene 2,True,False,False,False,False,,clean
+264,ENSG00000137273.5,0.0540779447992571,ENSG00000137273,FOXF2,protein-coding,,forkhead box F2,True,False,False,False,False,,clean
+265,ENSG00000275139.1,0.0539294295718591,ENSG00000275139,,,,,True,False,False,True,True,9.79186,flagged_but_expressed
+266,ENSG00000185615.15,0.0538137951463195,ENSG00000185615,PDIA2,protein-coding,,protein disulfide isomerase family A member 2,True,False,False,False,False,,clean
+267,ENSG00000274226.5,0.0533244008361231,ENSG00000274226,TBC1D3H,protein-coding,,TBC1 domain family member 3H,True,False,False,False,False,,clean
+268,ENSG00000103569.9,0.0532399802089111,ENSG00000103569,AQP9,protein-coding,,aquaporin 9,True,False,False,False,False,,clean
+269,ENSG00000204370.11,0.0531251965931201,ENSG00000204370,SDHD,protein-coding,,succinate dehydrogenase complex subunit D,True,False,False,False,False,,clean
+270,ENSG00000254629.1,0.0526137433008231,ENSG00000254629,LOC100420800,pseudo,,suppressor of cytokine signaling 6 pseudogene,True,False,False,False,False,,clean
+271,ENSG00000235724.9,0.0524813283102313,ENSG00000235724,PSMD14-DT,ncRNA,,PSMD14 divergent transcript,True,False,False,False,False,,clean
+272,ENSG00000154133.14,0.0523632851580937,ENSG00000154133,ROBO4,protein-coding,,roundabout guidance receptor 4,True,False,False,False,False,,clean
+273,ENSG00000087589.16,0.0522030159339351,ENSG00000087589,CASS4,protein-coding,,Cas scaffold protein family member 4,True,False,False,False,False,,clean
+274,ENSG00000243302.3,0.052197164400026,ENSG00000243302,,,,,True,False,False,True,True,67.6736,flagged_but_expressed
+275,ENSG00000126890.13,0.0521585964795427,ENSG00000126890,CTAG2,protein-coding,,cancer/testis antigen 2,True,False,False,False,False,,clean
+276,ENSG00000269242.1,0.051967942139449,ENSG00000269242,,,,,True,False,False,True,True,0.0,confirmed_artifact
+277,ENSG00000153283.12,0.0519417209243993,ENSG00000153283,CD96,protein-coding,,CD96 molecule,True,False,False,False,False,,clean
+278,ENSG00000148426.13,0.0516231269665518,ENSG00000148426,PROSER2,protein-coding,,proline and serine rich 2,True,False,False,False,False,,clean
+279,ENSG00000279667.1,0.0514794184667303,ENSG00000279667,,,,,True,False,False,True,True,1.5787799999999999,borderline
+280,ENSG00000197888.2,0.0511042736845542,ENSG00000197888,UGT2B17,protein-coding,,UDP glucuronosyltransferase family 2 member B17,True,False,False,False,False,,clean
+281,ENSG00000213598.4,0.0510967973940472,ENSG00000213598,RPL31P4,pseudo,,ribosomal protein L31 pseudogene 4,True,False,False,False,False,,clean
+282,ENSG00000279203.1,0.0510191338659237,ENSG00000279203,,,,,True,False,False,True,True,6.52766,flagged_but_expressed
+283,ENSG00000111206.12,0.0508942019285657,ENSG00000111206,FOXM1,protein-coding,,forkhead box M1,True,False,False,False,False,,clean
+284,ENSG00000162888.4,0.0508167948134043,ENSG00000162888,IKBKE-AS1,ncRNA,,IKBKE antisense RNA 1,True,False,False,False,False,,clean
+285,ENSG00000136297.14,0.0507484434628852,ENSG00000136297,MMD2,protein-coding,,monocyte to macrophage differentiation associated 2,True,False,False,False,False,,clean
+286,ENSG00000125945.15,0.0506903942414324,ENSG00000125945,ZNF436,protein-coding,,zinc finger protein 436,True,False,False,False,False,,clean
+287,ENSG00000267246.1,0.0505837141612303,ENSG00000267246,,,,,False,False,False,True,True,0.0,confirmed_artifact
+288,ENSG00000224509.2,0.0504986493598877,ENSG00000224509,MRPS9-AS2,ncRNA,,MRPS9 antisense RNA 2,True,False,False,False,False,,clean
+289,ENSG00000213239.3,0.0499690802489113,ENSG00000213239,NPM1P32,,,nucleophosmin 1 pseudogene 32,True,False,False,False,False,,clean
+290,ENSG00000175040.6,0.0498408563532009,ENSG00000175040,CHST2,protein-coding,,carbohydrate sulfotransferase 2,True,False,False,False,False,,clean
+291,ENSG00000255374.3,0.0496494230891573,ENSG00000255374,TAS2R43,protein-coding,,taste 2 receptor member 43,True,False,False,False,False,,clean
+292,ENSG00000111796.3,0.0495876586262362,ENSG00000111796,KLRB1,protein-coding,,killer cell lectin like receptor B1,True,False,False,False,False,,clean
+293,ENSG00000163923.10,0.0495720321752451,ENSG00000163923,RPL39L,protein-coding,,ribosomal protein L39 like,True,False,False,False,False,,clean
+294,ENSG00000073146.16,0.0493916539937841,ENSG00000073146,MOV10L1,protein-coding,,Mov10 like RNA helicase 1,True,False,False,False,False,,clean
+295,ENSG00000254484.1,0.0490311342515485,ENSG00000254484,,,,,True,False,False,True,True,0.33615,confirmed_artifact
+296,ENSG00000169313.9,0.0489571979952957,ENSG00000169313,P2RY12,protein-coding,,purinergic receptor P2Y12,True,False,False,False,False,,clean
+297,ENSG00000148803.12,0.0489353271467263,ENSG00000148803,FUOM,protein-coding,,fucose mutarotase,True,False,False,False,False,,clean
+298,ENSG00000233288.1,0.0489157131310191,ENSG00000233288,LOC101928401,ncRNA,,uncharacterized LOC101928401,True,False,False,False,False,,clean
+299,ENSG00000280474.1,0.0487866339118117,ENSG00000280474,,,,,True,False,False,True,True,0.300937,confirmed_artifact
+300,ENSG00000272949.1,0.0485717006282604,ENSG00000272949,,,,,False,False,False,True,True,0.0,confirmed_artifact
+301,ENSG00000145287.10,0.0485362107459032,ENSG00000145287,PLAC8,protein-coding,,placenta associated 8,True,False,False,False,False,,clean
+302,ENSG00000280429.1,0.0484563538031386,ENSG00000280429,,,,,True,False,False,True,True,6.655880000000001,flagged_but_expressed
+303,ENSG00000259658.5,0.0483690624795528,ENSG00000259658,UBE2Q2P13,,,UBE2Q2 pseudogene 13,True,False,False,False,False,,clean
+304,ENSG00000281938.2,0.0479489116216484,ENSG00000281938,,,,,True,False,False,True,True,0.0,confirmed_artifact
+305,ENSG00000236514.1,0.0475884102517911,ENSG00000236514,ZNF248-AS1,,,ZNF248 antisense RNA 1,True,False,False,False,False,,clean
+306,ENSG00000258701.1,0.0472226268842547,ENSG00000258701,VESTAR,ncRNA,,VEGFC mRNA stability associated lncRNA,True,False,False,False,False,,clean
+307,ENSG00000108405.4,0.0470619885412394,ENSG00000108405,P2RX1,protein-coding,,purinergic receptor P2X 1,True,False,False,False,False,,clean
+308,ENSG00000254447.3,0.0469293219335401,ENSG00000254447,,,,,True,False,False,True,True,0.855303,confirmed_artifact
+309,ENSG00000172457.6,0.0466608905347387,ENSG00000172457,OR9G4,protein-coding,,olfactory receptor family 9 subfamily G member 4,True,True,False,False,True,0.139061,confirmed_artifact
+310,ENSG00000286100.1,0.0463047501162465,ENSG00000286100,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+311,ENSG00000231035.1,0.0461334781467564,ENSG00000231035,RPL7L1P9,pseudo,,RPL7L1 pseudogene 9,True,False,False,False,False,,clean
+312,ENSG00000278212.2,0.0460456335763681,ENSG00000278212,,,,,True,False,False,True,True,0.585813,confirmed_artifact
+313,ENSG00000211968.3,0.0458705727318904,ENSG00000211968,IGHV1-58,other,,immunoglobulin heavy variable 1-58,True,False,False,False,False,,clean
+314,ENSG00000261831.2,0.0457334597383411,ENSG00000261831,,,,,True,False,False,True,True,6.71249,flagged_but_expressed
+315,ENSG00000226900.1,0.0455619264271105,ENSG00000226900,,,,,True,False,False,True,True,25.9463,flagged_but_expressed
+316,ENSG00000272040.1,0.0455100493192974,ENSG00000272040,,,,,False,False,False,True,True,10.9589,flagged_but_expressed
+317,ENSG00000278492.1,0.0454089884429154,ENSG00000278492,,,,,True,False,False,True,True,3.8628199999999997,borderline
+318,ENSG00000222445.1,0.0451340380366116,ENSG00000222445,RN7SKP56,pseudo,,RN7SK pseudogene 56,True,False,False,False,False,,clean
+319,ENSG00000173727.12,0.045101351529614,ENSG00000173727,FAUP4,,,FAU pseudogene 4,True,False,False,False,False,,clean
+320,ENSG00000226747.6,0.0450796622807868,ENSG00000226747,,,,,False,False,False,True,True,5.55166,flagged_but_expressed
+321,ENSG00000230793.1,0.045077206109468,ENSG00000230793,SMARCE1P5,pseudo,,SMARCE1 pseudogene 5,True,False,False,False,False,,clean
+322,ENSG00000171053.9,0.0450439908276043,ENSG00000171053,PATE1,protein-coding,,prostate and testis expressed 1,True,True,False,False,True,0.0792168,confirmed_artifact
+323,ENSG00000229018.5,0.0449476487900546,ENSG00000229018,PMS2P7,,,"PMS1 homolog 2, mismatch repair system component pseudogene 7",True,False,False,False,False,,clean
+324,ENSG00000233901.5,0.0445769831694067,ENSG00000233901,LINC01503,ncRNA,,long intergenic non-protein coding RNA 1503,True,False,False,False,False,,clean
+325,ENSG00000004468.13,0.0442411030384127,ENSG00000004468,CD38,protein-coding,,CD38 molecule,True,False,False,False,False,,clean
+326,ENSG00000236383.8,0.0437291730652376,ENSG00000236383,CCDC200,protein-coding,,coiled-coil domain containing 200,True,False,False,False,False,,clean
+327,ENSG00000126856.14,0.0434550134990758,ENSG00000126856,PRDM7,protein-coding,,PR/SET domain 7,True,False,False,False,False,,clean
+328,ENSG00000286011.1,0.0433563400133942,ENSG00000286011,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+329,ENSG00000137337.15,0.0432167204400836,ENSG00000137337,MDC1,protein-coding,,mediator of DNA damage checkpoint 1,True,False,False,False,False,,clean
+330,ENSG00000154451.14,0.0429892013489457,ENSG00000154451,GBP5,protein-coding,,guanylate binding protein 5,True,False,False,False,False,,clean
+331,ENSG00000231535.6,0.0429539452424784,ENSG00000231535,LINC00278,ncRNA,,long intergenic non-protein coding RNA 278,True,False,False,False,False,,clean
+332,ENSG00000214338.10,0.0427111174504623,ENSG00000214338,MTCL3,protein-coding,,MTCL family member 3,True,False,False,False,False,,clean
+333,ENSG00000186765.11,0.0425398315998832,ENSG00000186765,FSCN2,protein-coding,,"fascin actin-bundling protein 2, retinal",True,False,False,False,False,,clean
+334,ENSG00000196136.17,0.0425205328669435,ENSG00000196136,SERPINA3,protein-coding,,serpin family A member 3,True,False,False,False,False,,clean
+335,ENSG00000138772.13,0.0423263998062727,ENSG00000138772,ANXA3,protein-coding,,annexin A3,True,False,False,False,False,,clean
+336,ENSG00000099994.11,0.0423239968435919,ENSG00000099994,SUSD2,protein-coding,,sushi domain containing 2,True,False,False,False,False,,clean
+337,ENSG00000102755.12,0.0422926622724158,ENSG00000102755,FLT1,protein-coding,,fms related receptor tyrosine kinase 1,True,False,False,False,False,,clean
+338,ENSG00000268883.2,0.0419056631759698,ENSG00000268883,PNMA6B,,,PNMA family member 6B (pseudogene),True,False,False,False,False,,clean
+339,ENSG00000104332.12,0.0417480340487284,ENSG00000104332,SFRP1,protein-coding,,secreted frizzled related protein 1,True,False,False,False,False,,clean
+340,ENSG00000099399.6,0.0414994262452226,ENSG00000099399,MAGEB2,protein-coding,,MAGE family member B2,True,False,False,False,False,,clean
+341,ENSG00000214108.4,0.0414284054867832,ENSG00000214108,TPT1P5,pseudo,,TPT1 pseudogene 5,True,False,False,False,False,,clean
+342,ENSG00000185112.5,0.041331440108195,ENSG00000185112,FAM43A,protein-coding,,family with sequence similarity 43 member A,True,False,False,False,False,,clean
+343,ENSG00000270141.3,0.0413250477683374,ENSG00000270141,TERC,ncRNA,,telomerase RNA component,True,False,False,False,False,,clean
+344,ENSG00000249675.1,0.0409663560843905,ENSG00000249675,,,,,True,False,False,True,True,0.0,confirmed_artifact
+345,ENSG00000100802.15,0.0409480409390231,ENSG00000100802,C14orf93,protein-coding,,chromosome 14 open reading frame 93,True,False,False,False,False,,clean
+346,ENSG00000274080.1,0.0404537978460536,ENSG00000274080,,,,,True,False,False,True,True,3.18385,borderline
+347,ENSG00000182798.10,0.0401042680254236,ENSG00000182798,MAGEB17,protein-coding,,MAGE family member B17,True,False,False,False,False,,clean
+348,ENSG00000121318.2,0.0396645991272305,ENSG00000121318,TAS2R10,protein-coding,,taste 2 receptor member 10,True,False,False,False,False,,clean
+349,ENSG00000137575.12,0.0396054117975009,ENSG00000137575,SDCBP,protein-coding,,syndecan binding protein,True,False,False,False,False,,clean
+350,ENSG00000159197.3,0.0395632477754762,ENSG00000159197,KCNE2,protein-coding,,potassium voltage-gated channel subfamily E regulatory subunit 2,True,False,False,False,False,,clean
+351,ENSG00000273851.1,0.0394947392012227,ENSG00000273851,,,,,True,False,False,True,True,1.10071,borderline
+352,ENSG00000259695.2,0.0392187678703128,ENSG00000259695,,,,,True,False,False,True,True,0.0,confirmed_artifact
+353,ENSG00000232852.1,0.038994956364108,ENSG00000232852,CICP4,,,capicua transcriptional repressor pseudogene 4,True,False,False,False,False,,clean
+354,ENSG00000146070.16,0.0389487912430347,ENSG00000146070,PLA2G7,protein-coding,,phospholipase A2 group VII,True,False,False,False,False,,clean
+355,ENSG00000267238.1,0.0386129107917321,ENSG00000267238,,,,,True,False,False,True,True,0.705125,confirmed_artifact
+356,ENSG00000119917.14,0.0385898414711975,ENSG00000119917,IFIT3,protein-coding,,interferon induced protein with tetratricopeptide repeats 3,True,False,False,False,False,,clean
+357,ENSG00000135094.11,0.0383962288540316,ENSG00000135094,SDS,protein-coding,,serine dehydratase,True,False,False,False,False,,clean
+358,ENSG00000228874.1,0.0383208332364554,ENSG00000228874,RPS24P10,pseudo,,ribosomal protein S24 pseudogene 10,True,False,False,False,False,,clean
+359,ENSG00000205018.2,0.0383202012337395,ENSG00000205018,,,,,True,False,False,True,True,3.27677,borderline
+360,ENSG00000187627.15,0.038174613539757,ENSG00000187627,RGPD1,protein-coding,,RANBP2 like and GRIP domain containing 1,True,False,False,False,False,,clean
+361,ENSG00000236017.8,0.0379996645478425,ENSG00000236017,ASMTL-AS1,,,ASMTL antisense RNA 1,True,False,False,False,False,,clean
+362,ENSG00000272626.1,0.037952645127957,ENSG00000272626,,,,,True,False,False,True,True,1.6045200000000002,borderline
+363,ENSG00000266821.1,0.0378826672825292,ENSG00000266821,,,,,True,False,False,True,True,0.211267,confirmed_artifact
+364,ENSG00000247627.2,0.0378748079238486,ENSG00000247627,MTND4P12,pseudo,,MT-ND4 pseudogene 12,True,False,False,False,False,,clean
+365,ENSG00000120210.8,0.0377501412746337,ENSG00000120210,INSL6,protein-coding,,insulin like 6,True,False,False,False,False,,clean
+366,ENSG00000198856.13,0.0376706522268833,ENSG00000198856,OSTC,protein-coding,,oligosaccharyltransferase complex non-catalytic subunit,True,False,False,False,False,,clean
+367,ENSG00000280217.1,0.0375527158265174,ENSG00000280217,,,,,True,False,False,True,True,0.454163,confirmed_artifact
+368,ENSG00000186930.4,0.0375282143957157,ENSG00000186930,KRTAP6-2,protein-coding,,keratin associated protein 6-2,True,False,False,False,False,,clean
+369,ENSG00000245711.2,0.0373299432449376,ENSG00000245711,NADK2-AS1,ncRNA,,NADK2 antisense RNA 1,True,False,False,False,False,,clean
+370,ENSG00000216490.4,0.0370055745265419,ENSG00000216490,IFI30,protein-coding,,IFI30 lysosomal thiol reductase,True,False,False,False,False,,clean
+371,ENSG00000124205.17,0.0367656211469413,ENSG00000124205,EDN3,protein-coding,,endothelin 3,True,False,False,False,False,,clean
+372,ENSG00000285950.1,0.0365144783005818,ENSG00000285950,FAM90A10,protein-coding,,family with sequence similarity 90 member A10,True,False,False,False,False,,clean
+373,ENSG00000150687.12,0.0364716780164879,ENSG00000150687,PRSS23,protein-coding,,serine protease 23,True,True,False,False,True,140.487,flagged_but_expressed
+374,ENSG00000215302.8,0.0363578343966678,ENSG00000215302,WHAMMP4,,,WHAMM pseudogene 4,True,False,False,False,False,,clean
+375,ENSG00000248578.1,0.0361685957788097,ENSG00000248578,NPM1P21,,,nucleophosmin 1 pseudogene 21,True,False,False,False,False,,clean
+376,ENSG00000226686.7,0.0358603316865076,ENSG00000226686,LINC01535,ncRNA,,long intergenic non-protein coding RNA 1535,True,False,False,False,False,,clean
+377,ENSG00000224272.2,0.0354195352147031,ENSG00000224272,LOC124905349,ncRNA,,uncharacterized LOC124905349,True,False,False,False,False,,clean
+378,ENSG00000124253.11,0.0351087817066387,ENSG00000124253,PCK1,protein-coding,,phosphoenolpyruvate carboxykinase 1,True,False,False,False,False,,clean
+379,ENSG00000260852.1,0.0350988379090141,ENSG00000260852,FBXL19-AS1,ncRNA,,FBXL19 antisense RNA 1,True,False,False,False,False,,clean
+380,ENSG00000273595.1,0.0348327612756718,ENSG00000273595,,,,,True,False,False,True,True,0.129813,confirmed_artifact
+381,ENSG00000144837.9,0.034680897812445,ENSG00000144837,PLA1A,protein-coding,,phospholipase A1 member A,True,False,False,False,False,,clean
+382,ENSG00000224791.1,0.0346395106965977,ENSG00000224791,KRT18P39,pseudo,,keratin 18 pseudogene 39,True,False,False,False,False,,clean
+383,ENSG00000280401.1,0.0345402444443235,ENSG00000280401,,,,,True,False,False,True,True,5.66978,flagged_but_expressed
+384,ENSG00000255495.1,0.0345127159640457,ENSG00000255495,,,,,False,False,False,True,True,3.5415,borderline
+385,ENSG00000163597.14,0.0344168949556267,ENSG00000163597,SNHG16,ncRNA,,small nucleolar RNA host gene 16,True,False,False,False,False,,clean
+386,ENSG00000254788.7,0.0343963100237236,ENSG00000254788,CKLF-CMTM1,protein-coding,,CKLF-CMTM1 readthrough,True,False,False,False,False,,clean
+387,ENSG00000196378.11,0.0343894970372614,ENSG00000196378,ZNF34,protein-coding,,zinc finger protein 34,True,False,False,False,False,,clean
+388,ENSG00000235368.1,0.0342331179281392,ENSG00000235368,SAPCD2P2,pseudo,,suppressor APC domain containing 2 pseudogene 2,True,False,False,False,False,,clean
+389,ENSG00000135269.18,0.0340007728486979,ENSG00000135269,TES,protein-coding,,testin LIM domain protein,True,False,False,False,False,,clean
+390,ENSG00000227827.3,0.0337690781924204,ENSG00000227827,PKD1P2,pseudo,,"polycystin 1, transient receptor potential channel interacting pseudogene 2",True,False,False,False,False,,clean
+391,ENSG00000161016.17,0.033695290407964,ENSG00000161016,RPL8,protein-coding,,ribosomal protein L8,True,False,False,False,False,,clean
+392,ENSG00000212664.5,0.0330775129710558,ENSG00000212664,RPL17P39,pseudo,,ribosomal protein L17 pseudogene 39,True,False,False,False,False,,clean
+393,ENSG00000182698.11,0.0330187761258539,ENSG00000182698,RESP18,protein-coding,,regulated endocrine specific protein 18,True,False,False,False,False,,clean
+394,ENSG00000105281.12,0.0329747967075936,ENSG00000105281,SLC1A5,protein-coding,,solute carrier family 1 member 5,True,False,False,False,False,,clean
+395,ENSG00000222042.1,0.0329076113715926,ENSG00000222042,,,,,True,False,False,True,True,1.48333,borderline
+396,ENSG00000279128.1,0.0326742985728727,ENSG00000279128,,,,,True,False,False,True,True,13.732999999999999,flagged_but_expressed
+397,ENSG00000238917.1,0.0325749098091067,ENSG00000238917,SNORD10,snoRNA,,"small nucleolar RNA, C/D box 10",True,False,False,False,False,,clean
+398,ENSG00000285556.1,0.0325340241150655,ENSG00000285556,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+399,ENSG00000133055.9,0.0320874923473122,ENSG00000133055,MYBPH,protein-coding,,myosin binding protein H,True,False,False,False,False,,clean
+400,ENSG00000223599.1,0.0315014620034799,ENSG00000223599,,,,,True,False,False,True,True,0.596174,confirmed_artifact
+401,ENSG00000235001.3,0.0314969985147904,ENSG00000235001,EIF4A1P2,pseudo,,eukaryotic translation initiation factor 4A1 pseudogene 2,True,False,False,False,False,,clean
+402,ENSG00000125691.13,0.031374661398729,ENSG00000125691,RPL23,protein-coding,,ribosomal protein L23,True,False,False,False,False,,clean
+403,ENSG00000261371.6,0.0313734179258015,ENSG00000261371,PECAM1,protein-coding,,platelet and endothelial cell adhesion molecule 1,True,False,False,False,False,,clean
+404,ENSG00000085999.12,0.0312077291186439,ENSG00000085999,RAD54L,protein-coding,,RAD54 like,True,False,False,False,False,,clean
+405,ENSG00000238961.1,0.031117678357599,ENSG00000238961,SNORA47,snoRNA,,"small nucleolar RNA, H/ACA box 47",True,False,False,False,False,,clean
+406,ENSG00000263644.1,0.0310893082761521,ENSG00000263644,,,,,True,False,False,True,True,0.713119,confirmed_artifact
+407,ENSG00000249359.2,0.0308636789658695,ENSG00000249359,,,,,True,False,False,True,True,0.217119,confirmed_artifact
+408,ENSG00000179134.15,0.0307979837441136,ENSG00000179134,SAMD4B,protein-coding,,sterile alpha motif domain containing 4B,True,False,False,False,False,,clean
+409,ENSG00000263535.2,0.0307799692797101,ENSG00000263535,AK4P1,,,adenylate kinase 4 pseudogene 1,True,False,False,False,False,,clean
+410,ENSG00000205362.11,0.0306109126338616,ENSG00000205362,MT1A,protein-coding,,metallothionein 1A,True,False,False,False,False,,clean
+411,ENSG00000229921.6,0.0305164605637742,ENSG00000229921,KIF25-AS1,ncRNA,,KIF25 antisense RNA 1,True,False,False,False,False,,clean
+412,ENSG00000237741.1,0.0304986824746736,ENSG00000237741,,,,,True,False,False,True,True,0.11141300000000001,confirmed_artifact
+413,ENSG00000142227.11,0.0304223485885493,ENSG00000142227,EMP3,protein-coding,,epithelial membrane protein 3 (MAM blood group),True,False,False,False,False,,clean
+414,ENSG00000167397.15,0.0293811028812203,ENSG00000167397,VKORC1,protein-coding,,vitamin K epoxide reductase complex subunit 1,True,False,False,False,False,,clean
+415,ENSG00000279253.1,0.0290522670027325,ENSG00000279253,,,,,True,False,False,True,True,15.1559,flagged_but_expressed
+416,ENSG00000153162.9,0.0290324218300904,ENSG00000153162,BMP6,protein-coding,,bone morphogenetic protein 6,True,False,False,False,False,,clean
+417,ENSG00000142546.13,0.0285766147520897,ENSG00000142546,NOSIP,protein-coding,,nitric oxide synthase interacting protein,True,False,False,False,False,,clean
+418,ENSG00000261783.1,0.0284619931599214,ENSG00000261783,,,,,True,False,False,True,True,2.84551,borderline
+419,ENSG00000251046.2,0.0283962336454786,ENSG00000251046,ZNF969P,pseudo,,"zinc finger protein 969, pseudogene",True,False,False,False,False,,clean
+420,ENSG00000249610.1,0.0283376213628566,ENSG00000249610,ZNF474-AS1,,,ZNF474 antisense RNA 1,True,False,False,False,False,,clean
+421,ENSG00000277200.1,0.0280071430602028,ENSG00000277200,CCDC92B,protein-coding,,coiled-coil domain containing 92B,True,False,False,False,False,,clean
+422,ENSG00000285888.1,0.0280014934207435,ENSG00000285888,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+423,ENSG00000132530.17,0.0278919223653758,ENSG00000132530,XAF1,protein-coding,,XIAP associated factor 1,True,False,False,False,False,,clean
+424,ENSG00000261436.5,0.0273532812019168,ENSG00000261436,LOC101927605,ncRNA,,uncharacterized LOC101927605,True,False,False,False,False,,clean
+425,ENSG00000251379.1,0.0272117652202306,ENSG00000251379,,,,,False,False,False,True,True,1.2392,borderline
+426,ENSG00000276076.4,0.0268351255709364,ENSG00000276076,LOC102724652,protein-coding,,crystallin alpha A2,True,False,False,False,False,,clean
+427,ENSG00000277209.1,0.0267230371657196,ENSG00000277209,RPPH1,ncRNA,,ribonuclease P RNA component H1,True,False,False,False,False,,clean
+428,ENSG00000139567.12,0.0265378388525262,ENSG00000139567,ACVRL1,protein-coding,,activin A receptor like type 1,True,False,False,False,False,,clean
+429,ENSG00000258545.5,0.0264210557602937,ENSG00000258545,RHOXF1-AS1,ncRNA,,RHOXF1 antisense RNA 1,True,False,False,False,False,,clean
+430,ENSG00000275572.1,0.0260452655364117,ENSG00000275572,GRIFIN,protein-coding,,galectin-related inter-fiber protein,True,False,False,False,False,,clean
+431,ENSG00000275385.1,0.0257087679427375,ENSG00000275385,CCL18,protein-coding,,C-C motif chemokine ligand 18,True,False,False,False,False,,clean
+432,ENSG00000179364.13,0.0256787397299691,ENSG00000179364,PACS2,protein-coding,,phosphofurin acidic cluster sorting protein 2,True,False,False,False,False,,clean
+433,ENSG00000259349.1,0.025463858592941,ENSG00000259349,APPBP2-DT,,,APPBP2 divergent transcript,True,False,False,False,False,,clean
+434,ENSG00000277669.1,0.0254321231767675,ENSG00000277669,,,,,False,False,False,True,True,0.0,confirmed_artifact
+435,ENSG00000269937.1,0.0253841888186573,ENSG00000269937,,,,,True,False,False,True,True,0.28871399999999997,confirmed_artifact
+436,ENSG00000274678.1,0.0253359085684681,ENSG00000274678,,,,,True,False,False,True,True,18.0898,flagged_but_expressed
+437,ENSG00000113384.14,0.024881651714677,ENSG00000113384,GOLPH3,protein-coding,,golgi phosphoprotein 3,True,False,False,False,False,,clean
+438,ENSG00000277157.1,0.0248399692999992,ENSG00000277157,H4C4,protein-coding,,H4 clustered histone 4,True,False,False,False,False,,clean
+439,ENSG00000263050.1,0.0247732483426991,ENSG00000263050,DPH1-AS1,,,DPH1 antisense RNA 1,True,False,False,False,False,,clean
+440,ENSG00000235012.1,0.0247081267309078,ENSG00000235012,JCADP1,pseudo,,JCAD pseudogene 1,True,False,False,False,False,,clean
+441,ENSG00000164488.12,0.0245997232292303,ENSG00000164488,DACT2,protein-coding,,dishevelled binding antagonist of beta catenin 2,True,False,False,False,False,,clean
+442,ENSG00000286159.1,0.0240187017606607,ENSG00000286159,,,,,True,False,False,True,True,-1.0,flagged_no_gtex
+443,ENSG00000160410.15,0.0234718562520192,ENSG00000160410,SHKBP1,protein-coding,,SH3KBP1 binding protein 1,True,False,False,False,False,,clean
+444,ENSG00000159167.12,0.0233641754723293,ENSG00000159167,STC1,protein-coding,,stanniocalcin 1,True,False,False,False,False,,clean
+445,ENSG00000259488.2,0.0230638952847179,ENSG00000259488,DUT-AS1,ncRNA,,DUT antisense RNA 1,True,False,False,False,False,,clean
+446,ENSG00000279791.1,0.0228596626950669,ENSG00000279791,,,,,True,False,False,True,True,7.39717,flagged_but_expressed
+447,ENSG00000250794.2,0.0228527143442078,ENSG00000250794,ALG1L12P,,,"ALG1 like 12, pseudogene",True,False,False,False,False,,clean
+448,ENSG00000175643.10,0.0227428978491654,ENSG00000175643,RMI2,protein-coding,,RecQ mediated genome instability 2,True,False,False,False,False,,clean
+449,ENSG00000264943.1,0.0226918076745825,ENSG00000264943,SH3GL1P2,,,"SH3 domain containing GRB2 like 1, endophilin A2 pseudogene 2",True,False,False,False,False,,clean
+450,ENSG00000273802.2,0.022280403042595,ENSG00000273802,H2BC8,protein-coding,,H2B clustered histone 8,True,False,False,False,False,,clean
+451,ENSG00000227045.1,0.0221776679863625,ENSG00000227045,,,,,True,False,False,True,True,3.1133900000000003,borderline
+452,ENSG00000136457.10,0.0221374136244848,ENSG00000136457,CHAD,protein-coding,,chondroadherin,True,False,False,False,False,,clean
+453,ENSG00000217539.2,0.0219257312461387,ENSG00000217539,IQCB2P,,,IQ motif containing B2 pseudogene,True,False,False,False,False,,clean
+454,ENSG00000103642.12,0.0216310341061379,ENSG00000103642,LACTB,protein-coding,,lactamase beta,True,False,False,False,False,,clean
+455,ENSG00000132002.8,0.0215522398676806,ENSG00000132002,DNAJB1,protein-coding,,DnaJ heat shock protein family (Hsp40) member B1,True,False,False,False,False,,clean
+456,ENSG00000257771.5,0.0210402562484103,ENSG00000257771,LINC02395,ncRNA,,long intergenic non-protein coding RNA 2395,True,False,False,False,False,,clean
+457,ENSG00000255073.8,0.0208754600161173,ENSG00000255073,ZFP91-CNTF,,,ZFP91-CNTF readthrough (NMD candidate),True,False,False,False,False,,clean
+458,ENSG00000269404.7,0.019954278236599,ENSG00000269404,SPIB,protein-coding,,Spi-B transcription factor,True,False,False,False,False,,clean
+459,ENSG00000161970.14,0.0197661879358711,ENSG00000161970,RPL26,protein-coding,,ribosomal protein L26,True,False,False,False,False,,clean
+460,ENSG00000243927.6,0.0196887859159219,ENSG00000243927,MRPS6,protein-coding,,mitochondrial ribosomal protein S6,True,False,False,False,False,,clean
+461,ENSG00000264490.3,0.0196097105663491,ENSG00000264490,,,,,True,False,False,True,True,1.38267,borderline
+462,ENSG00000272158.1,0.0195582385758782,ENSG00000272158,,,,,True,False,False,True,True,4.14299,borderline
+463,ENSG00000115705.21,0.0190681621144614,ENSG00000115705,TPO,protein-coding,,thyroid peroxidase,True,False,False,False,False,,clean
+464,ENSG00000146166.16,0.0190139332155694,ENSG00000146166,LGSN,protein-coding,,"lengsin, lens protein with glutamine synthetase domain",True,False,False,False,False,,clean
+465,ENSG00000237276.8,0.0187393553226602,ENSG00000237276,ANO7L1,,,anoctamin 7 like 1 (pseudogene),True,False,False,False,False,,clean
+466,ENSG00000280195.1,0.0187314290592223,ENSG00000280195,,,,,True,False,False,True,True,7.74931,flagged_but_expressed
+467,ENSG00000271959.1,0.0186946464172041,ENSG00000271959,,,,,True,False,False,True,True,15.6133,flagged_but_expressed
+468,ENSG00000237036.4,0.0186751386460991,ENSG00000237036,ZEB1-AS1,ncRNA,,ZEB1 antisense RNA 1,True,False,False,False,False,,clean
+469,ENSG00000112175.8,0.0184197803839259,ENSG00000112175,BMP5,protein-coding,,bone morphogenetic protein 5,True,False,False,False,False,,clean
+470,ENSG00000233334.3,0.0178804724656115,ENSG00000233334,FAM53B-AS1,ncRNA,,FAM53B antisense RNA 1,True,False,False,False,False,,clean
+471,ENSG00000101883.4,0.0177982040046669,ENSG00000101883,RHOXF1,protein-coding,,Rhox homeobox family member 1,True,False,False,False,False,,clean
+472,ENSG00000258469.1,0.0169291040534411,ENSG00000258469,CHMP4BP1,,,charged multivesicular body protein 4B pseudogene 1,True,False,False,False,False,,clean
+473,ENSG00000272668.2,0.0167833204596109,ENSG00000272668,LOC124904434,ncRNA,,uncharacterized LOC124904434,True,False,False,False,False,,clean
+474,ENSG00000140368.12,0.0166610622920751,ENSG00000140368,PSTPIP1,protein-coding,,proline-serine-threonine phosphatase interacting protein 1,True,False,False,False,False,,clean
+475,ENSG00000242280.1,0.0156752318235716,ENSG00000242280,SLC16A1P1,pseudo,,SLC16A1 pseudogene 1,True,False,False,False,False,,clean
+476,ENSG00000144857.14,0.0155495894034725,ENSG00000144857,BOC,protein-coding,,"BOC cell adhesion associated, oncogene regulated",True,False,False,False,False,,clean
+477,ENSG00000116586.11,0.0154959185450557,ENSG00000116586,LAMTOR2,protein-coding,,"late endosomal/lysosomal adaptor, MAPK and MTOR activator 2",True,False,False,False,False,,clean
+478,ENSG00000122420.10,0.0149840834685132,ENSG00000122420,PTGFR,protein-coding,,prostaglandin F receptor,True,False,False,False,False,,clean
+479,ENSG00000133315.11,0.0143535157279988,ENSG00000133315,MACROD1,protein-coding,,mono-ADP ribosylhydrolase 1,True,False,False,False,False,,clean
+480,ENSG00000250471.2,0.0140611367196005,ENSG00000250471,GMPSP1,pseudo,,GMPS pseudogene 1,True,False,False,False,False,,clean
+481,ENSG00000101187.16,0.0140279945685233,ENSG00000101187,SLCO4A1,protein-coding,,solute carrier organic anion transporter family member 4A1,True,False,False,False,False,,clean
+482,ENSG00000184669.9,0.0136877608453282,ENSG00000184669,OR7E14P,pseudo,,olfactory receptor family 7 subfamily E member 14 pseudogene,True,True,False,False,True,15.4696,flagged_but_expressed
+483,ENSG00000111885.7,0.0135835416150324,ENSG00000111885,MAN1A1,protein-coding,,mannosidase alpha class 1A member 1,True,False,False,False,False,,clean
+484,ENSG00000235750.10,0.011892940902753,ENSG00000235750,KIAA0040,protein-coding,,KIAA0040,True,False,False,False,False,,clean
+485,ENSG00000270020.1,0.0112505217596731,ENSG00000270020,,,,,True,False,False,True,True,2.05044,borderline
+486,ENSG00000261744.1,0.0104134641415231,ENSG00000261744,ZFPM1-AS1,ncRNA,,ZFPM1 antisense RNA 1,True,False,False,False,False,,clean
+487,ENSG00000271555.1,0.0102715575768678,ENSG00000271555,,,,,True,False,False,True,True,1.73384,borderline
+488,ENSG00000213853.10,0.0102536973128543,ENSG00000213853,EMP2,protein-coding,,epithelial membrane protein 2,True,False,False,False,False,,clean
+489,ENSG00000259782.2,0.0099570415785597,ENSG00000259782,,,,,True,False,False,True,True,1.02311,borderline
+490,ENSG00000184795.9,0.0091970917588112,ENSG00000184795,UNC93B5,,,unc-93 homolog B5 (pseudogene),True,False,False,False,False,,clean
+491,ENSG00000251634.2,0.0089810173442556,ENSG00000251634,NAIPP4,,,NAIP pseudogene 4,True,False,False,False,False,,clean
+492,ENSG00000182899.16,0.0082175779952004,ENSG00000182899,RPL35A,protein-coding,,ribosomal protein L35a,True,False,False,False,False,,clean
+493,ENSG00000233003.4,0.0081480027251523,ENSG00000233003,CICP26,,,capicua transcriptional repressor pseudogene 26,True,False,False,False,False,,clean
+494,ENSG00000229117.9,0.0079170811757198,ENSG00000229117,RPL41,protein-coding,,ribosomal protein L41,True,False,False,False,False,,clean
+495,ENSG00000232166.1,0.0075727145834727,ENSG00000232166,RPL9P10,pseudo,,ribosomal protein L9 pseudogene 10,True,False,False,False,False,,clean
+496,ENSG00000250268.3,0.0071443243651538,ENSG00000250268,ALG1L14P,,,"ALG1 like 14, pseudogene",True,False,False,False,False,,clean
+497,ENSG00000160886.13,0.0063413325090317,ENSG00000160886,LY6K,protein-coding,,lymphocyte antigen 6 family member K,True,False,False,False,False,,clean
+498,ENSG00000225930.4,0.0051911248273151,ENSG00000225930,LINC02249,ncRNA,,long intergenic non-protein coding RNA 2249,True,False,False,False,False,,clean
+499,ENSG00000104671.8,0.0,ENSG00000104671,DCTN6,protein-coding,,dynactin subunit 6,True,False,False,False,False,,clean
+500,ENSG00000113303.11,0.0,ENSG00000113303,BTNL8,protein-coding,,butyrophilin like 8,True,False,False,False,False,,clean

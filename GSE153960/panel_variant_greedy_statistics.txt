@@ -1,0 +1,24 @@
+Greedy Druggable Panel Optimisation
+================================================================================
+Baseline (fast model CV): 0.9392
+Baseline zero-shot GSE76220: 0.7500
+Baseline zero-shot GSE122649: 0.7468
+
+GREEDY FORWARD SELECTION (objective: GSE122649 zero-shot AUC)
+--------------------------------------------------------------------------------
+Step  Swapped                → Replacement           CV    ZS_122     ZS_76     Δ122
+--------------------------------------------------------------------------------
+1     SOHLH2                 → KIF2A             0.9379    0.8654    0.7812  +0.1186
+2     VWF                    → TM4SF1            0.9374    0.9071    0.8958  +0.0417
+3     HERC2P8                → C20orf204         0.9372    0.9455    0.8958  +0.0385
+4     LOC112268270           → BTBD17            0.9346    0.9519    0.8958  +0.0064
+
+Active swaps in final greedy panel:
+  [('SOHLH2', 'KIF2A'), ('VWF', 'TM4SF1'), ('HERC2P8', 'C20orf204'), ('LOC112268270', 'BTBD17')]
+
+MAX-CODING PANEL (all protein-coding swaps simultaneously)
+--------------------------------------------------------------------------------
+Swaps: 16 (genes: CKMT2, CLDN5, EMP1, HERC2P8, HEXB, LOC112268270, MCEE, MECOM, NR4A1, PROS1, SERTAD1, SLC37A2, SMG1P5, SOHLH2, TINAGL1, VWF)
+CV AUC    : 0.8926  (Δ baseline: -0.0466)
+ZS GSE76220    : 0.6771  (Δ baseline: -0.0729)
+ZS GSE122649   : 0.4583  (Δ baseline: -0.2885)

@@ -1,0 +1,21 @@
+STMN2 TDP-43 bridge check
+============================================================
+STMN2 column: ENSG00000104435.13
+
+ALS Spectrum MND (n=684)  mean log1p = 7.555
+Non-Neuro Control (n=190) mean log1p = 7.571
+Other Neurological (n=162) mean log1p = 7.404
+
+ALS vs Control:
+  rank-biserial = +0.071
+  Mann-Whitney p = 1.340e-01
+  log2 FC (ALS/Control) raw RSEM = +0.066
+  direction: UP in ALS
+  TDP-43 expectation: STMN2 should be DOWN in ALS (TDP-43 LOF)
+
+Other-Neurological cohort split by panel composite (median):
+  hi-panel STMN2 mean = 7.414  (n=81)
+  lo-panel STMN2 mean = 7.395  (n=81)
+  rank-biserial (hi vs lo) = -0.001
+  Mann-Whitney p = 9.960e-01
+  TDP-43 expectation: hi-panel (FTLD-TDP-like) should show LOWER STMN2

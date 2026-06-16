@@ -1,0 +1,73 @@
+Universal Replacement Gene Profiling
+========================================================================
+
+INVESTIGATION 1: Direction + Univariate AUC
+--------------------------------------------------
+  ENSG00000223821            dir=up    log2FC=+0.052  r_b=+0.336  p=1.30e-12  univar_AUC=0.6680 [0.6222–0.7144]
+  OR4D6                      dir=up    log2FC=+0.016  r_b=+0.388  p=2.64e-16  univar_AUC=0.6940 [0.6482–0.7391]
+  PATE1                      dir=up    log2FC=+0.015  r_b=+0.393  p=1.08e-16  univar_AUC=0.6965 [0.6506–0.7441]
+
+INVESTIGATION 2: Cell-type Spearman ρ
+--------------------------------------------------
+  ENSG00000223821:  strongest = Neuron ρ=-0.251
+    Neuron                ρ=-0.251
+    Astrocyte             ρ=+0.226
+    Oligodendrocyte       ρ=+0.106
+    Microglia             ρ=+0.240
+    Endothelial           ρ=+0.144
+    OPC                   ρ=+0.096
+    Pericyte              ρ=+0.127
+  OR4D6:  strongest = Pericyte ρ=-0.378
+    Neuron                ρ=-0.047
+    Astrocyte             ρ=-0.215
+    Oligodendrocyte       ρ=-0.281
+    Microglia             ρ=-0.195
+    Endothelial           ρ=-0.370
+    OPC                   ρ=-0.327
+    Pericyte              ρ=-0.378
+  PATE1:  strongest = Pericyte ρ=-0.265
+    Neuron                ρ=-0.066
+    Astrocyte             ρ=-0.138
+    Oligodendrocyte       ρ=-0.224
+    Microglia             ρ=-0.128
+    Endothelial           ρ=-0.249
+    OPC                   ρ=-0.244
+    Pericyte              ρ=-0.265
+
+INVESTIGATION 3: GTEx v8 Tissue Specificity
+--------------------------------------------------
+  ENSG00000223821:  CNS mean=0.18 TPM  non-CNS mean=0.38 TPM  CNS ratio=0.459
+    Top-3 tissues: Cervix_Endocervix=1.1  |  Ovary=1.0  |  Nerve_Tibial=0.8
+  OR4D6:  CNS mean=0.00 TPM  non-CNS mean=0.01 TPM  CNS ratio=0.000
+    Top-3 tissues: Testis=0.2  |  Thyroid=0.1  |  Fallopian_Tube=0.1
+  PATE1:  CNS mean=0.00 TPM  non-CNS mean=0.00 TPM  CNS ratio=0.000
+    Top-3 tissues: Prostate=0.1  |  Testis=0.0  |  Adipose_Subcutaneous=0.0
+
+INVESTIGATION 4: C9ALS-FTD vs pure ALS differential
+--------------------------------------------------
+  ENSG00000223821            r_b(FTD vs ALS)=-0.022  p=3.29e-01  q=0.784  | r_b(ALS vs ctrl)=+0.054  r_b(FTD vs ctrl)=+0.033
+  OR4D6                      r_b(FTD vs ALS)=-0.005  p=7.33e-01  q=0.784  | r_b(ALS vs ctrl)=+0.012  r_b(FTD vs ctrl)=+0.008
+  PATE1                      r_b(FTD vs ALS)=+0.004  p=7.84e-01  q=0.784  | r_b(ALS vs ctrl)=+0.011  r_b(FTD vs ctrl)=+0.014
+
+INVESTIGATION 5: Co-expression Top-50 ORA
+--------------------------------------------------
+  ENSG00000223821  top-10 correlates: ENSG00000237178(r=+0.258), ENSG00000228770(r=+0.258), ENSG00000234227(r=+0.258), ENSG00000263914(r=+0.258), ENSG00000255919(r=+0.258), ENSG00000235028(r=+0.220), ENSG00000232638(r=+0.219), ENSG00000239872(r=+0.217), ENSG00000224486(r=+0.206), ENSG00000236894(r=+0.206)
+    ORA: no significant terms (adj_p < 0.25)
+  OR4D6  top-10 correlates: ENSG00000278815(r=+0.372), ENSG00000229287(r=+0.372), ENSG00000202517(r=+0.372), ENSG00000234399(r=+0.372), ENSG00000231516(r=+0.372), ENSG00000276601(r=+0.372), ENSG00000268238(r=+0.372), ENSG00000243136(r=+0.372), ENSG00000221745(r=+0.372), ENSG00000284179(r=+0.372)
+    ORA: no significant terms (adj_p < 0.25)
+  PATE1  top-10 correlates: ENSG00000258117(r=+0.277), ENSG00000255269(r=+0.251), ENSG00000232790(r=+0.241), ENSG00000199459(r=+0.241), ENSG00000241932(r=+0.241), ENSG00000259324(r=+0.241), ENSG00000275419(r=+0.241), ENSG00000236101(r=+0.241), ENSG00000251642(r=+0.241), ENSG00000266943(r=+0.241)
+    ORA: no significant terms (adj_p < 0.25)
+
+INVESTIGATION 6: External Cohort Presence
+--------------------------------------------------
+  ENSG00000223821:  GPL24676=True  GPL16791=True  GSE76220=False  GSE122649=unknown
+  OR4D6:  GPL24676=True  GPL16791=True  GSE76220=True  GSE122649=unknown
+  PATE1:  GPL24676=True  GPL16791=True  GSE76220=False  GSE122649=unknown
+
+INVESTIGATION 7: k=28 Panel Test
+--------------------------------------------------
+  Baseline k=25 AUC: 0.9571
+  k=28 (all 3 added): 0.9762  (Δ=+0.0191)
+    +ENSG00000223821: AUC=0.9737  Δ=+0.0166
+    +OR4D6: AUC=0.9705  Δ=+0.0134
+    +PATE1: AUC=0.9710  Δ=+0.0139

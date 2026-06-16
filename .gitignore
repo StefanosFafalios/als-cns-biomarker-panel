@@ -1,0 +1,30 @@
+# Raw data — download via GSE153960/reproduce/download_geo_data.sh
+resources/
+
+# Large regenerable artifacts (rebuilt by reproduce/run_all.sh, step 02)
+*.npy
+
+# Binary model / data caches
+*.pkl
+*.joblib
+*.h5
+cache*/
+optimizer_state*/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+reproduce/logs/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.out
+*.toc
+*.fls
+*.fdb_latexmk

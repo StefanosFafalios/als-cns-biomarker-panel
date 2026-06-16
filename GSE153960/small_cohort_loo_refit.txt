@@ -1,0 +1,14 @@
+Small-cohort within-cohort LOO — hyperparameter sensitivity (M6)
+======================================================================
+Compares within-cohort LOO AUC under the n=874-tuned hyperparameter
+regime (currently in main text) vs a regime appropriate for small n.
+
+  cohort  n  n_pos                regime  n_estimators  min_child_samples  AUC_LOO
+GSE76220 20     12 paper_hyperparams_LOO          1500                  1   0.8229
+GSE76220 20     12      sane_small_n_LOO           100                  5   0.7396
+
+Interpretation:
+  - If both regimes give similar AUC, the LOO numbers are robust to
+    the hyperparameter choice and the reviewer's concern is bounded.
+  - If the sane-regime AUC is notably different, the original numbers
+    over- or under-fit and the main-text values need a caveat.

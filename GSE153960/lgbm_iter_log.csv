@@ -1,0 +1,4 @@
+iteration,n_discard,n_features_available,n_sfm_selected,mean_auc,fold_1_auc,fold_2_auc,fold_3_auc,fold_4_auc,fold_5_auc,n_newly_flagged,newly_flagged,newly_flagged_symbols
+0.0,18.0,47822.0,3339.0,0.9653,0.9825,0.9727,0.9443,0.9716,0.9555,0.0,,
+1.0,19.0,47822.0,3339.0,0.9653,0.9825,0.9727,0.9443,0.9716,0.9555,0.0,,
+2.0,19.0,47822.0,3704.0,0.9824,0.9942,0.9923,0.971,0.9854,0.9692,0.0,,

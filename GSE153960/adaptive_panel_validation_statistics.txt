@@ -1,0 +1,64 @@
+Adaptive Panel External Validation
+========================================================================
+
+Strategy: missing panel genes replaced with best non-artifact
+replacement from gene_replacement_results.csv (clean pool).
+Artifacts excluded: 41 confirmed (max GTEx TPM < 1.0).
+
+GSE76220 — Lumbar SC LCM (n=20, ALS=12, Ctrl=8)
+------------------------------------------------------------------------
+Panel genes matched natively: 15/25
+  SERTAD1, FCN3, PROS1, ANGPT2, EMP1, SNORD97, TINAGL1, CKMT2, VWF, CLDN5, NR4A1, SOHLH2, HEXB, MCEE, SLC37A2
+Missing panel genes: 10
+  MECOM, HERC2P8, SMG1P5, RPL21P75, MAP3K2-DT, ENSG00000280893, RPL15P11, RHOT1P2, ENSG00000279656, LOC112268270
+Substitutes found: 10
+  MECOM              → MYCT1          (ENSG00000120279)  repl_AUC=0.9465  |r|=0.576
+  HERC2P8            → HERC2P4        (ENSG00000230267)  repl_AUC=0.9489  |r|=0.872
+  SMG1P5             → SMG1           (ENSG00000157106)  repl_AUC=0.9450  |r|=0.606
+  RPL21P75           → SLC6A18        (ENSG00000164363)  repl_AUC=0.9635
+  MAP3K2-DT          → C1orf185       (ENSG00000204006)  repl_AUC=0.9595
+  ENSG00000280893    → INSL6          (ENSG00000120210)  repl_AUC=0.9597
+  RPL15P11           → MAGEB2         (ENSG00000099399)  repl_AUC=0.9547
+  RHOT1P2            → DHCR24         (ENSG00000116133)  repl_AUC=0.9522
+  ENSG00000279656    → OAS2           (ENSG00000111335)  repl_AUC=0.9546
+  LOC112268270       → PPP1R1B        (ENSG00000131771)  repl_AUC=0.9480  |r|=0.573
+No substitute available: none
+
+  Subset panel (15 genes):
+    Zero-shot AUC    : 0.8438
+    Bootstrap 95% CI : [0.6313, 0.9800]  (n=2000)
+    Within-cohort LOO: 0.8438
+  Adapted panel (25 genes):
+    Zero-shot AUC    : 0.8281
+    Bootstrap 95% CI : [0.6171, 0.9896]  (n=2000)
+    Within-cohort LOO: 0.8438
+
+  Delta (adapted − subset): zero-shot -0.0156  LOO +0.0000
+
+GSE122649 — Motor Cortex (n=38, ALS=26, Ctrl=12)
+------------------------------------------------------------------------
+Panel genes matched natively: 17/25
+  MECOM, SMG1P5, SERTAD1, FCN3, PROS1, ANGPT2, EMP1, SNORD97, TINAGL1, CKMT2, VWF, CLDN5, NR4A1, SOHLH2, HEXB, MCEE, SLC37A2
+Missing panel genes: 8
+  HERC2P8, RPL21P75, MAP3K2-DT, ENSG00000280893, RPL15P11, RHOT1P2, ENSG00000279656, LOC112268270
+Substitutes found: 8
+  HERC2P8            → HERC2P4        (ENSG00000230267)  repl_AUC=0.9489  |r|=0.872
+  RPL21P75           → SLC6A18        (ENSG00000164363)  repl_AUC=0.9635
+  MAP3K2-DT          → C1orf185       (ENSG00000204006)  repl_AUC=0.9595
+  ENSG00000280893    → LINC01318      (ENSG00000237790)  repl_AUC=0.9609
+  RPL15P11           → INSL6          (ENSG00000120210)  repl_AUC=0.9583
+  RHOT1P2            → LINC02556      (ENSG00000236611)  repl_AUC=0.9572
+  ENSG00000279656    → OAS2           (ENSG00000111335)  repl_AUC=0.9546
+  LOC112268270       → PPP1R1B        (ENSG00000131771)  repl_AUC=0.9480  |r|=0.573
+No substitute available: none
+
+  Subset panel (17 genes):
+    Zero-shot AUC    : 0.7949
+    Bootstrap 95% CI : [0.6296, 0.9263]  (n=2000)
+    Within-cohort LOO: 0.7821
+  Adapted panel (25 genes):
+    Zero-shot AUC    : 0.7756
+    Bootstrap 95% CI : [0.6057, 0.9205]  (n=2000)
+    Within-cohort LOO: 0.7404
+
+  Delta (adapted − subset): zero-shot -0.0192  LOO -0.0417

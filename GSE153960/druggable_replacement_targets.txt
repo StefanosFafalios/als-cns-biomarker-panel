@@ -1,0 +1,24 @@
+Druggable-replacement target prioritisation
+======================================================================
+Best druggable + direction-appropriate + safety-reviewed substitute per
+high-signal gene (non-inferior substitutes only; DGIdb + approval).
+Score = approved-drug + favourable-direction + favourable&approved +
+        chemistry-breadth + substituted-AUC.
+
+gene     dir  best substitute     r     AUC DGIdb  fav  approved drugs
+------------------------------------------------------------------------------------------
+FCN3          (no druggable co-expressed substitute -- target the gene itself)
+PROS1    up   C1S              0.79  0.9499  10.0  yes  ANTITHROMBIN ALFA|C1 ESTERASE INHIBITOR|HUMAN C1-ESTERASE INHIBITOR|SUTIMLIMAB
+ANGPT2        (no druggable co-expressed substitute -- target the gene itself)
+TINAGL1       (no druggable co-expressed substitute -- target the gene itself)
+CKMT2    down ABL1             0.65  0.9452 143.0  yes  ACYCLOVIR|ADENOSINE TRIPHOSPHATE|APOMORPHINE|APRACLONIDINE
+CLDN5    down ATP10A           0.53  0.9455   2.0   no  CLOPIDOGREL|DULOXETINE HYDROCHLORIDE
+NR4A1    down PRKD2            0.51  0.9451  34.0   no  ERLOTINIB|GEFITINIB|QUERCETIN|RUCAPARIB
+SOHLH2   up   CFL1              0.6  0.9478   8.0   no  CINNARIZINE|CLOFIBRATE|CLOTRIMAZOLE|FENOFIBRATE MICRONIZED
+HEXB     up   NPM1             0.87  0.9518   7.0  yes  CERITINIB|CRIZOTINIB|DAUNORUBICIN LIPOSOMAL|MIDOSTAURIN
+MCEE     up   HMGB1            0.83  0.9481  19.0  yes  AMPICILLIN (ANHYDROUS)|BIFONAZOLE|CHLORAMPHENICOL|CISPLATIN
+SLC37A2  up   PTAFR            0.89   0.948   6.0  yes  RUPATADINE|TICLOPIDINE
+SERTAD1  up   RPL29            0.53  0.9458   5.0  yes  ATALUREN
+
+Low-replaceability gene-level targets (CKMT2, NR4A1, TINAGL1, SERTAD1)
+have few/no non-inferior protein-coding substitutes -> drug the gene itself.

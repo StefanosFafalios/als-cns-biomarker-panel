@@ -1,0 +1,35 @@
+SRP064478 Cervical Spinal Cord Validation — Ladd et al. 2017
+============================================================
+Dataset: SRP064478 (Virginia Commonwealth Univ., BennettLab)
+  Tissue: Postmortem cervical spinal cord
+  Platform: Illumina NextSeq 500, paired-end, total RNA-seq
+  Samples: ALS=7  Control=8
+  Publication: Ladd et al. 2017, Brain Research (PMID 28511992)
+  Quantification: Salmon 0.13.1, Ensembl GRCh38 release 111
+
+Panel genes matched (15/15): MECOM, SERTAD1, FCN3, PROS1, ANGPT2, EMP1, TINAGL1, CKMT2, VWF, CLDN5, NR4A1, SOHLH2, HEXB, MCEE, SLC37A2
+Missing (0): none
+
+Zero-shot transfer (GPL24676-trained model → SRP064478):
+  AUC = 1.0000  95%CI [1.0000, 1.0000]
+  Note: within-cohort LOO-CV not reported (n=15 too small for
+        reliable within-cohort model training at these hyperparameters).
+
+Per-gene ALS vs Control (log1p expression; MWU):
+  Gene               r_b       p_MWU   sig
+------------------------------------------
+  SLC37A2        +0.6429      0.0401     *
+  HEXB           +0.4464      0.1645      
+  EMP1           +0.3571      0.2810      
+  SOHLH2         +0.2857      0.3850      
+  SERTAD1        +0.0357      0.9551      
+  FCN3           +0.0000      1.0000      
+  VWF            +0.0000      1.0000      
+  CLDN5          +0.0000      1.0000      
+  TINAGL1        -0.1250      0.7282      
+  CKMT2          -0.1429      0.6844      
+  PROS1          -0.2143      0.5358      
+  MCEE           -0.2321      0.4871      
+  MECOM          -0.3214      0.3357      
+  ANGPT2         -0.3929      0.2319      
+  NR4A1          -0.4643      0.1520      

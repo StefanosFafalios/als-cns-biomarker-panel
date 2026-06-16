@@ -1,0 +1,39 @@
+17-gene critical panel — zero-shot AUC with 95% CI
+======================================================================
+
+Panel members (D_ZS < 0 in one-pass LOO):
+  Protein-coding (11): CKMT2, SLC37A2, NR4A1, HEXB, ANGPT2, SERTAD1,
+                       TINAGL1, PROS1, SOHLH2, FCN3, MECOM
+  Pseudogenes (4):     HERC2P8, RPL15P11, SMG1P5, RHOT1P2
+  lncRNAs (2):         LOC112268270, MAP3K2-DT
+
+Panel indices in 25-gene panel: [0, 1, 2, 3, 5, 6, 7, 8, 11, 12, 16, 17, 18, 19, 20, 22, 24]
+
+Cohort weights:
+  GPL16791     n=636  w=0.8970
+  GSE76220     n=20  w=0.0282
+  GSE122649    n=38  w=0.0536
+  SRP064478    n=15  w=0.0212
+  Total N = 709
+
+Gene availability:
+  GPL16791  = 17/17  (Ensembl base ID, all critical genes present)
+  GSE76220  = 10/17  (HGNC symbol; pseudogenes/lncRNAs absent)
+  GSE122649 = 12/17  (HGNC symbol)
+  SRP064478 = 15/17  (Ensembl base ID; pseudogenes present)
+
+Results (zero-shot, N_bootstrap=2000):
+
+      Cohort      N   Genes      AUC            95% CI
+----------------------------------------------------------
+      GPL16791    636      17   0.7996  [0.747, 0.848]
+      GSE76220     20      10   0.5260  [0.275, 0.768]
+     GSE122649     38      12   0.7532  [0.580, 0.902]
+     SRP064478     15      15   0.8929  [0.667, 1.000]
+
+  Weighted mean AUC = 0.7914
+
+Note: 'Genes' = number of panel genes matched in that cohort's vocabulary.
+      GPL16791 uses CTD compartment regression (same as training).
+      GSE76220, GSE122649 matched by HGNC symbol.
+      SRP064478 matched by Ensembl base ID (captures pseudogenes).

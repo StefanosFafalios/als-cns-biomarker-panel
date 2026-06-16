@@ -1,0 +1,106 @@
+DE-GSEA Robustness Check — 47,822 Pre-filtered Genes
+======================================================================
+Feature space: 47822 pre-filtered genes (lgbm_prefilter_X.npy)
+Ranking metric: signed Welch t-statistic (ALS vs Control, positive = ALS-up)
+Samples: n=874 | ALS=684 | Control=190
+HGNC-mapped symbols: 33590 / 47822 (70.2%)
+Prerank list after deduplication: 33371 unique symbols
+Gene set libraries: GO_Biological_Process_2023, KEGG_2021_Human, Reactome_2022
+Permutations: 1000 | Min gene-set size: 10 | Max: 500
+FDR significance threshold: 0.25
+
+PRERANK LIST STATISTICS
+  Positive scores (ALS-up): 17071
+  Negative scores (ctrl-up): 16300
+  Score range: [-12.542, 12.619]
+  Note: unlike SHAP-GSEA (Step 13), all genes have non-zero scores
+  (t-stat is defined for every gene with sufficient variance).
+
+======================================================================
+Gene set library: GO_Biological_Process_2023
+Significant pathways (FDR < 0.25): 2236 / 3423
+Term                                                        NES        FDR
+--------------------------------------------------------------------------
+Regulation Of T Cell Receptor Signaling Pathway (GO...    2.038  1.000e-03
+Microglial Cell Activation (GO:0001774)                   2.026  1.000e-03
+Positive Regulation Of NF-kappaB Transcription Fact...    2.026  1.000e-03
+Regulation Of Type I Interferon Production (GO:0032...    2.025  1.000e-03
+Negative Regulation Of Type II Interferon Productio...    2.025  1.000e-03
+Nicotinamide Nucleotide Metabolic Process (GO:0046496)    2.025  1.000e-03
+Positive Regulation Of Cellular Component Biogenesi...    2.024  1.000e-03
+Regulation Of Pathway-Restricted SMAD Protein Phosp...    2.023  1.000e-03
+Regulation Of Phagocytosis, Engulfment (GO:0060099)       2.023  1.000e-03
+Chemokine-Mediated Signaling Pathway (GO:0070098)         2.022  1.000e-03
+Sphingolipid Metabolic Process (GO:0006665)               2.021  1.000e-03
+Positive Regulation Of Peptidyl-Tyrosine Phosphoryl...    2.021  1.000e-03
+Negative Regulation Of Viral Genome Replication (GO...    2.040  1.000e-03
+Negative Regulation Of G1/S Transition Of Mitotic C...    2.027  1.000e-03
+Regulation Of Osteoblast Differentiation (GO:0045667)     2.037  1.000e-03
+
+======================================================================
+Gene set library: KEGG_2021_Human
+Significant pathways (FDR < 0.25): 250 / 310
+Term                                                        NES        FDR
+--------------------------------------------------------------------------
+Ribosome                                                  3.191  1.000e-03
+Staphylococcus aureus infection                           2.951  1.000e-03
+Coronavirus disease                                       2.935  1.000e-03
+Phagosome                                                 2.868  1.000e-03
+Systemic lupus erythematosus                              2.776  1.000e-03
+Oxidative phosphorylation                                 2.679  1.000e-03
+Non-alcoholic fatty liver disease                         2.415  1.000e-03
+Amyotrophic lateral sclerosis                             2.407  1.000e-03
+Inflammatory bowel disease                                2.392  1.000e-03
+Tuberculosis                                              2.375  1.000e-03
+Epstein-Barr virus infection                              2.374  1.000e-03
+Salmonella infection                                      2.363  1.000e-03
+Malaria                                                   2.363  1.000e-03
+Osteoclast differentiation                                2.354  1.000e-03
+Neutrophil extracellular trap formation                   2.351  1.000e-03
+
+======================================================================
+Gene set library: Reactome_2022
+Significant pathways (FDR < 0.25): 1015 / 1363
+Term                                                        NES        FDR
+--------------------------------------------------------------------------
+Interleukin-3, Interleukin-5 And GM-CSF Signaling R...    2.033  1.000e-03
+Intrinsic Pathway For Apoptosis R-HSA-109606              2.012  1.000e-03
+Association Of TriC/CCT With Target Proteins During...    2.015  1.000e-03
+DDX58/IFIH1-mediated Induction Of Interferon-Alpha/...    2.016  1.000e-03
+Signaling By ROBO Receptors R-HSA-376176                  3.069  1.000e-03
+Chaperone Mediated Autophagy R-HSA-9613829                2.020  1.000e-03
+IKK Complex Recruitment Mediated By RIP1 R-HSA-937041     2.023  1.000e-03
+Leishmania Infection R-HSA-9658195                        2.025  1.000e-03
+Metalloprotease DUBs R-HSA-5689901                        2.026  1.000e-03
+Unattached Kinetochores Signal Amplification Via A ...    2.029  1.000e-03
+RHO GTPases Activate Formins R-HSA-5663220                2.030  1.000e-03
+Regulation Of Necroptotic Cell Death R-HSA-5675482        2.031  1.000e-03
+Antiviral Mechanism By IFN-stimulated Genes R-HSA-1...    2.012  1.000e-03
+TP53 Regulates Metabolic Genes R-HSA-5628897              2.033  1.000e-03
+Keratan Sulfate Degradation R-HSA-2022857                 2.033  1.000e-03
+
+======================================================================
+COMPARISON TO STEP 13 (SHAP-GSEA on 3,704 genes)
+----------------------------------------------------------------------
+KEGG sig (DE-GSEA, FDR<0.25): 250 pathways
+KEGG overlap with Step-13 sig set (n=6): 5 / 6
+  [MATCH]  C-type lectin receptor signaling pathway
+  [MATCH]  Hematopoietic cell lineage
+  [MATCH]  Influenza A
+  [MATCH]  MAPK signaling pathway
+  [MATCH]  Phospholipase D signaling pathway
+  [ABSENT] Calcium signaling pathway
+
+Reactome sig (DE-GSEA): 1015 pathways
+Reactome overlap with Step-13 sig set (n=1): 0 / 1
+  [ABSENT] Sensory Perception R-HSA-9709957
+
+Interpretation: overlap confirms SFM did not introduce pathway bias;
+divergences identify biology present in full transcriptome but filtered
+by SelectFromModel (see Discussion).
+
+======================================================================
+OUTPUT FILES
+  Full NES/FDR table: als_analysis/GSE153960/de_gsea_robustness_results.csv
+  Enrichment plots:   als_analysis/GSE153960/de_gsea_robustness/
+  Statistics:         als_analysis/GSE153960/de_gsea_robustness_statistics.txt

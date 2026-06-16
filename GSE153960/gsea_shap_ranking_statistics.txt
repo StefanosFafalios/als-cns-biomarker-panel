@@ -1,0 +1,59 @@
+GSEA Prerank — 3,704 SHAP-Ranked Genes (Step 13)
+======================================================================
+Prerank list: 2810 HGNC symbols (3,704 ENSG → 2816 mapped)
+Ranking metric: signed mean SHAP (positive = ALS, negative = control)
+Gene set libraries: GO_Biological_Process_2023, KEGG_2021_Human, Reactome_2022
+Permutations: 1000 | Min gene-set size: 10 | Max: 500
+FDR significance threshold: 0.25
+
+PRERANK LIST STATISTICS
+  Total symbols: 2810
+  Positive scores (ALS-associated): 802
+  Negative scores (control-associated): 913
+  Score range: [-0.0082, 0.0594]
+
+======================================================================
+Gene set library: GO_Biological_Process_2023
+Significant pathways (FDR < 0.25): 0 / 297
+Term                                                        NES        FDR
+--------------------------------------------------------------------------
+Cellular Response To Molecule Of Bacterial Origin (...    1.388  4.798e-01
+Regulation Of Interleukin-1 Beta Production (GO:003...    1.383  4.847e-01
+Cellular Response To Lipopolysaccharide (GO:0071222)      1.389  4.891e-01
+Positive Regulation Of Intracellular Signal Transdu...    1.389  5.014e-01
+Positive Regulation Of MAPK Cascade (GO:0043410)          1.391  5.079e-01
+Peptide Biosynthetic Process (GO:0043043)                 1.391  5.211e-01
+Gene Expression (GO:0010467)                              1.413  5.225e-01
+Regulation Of Protein Secretion (GO:0050708)              1.360  5.241e-01
+Positive Regulation Of Phosphatidylinositol 3-Kinas...    1.367  5.250e-01
+Protein Phosphorylation (GO:0006468)                      1.427  5.286e-01
+Positive Regulation Of DNA-binding Transcription Fa...    1.421  5.298e-01
+Ribosomal Small Subunit Biogenesis (GO:0042274)           1.442  5.309e-01
+Positive Regulation Of Transferase Activity (GO:005...    1.354  5.312e-01
+Regulation Of Inflammatory Response (GO:0050727)          1.288  5.324e-01
+Cytoplasmic Translation (GO:0002181)                      1.392  5.339e-01
+  (no pathways met FDR threshold; showing top 15 by FDR)
+
+======================================================================
+Gene set library: KEGG_2021_Human
+Significant pathways (FDR < 0.25): 6 / 109
+Term                                                        NES        FDR
+--------------------------------------------------------------------------
+Hematopoietic cell lineage                                1.435  2.285e-01
+C-type lectin receptor signaling pathway                  1.445  2.288e-01
+Calcium signaling pathway                                 1.437  2.352e-01
+Influenza A                                               1.447  2.380e-01
+Phospholipase D signaling pathway                         1.450  2.451e-01
+MAPK signaling pathway                                    1.455  2.484e-01
+
+======================================================================
+Gene set library: Reactome_2022
+Significant pathways (FDR < 0.25): 1 / 194
+Term                                                        NES        FDR
+--------------------------------------------------------------------------
+Sensory Perception R-HSA-9709957                          1.841  9.651e-02
+
+======================================================================
+OUTPUT FILES
+  Full NES/FDR table: als_analysis/GSE153960/gsea_shap_ranking_results.csv
+  Enrichment plots:   als_analysis/GSE153960/gsea_shap_ranking/

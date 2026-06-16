@@ -1,0 +1,70 @@
+Stability selection — 100 stratified bootstraps × top-25 SHAP on 3,704 SFM genes
+======================================================================
+
+Panel gene selection frequencies:
+  [MID ] SERTAD1           freq=0.72
+  [MID ] HERC2P8           freq=0.66
+  [MID ] HEXB              freq=0.63
+  [MID ] ENSG00000280893   freq=0.57
+  [MID ] MECOM             freq=0.52
+  [MID ] EMP1              freq=0.51
+  [LOW ] PROS1             freq=0.45
+  [LOW ] FCN3              freq=0.43
+  [LOW ] CKMT2             freq=0.38
+  [LOW ] VWF               freq=0.38
+  [LOW ] ANGPT2            freq=0.34
+  [LOW ] CLDN5             freq=0.30
+  [LOW ] SMG1P5            freq=0.27
+  [LOW ] SLC37A2           freq=0.26
+  [LOW ] RPL21P75          freq=0.24
+  [LOW ] TINAGL1           freq=0.23
+  [LOW ] SOHLH2            freq=0.22
+  [LOW ] RHOT1P2           freq=0.19
+  [LOW ] NR4A1             freq=0.19
+  [LOW ] ENSG00000279656   freq=0.16
+  [LOW ] MCEE              freq=0.15
+  [LOW ] RPL15P11          freq=0.07
+  [LOW ] MAP3K2-DT         freq=0.05
+  [LOW ] SNORD97           freq=0.05
+  [LOW ] LOC112268270      freq=0.02
+
+High stability (selected in ≥80% of bootstraps; n=0):
+  (none)
+
+Mid stability (50-80%; n=6):
+  EMP1, ENSG00000280893, HERC2P8, HEXB, MECOM, SERTAD1
+
+Low stability (<50%; n=19):
+  ANGPT2, CKMT2, CLDN5, ENSG00000279656, FCN3, LOC112268270, MAP3K2-DT, MCEE, NR4A1, PROS1, RHOT1P2, RPL15P11, RPL21P75, SLC37A2, SMG1P5, SNORD97, SOHLH2, TINAGL1, VWF
+
+Top-30 candidates by stability across ALL bootstraps (not restricted to panel):
+  SERTAD1               freq=0.72  (PANEL)
+  HERC2P8               freq=0.66  (PANEL)
+  HEXB                  freq=0.63  (PANEL)
+  ENSG00000280893       freq=0.57  (PANEL)
+  MECOM                 freq=0.52  (PANEL)
+  EMP1                  freq=0.51  (PANEL)
+  PROS1                 freq=0.45  (PANEL)
+  FCN3                  freq=0.43  (PANEL)
+  ENSG00000255769...    freq=0.41  (non-panel)
+  CKMT2                 freq=0.38  (PANEL)
+  VWF                   freq=0.38  (PANEL)
+  ENSG00000151632...    freq=0.37  (non-panel)
+  ANGPT2                freq=0.34  (PANEL)
+  ENSG00000230178...    freq=0.31  (non-panel)
+  ENSG00000260644...    freq=0.31  (non-panel)
+  CLDN5                 freq=0.30  (PANEL)
+  ENSG00000284931...    freq=0.28  (non-panel)
+  SMG1P5                freq=0.27  (PANEL)
+  ENSG00000007038...    freq=0.26  (non-panel)
+  SLC37A2               freq=0.26  (PANEL)
+  ENSG00000150687...    freq=0.24  (non-panel)
+  RPL21P75              freq=0.24  (PANEL)
+  ENSG00000198959...    freq=0.23  (non-panel)
+  TINAGL1               freq=0.23  (PANEL)
+  SOHLH2                freq=0.22  (PANEL)
+  RHOT1P2               freq=0.19  (PANEL)
+  NR4A1                 freq=0.19  (PANEL)
+  ENSG00000136235...    freq=0.18  (non-panel)
+  ENSG00000248668...    freq=0.18  (non-panel)
+  ENSG00000236611...    freq=0.17  (non-panel)

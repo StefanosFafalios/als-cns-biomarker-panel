@@ -1,0 +1,295 @@
+Core 25-gene Panel — Biological Annotations
+=================================================================
+
+────────────────────────────────────────────────────────────
+Symbol       : MECOM
+Feature ID   : ENSG00000085276.18
+SHAP rank    : 1/25  (mean |SHAP| = 0.551108)
+Gene name    : MDS1 and EVI1 complex locus
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000085276
+UniProt      : Q03112
+Aliases      : AML1-EVI-1; EVI1; KMT8E; MDS1; MDS1-EVI1; PRDM3; RUSAT2
+Function     : Functions as a transcriptional regulator binding to DNA sequences in the promoter region of target genes and regulating positively or negatively their expression. Oncogene which plays a role in development, cell proliferation and differentiation. May also play a role in apoptosis through regulation of the JNK and TGF-beta signaling. Involved in hematopoiesis
+Tractability : PR
+Top diseases : Radio-ulnar synostosis - amegakaryocytic thrombocytopenia (0.77) | radioulnar synostosis with amegakaryocytic thrombocytopenia 2 (0.73) | MECOM-associated syndrome (0.62) | congenital radioulnar synostosis (0.57) | hypertension (0.49)
+
+────────────────────────────────────────────────────────────
+Symbol       : HERC2P8
+Feature ID   : ENSG00000261599.6
+SHAP rank    : 2/25  (mean |SHAP| = 0.528776)
+Gene name    : HERC2 pseudogene 8
+Gene type    : pseudo
+Ensembl ID   : ENSG00000261599
+UniProt      : 
+Top diseases : neoplasm (0.00)
+
+────────────────────────────────────────────────────────────
+Symbol       : SMG1P5
+Feature ID   : ENSG00000183604.14
+SHAP rank    : 3/25  (mean |SHAP| = 0.511101)
+Gene name    : SMG1 pseudogene 5
+Gene type    : 
+Ensembl ID   : ENSG00000183604
+UniProt      : 
+Top diseases : neoplasm (0.00)
+
+────────────────────────────────────────────────────────────
+Symbol       : SERTAD1
+Feature ID   : ENSG00000197019.5
+SHAP rank    : 4/25  (mean |SHAP| = 0.402916)
+Gene name    : SERTA domain containing 1
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000197019
+UniProt      : Q9UHV2
+Aliases      : SEI1; TRIP-Br1; TRIPBR1
+Function     : Acts at E2F-responsive promoters as coregulator to integrate signals provided by PHD- and/or bromodomain-containing transcription factors. Stimulates E2F1/TFDP1 transcriptional activity. Renders the activity of cyclin D1/CDK4 resistant to the inhibitory effects of CDKN2A/p16INK4A
+Tractability : PR
+Top diseases : neurodegenerative disease (0.50) | cancer (0.09) | Alzheimer disease (0.08) | protozoa infectious disease (0.07) | multiple myeloma (0.07)
+
+────────────────────────────────────────────────────────────
+Symbol       : RPL21P75
+Feature ID   : ENSG00000213860.4
+SHAP rank    : 5/25  (mean |SHAP| = 0.369863)
+Gene name    : ribosomal protein L21 pseudogene 75
+Gene type    : pseudo
+Ensembl ID   : ENSG00000213860
+UniProt      : 
+Aliases      : RPL21_29_789
+Top diseases : pulmonary fibrosis (0.00)
+
+────────────────────────────────────────────────────────────
+Symbol       : FCN3
+Feature ID   : ENSG00000142748.12
+SHAP rank    : 6/25  (mean |SHAP| = 0.307586)
+Gene name    : ficolin 3
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000142748
+UniProt      : O75636
+Aliases      : FCNH; HAKA1
+Function     : Calcium-dependent lectin, which acts as a pattern recognition receptor that initiates the lectin pathway of the complement system, a cascade of proteins that leads to phagocytosis and breakdown of pathogens and signaling that strengthens the adaptive immune system (PubMed:11907111, PubMed:15804047, PubMed:17215869, PubMed:26133042). Specifically recognizes and binds carbohydrates on the pathogen surface, activating the MASP1 serine protease and initiating the proteolytic cascade of the lectin co
+Tractability : SM; AB
+Top diseases : immunodeficiency due to ficolin3 deficiency (0.66) | complement deficiency (0.37) | rheumatic heart disease (0.22) | hepatocellular carcinoma (0.13) | microcephaly (0.11)
+
+────────────────────────────────────────────────────────────
+Symbol       : PROS1
+Feature ID   : ENSG00000184500.15
+SHAP rank    : 7/25  (mean |SHAP| = 0.293883)
+Gene name    : protein S
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000184500
+UniProt      : P07225
+Aliases      : PROS; PS21; PS22; PS23; PS24; PS25; PSA; THPH5; THPH6
+Function     : Anticoagulant plasma protein; it is a cofactor to activated protein C in the degradation of coagulation factors Va and VIIIa. It helps to prevent coagulation and stimulating fibrinolysis
+Tractability : AB; PR
+Top diseases : thrombophilia due to protein S deficiency, autosomal dominant (0.82) | hereditary thrombophilia due to congenital protein S deficiency (0.70) | protein S deficiency (0.70) | thrombophilia due to protein S deficiency, autosomal recessive (0.69) | pulmonary embolism (0.65)
+
+────────────────────────────────────────────────────────────
+Symbol       : ANGPT2
+Feature ID   : ENSG00000091879.13
+SHAP rank    : 8/25  (mean |SHAP| = 0.292617)
+Gene name    : angiopoietin 2
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000091879
+UniProt      : O15123
+Aliases      : AGPT2; ANG2; LMPHM10
+Function     : Binds to TEK/TIE2, competing for the ANGPT1 binding site, and modulating ANGPT1 signaling (PubMed:15284220, PubMed:19116766, PubMed:19223473, PubMed:9204896). Can induce tyrosine phosphorylation of TEK/TIE2 in the absence of ANGPT1 (PubMed:15284220, PubMed:19116766, PubMed:19223473, PubMed:9204896). In the absence of angiogenic inducers, such as VEGF, ANGPT2-mediated loosening of cell-matrix contacts may induce endothelial cell apoptosis with consequent vascular regression. In concert with VEGF,
+Tractability : AB; OC
+Top diseases : lymphatic malformation 10 (0.62) | diabetic macular edema (0.56) | wet macular degeneration (0.55) | microcephaly 1, primary, autosomal recessive (0.48) | hemorrhoid (0.42)
+
+────────────────────────────────────────────────────────────
+Symbol       : MAP3K2-DT
+Feature ID   : ENSG00000236682.1
+SHAP rank    : 9/25  (mean |SHAP| = 0.289716)
+Gene name    : MAP3K2 divergent transcript
+Gene type    : ncRNA
+Ensembl ID   : ENSG00000236682
+UniProt      : 
+Top diseases : asthma (0.00)
+
+────────────────────────────────────────────────────────────
+Symbol       : EMP1
+Feature ID   : ENSG00000134531.10
+SHAP rank    : 10/25  (mean |SHAP| = 0.283663)
+Gene name    : epithelial membrane protein 1
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000134531
+UniProt      : P54849
+Aliases      : CL-20; EMP-1; TMP
+Tractability : AB
+Top diseases : neurodegenerative disease (0.40) | alcohol drinking (0.37) | ovarian dysfunction (0.27) | kidney disease (0.23) | stricture (0.23)
+
+────────────────────────────────────────────────────────────
+Symbol       : SNORD97
+Feature ID   : ENSG00000238622.1
+SHAP rank    : 11/25  (mean |SHAP| = 0.259935)
+Gene name    : small nucleolar RNA, C/D box 97
+Gene type    : snoRNA
+Ensembl ID   : ENSG00000238622
+UniProt      : 
+Aliases      : U97
+Top diseases : neoplasm (0.00) | cervical cancer (0.00) | cancer (0.00) | lymphopenia (0.00) | cervical squamous cell carcinoma (0.00)
+
+────────────────────────────────────────────────────────────
+Symbol       : TINAGL1
+Feature ID   : ENSG00000142910.16
+SHAP rank    : 12/25  (mean |SHAP| = 0.257421)
+Gene name    : tubulointerstitial nephritis antigen like 1
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000142910
+UniProt      : Q9GZM7
+Aliases      : ARG1; LCN7; LIECG3; TINAGRP
+Function     : May be implicated in the adrenocortical zonation and in mechanisms for repressing the CYP11B1 gene expression in adrenocortical cells. This is a non catalytic peptidase C1 family protein (By similarity)
+Tractability : AB
+Top diseases : placenta praevia (0.37) | neurodegenerative disease (0.33) | Alzheimer disease (0.30) | hepatocellular carcinoma (0.08) | ovarian neoplasm (0.06)
+
+────────────────────────────────────────────────────────────
+Symbol       : CKMT2
+Feature ID   : ENSG00000131730.16
+SHAP rank    : 13/25  (mean |SHAP| = 0.249937)
+Gene name    : creatine kinase, mitochondrial 2
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000131730
+UniProt      : P17540
+Aliases      : SMTCK
+Function     : Reversibly catalyzes the transfer of phosphate between ATP and various phosphogens (e.g. creatine phosphate). Creatine kinase isoenzymes play a central role in energy transduction in tissues with large, fluctuating energy demands, such as skeletal muscle, heart, brain and spermatozoa
+Tractability : SM; AB
+Top diseases : Peyronie disease (0.32) | Parkinson disease (0.19) | neurodegenerative disease (0.18) | multiple sclerosis (0.18) | Alzheimer disease (0.18)
+
+────────────────────────────────────────────────────────────
+Symbol       : ENSG00000280893
+Feature ID   : ENSG00000280893.1
+SHAP rank    : 14/25  (mean |SHAP| = 0.247789)
+Gene name    : novel transcript
+Gene type    : 
+Ensembl ID   : ENSG00000280893
+UniProt      : 
+
+────────────────────────────────────────────────────────────
+Symbol       : VWF
+Feature ID   : ENSG00000110799.13
+SHAP rank    : 15/25  (mean |SHAP| = 0.243399)
+Gene name    : von Willebrand factor
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000110799
+UniProt      : P04275
+Aliases      : F8VWF; VWD
+Function     : Important in the maintenance of hemostasis, it promotes adhesion of platelets to the sites of vascular injury by forming a molecular bridge between sub-endothelial collagen matrix and platelet-surface receptor complex GPIb-IX-V. Also acts as a chaperone for coagulation factor VIII, delivering it to the site of injury, stabilizing its heterodimeric structure and protecting it from premature clearance from plasma
+Tractability : SM; AB; PR; OC
+Top diseases : Von Willebrand disease (0.83) | von Willebrand disease 3 (0.80) | von Willebrand disease 2 (0.76) | von Willebrand disease (hereditary or acquired) (0.74) | Von Willebrand disease type 1 (0.74)
+
+────────────────────────────────────────────────────────────
+Symbol       : CLDN5
+Feature ID   : ENSG00000184113.9
+SHAP rank    : 16/25  (mean |SHAP| = 0.227371)
+Gene name    : claudin 5
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000184113
+UniProt      : O00501
+Aliases      : AWAL; BEC1; CPETRL1; TMDVCF; TMVCF
+Function     : Plays a major role in tight junction-specific obliteration of the intercellular space
+Tractability : AB
+Top diseases : genetic disorder (0.41) | epilepsy (0.37) | Intellectual disability (0.37) | Neurodevelopmental disorder (0.34) | hypotension (0.30)
+
+────────────────────────────────────────────────────────────
+Symbol       : NR4A1
+Feature ID   : ENSG00000123358.20
+SHAP rank    : 17/25  (mean |SHAP| = 0.227285)
+Gene name    : nuclear receptor subfamily 4 group A member 1
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000123358
+UniProt      : P22736
+Aliases      : GFRP1; HMR; N10; NAK-1; NGFIB; NP10; NUR77; TR3
+Function     : Orphan nuclear receptor. Binds the NGFI-B response element (NBRE) 5'-AAAGGTCA-3' (PubMed:18690216, PubMed:8121493, PubMed:9315652). Binds 9-cis-retinoic acid outside of its ligand-binding (NR LBD) domain (PubMed:18690216). Participates in energy homeostasis by sequestrating the kinase STK11 in the nucleus, thereby attenuating cytoplasmic AMPK activation (PubMed:22983157). Regulates the inflammatory response in macrophages by regulating metabolic adaptations during inflammation, including repress
+Tractability : SM; PR
+Top diseases : neurodegenerative disease (0.36) | neoplasm (0.12) | breast cancer (0.12) | cancer (0.11) | hepatocellular carcinoma (0.11)
+
+────────────────────────────────────────────────────────────
+Symbol       : RPL15P11
+Feature ID   : ENSG00000223718.3
+SHAP rank    : 18/25  (mean |SHAP| = 0.223260)
+Gene name    : ribosomal protein L15 pseudogene 11
+Gene type    : pseudo
+Ensembl ID   : ENSG00000223718
+UniProt      : 
+Aliases      : RPL15_5_851
+
+────────────────────────────────────────────────────────────
+Symbol       : SOHLH2
+Feature ID   : ENSG00000120669.16
+SHAP rank    : 19/25  (mean |SHAP| = 0.221523)
+Gene name    : spermatogenesis and oogenesis specific basic helix-loop-helix 2
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000120669
+UniProt      : Q9NX45
+Aliases      : SOSF2; SPATA28; TEB1; bHLHe81
+Function     : Transcription regulator of both male and female germline differentiation. Suppresses genes involved in spermatogonial stem cells maintenance, and induces genes important for spermatogonial differentiation. Coordinates oocyte differentiation without affecting meiosis I (By similarity)
+Top diseases : multiple myeloma (0.42) | myocardial infarction (0.32) | spondylolisthesis (0.25) | musculoskeletal system disease (0.24) | monoclonal gammopathy (0.21)
+
+────────────────────────────────────────────────────────────
+Symbol       : RHOT1P2
+Feature ID   : ENSG00000203616.2
+SHAP rank    : 20/25  (mean |SHAP| = 0.221075)
+Gene name    : ras homolog family member T1 pseudogene 2
+Gene type    : pseudo
+Ensembl ID   : ENSG00000203616
+UniProt      : 
+
+────────────────────────────────────────────────────────────
+Symbol       : HEXB
+Feature ID   : ENSG00000049860.14
+SHAP rank    : 21/25  (mean |SHAP| = 0.216835)
+Gene name    : hexosaminidase subunit beta
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000049860
+UniProt      : P07686
+Aliases      : ENC-1AS; HEL-248; HEL-S-111
+Function     : Hydrolyzes the non-reducing end N-acetyl-D-hexosamine and/or sulfated N-acetyl-D-hexosamine of glycoconjugates, such as the oligosaccharide moieties from proteins and neutral glycolipids, or from certain mucopolysaccharides (PubMed:11707436, PubMed:8123671, PubMed:8672428, PubMed:9694901). The isozyme B does not hydrolyze each of these substrates, however hydrolyzes efficiently neutral oligosaccharide (PubMed:11707436). Only the isozyme A is responsible for the degradation of GM2 gangliosides in
+Tractability : SM; AB; PR
+Top diseases : Sandhoff disease (0.84) | Sandhoff disease, infantile form (0.57) | Sandhoff disease, adult form (0.55) | Sandhoff disease, juvenile form (0.55) | genetic disorder (0.49)
+
+────────────────────────────────────────────────────────────
+Symbol       : ENSG00000279656
+Feature ID   : ENSG00000279656.1
+SHAP rank    : 22/25  (mean |SHAP| = 0.211581)
+Gene name    : 
+Gene type    : 
+Ensembl ID   : ENSG00000279656
+UniProt      : 
+Top diseases : ataxia telangiectasia (0.00) | myxosarcoma (0.00)
+
+────────────────────────────────────────────────────────────
+Symbol       : LOC112268270
+Feature ID   : ENSG00000226308.1
+SHAP rank    : 23/25  (mean |SHAP| = 0.211338)
+Gene name    : translation initiation factor IF-2-like
+Gene type    : ncRNA
+Ensembl ID   : ENSG00000226308
+UniProt      : 
+Top diseases : metabolic syndrome (0.07)
+
+────────────────────────────────────────────────────────────
+Symbol       : MCEE
+Feature ID   : ENSG00000124370.11
+SHAP rank    : 24/25  (mean |SHAP| = 0.206372)
+Gene name    : methylmalonyl-CoA epimerase
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000124370
+UniProt      : Q96PE7
+Aliases      : GLOD2; MCE; MMCE
+Function     : Methylmalonyl-CoA epimerase involved in propionyl-CoA metabolism
+Tractability : SM; PR
+Top diseases : methylmalonic acidemia due to methylmalonyl-CoA epimerase deficiency (0.76) | genetic disorder (0.41) | methylmalonic acidemia (0.37) | dyshidrosis (0.02) | gastrointestinal disease (0.02)
+
+────────────────────────────────────────────────────────────
+Symbol       : SLC37A2
+Feature ID   : ENSG00000134955.11
+SHAP rank    : 25/25  (mean |SHAP| = 0.204290)
+Gene name    : solute carrier family 37 member 2
+Gene type    : protein-coding
+Ensembl ID   : ENSG00000134955
+UniProt      : Q8TED4
+Aliases      : SPX2; pp11662
+Function     : Inorganic phosphate and glucose-6-phosphate antiporter. May transport cytoplasmic glucose-6-phosphate into the lumen of the endoplasmic reticulum and translocate inorganic phosphate into the opposite direction. Independent of a lumenal glucose-6-phosphatase. May not play a role in homeostatic regulation of blood glucose levels
+Tractability : AB; PR
+Top diseases : Apnea (0.32) | atherosclerosis (0.04) | hyper-IgE recurrent infection syndrome 5, autosomal recessive (0.04) | Testicular regression syndrome (0.04) | Familial ocular anterior segment mesenchymal dysgenesis (0.03)

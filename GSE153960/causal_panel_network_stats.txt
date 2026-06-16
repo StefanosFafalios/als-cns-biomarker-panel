@@ -1,0 +1,63 @@
+PC Causal Skeleton — ALS Panel (protein-coding genes)
+=================================================================
+Method: PC algorithm, Fisher-Z CI test, alpha=0.01
+Data: GSE153960 GPL24676, n=874 samples
+Genes: MECOM, HERC2P8, SMG1P5, SERTAD1, FCN3, PROS1, ANGPT2, EMP1, TINAGL1, CKMT2, VWF, CLDN5, NR4A1, SOHLH2, HEXB, MCEE, SLC37A2
+
+Causal edges (skeleton): 31
+STRING high-conf edges:  2
+Shared (agree):          1
+Causal-only:             30
+STRING-only (not found): 1
+
+Edge list:
+  ANGPT2 — CKMT2
+  ANGPT2 — SOHLH2
+  CKMT2 — MCEE
+  CKMT2 — NR4A1
+  CKMT2 — SLC37A2
+  CKMT2 — SOHLH2
+  EMP1 — SLC37A2
+  EMP1 — TINAGL1
+  EMP1 — VWF
+  FCN3 — NR4A1
+  HERC2P8 — MCEE
+  HERC2P8 — SMG1P5
+  HEXB — MCEE
+  HEXB — SLC37A2
+  MECOM — ANGPT2
+  MECOM — CLDN5
+  MECOM — EMP1
+  MECOM — VWF
+  NR4A1 — SLC37A2
+  PROS1 — EMP1
+  PROS1 — HEXB
+  PROS1 — SOHLH2
+  SERTAD1 — CLDN5
+  SERTAD1 — EMP1
+  SERTAD1 — HEXB
+  SERTAD1 — NR4A1
+  SMG1P5 — MCEE
+  SOHLH2 — HEXB
+  TINAGL1 — CLDN5
+  TINAGL1 — NR4A1
+  VWF — CLDN5 [also in STRING]
+
+Degree ranking:
+  EMP1            degree=6
+  CKMT2           degree=5
+  NR4A1           degree=5
+  HEXB            degree=5
+  MECOM           degree=4
+  SERTAD1         degree=4
+  CLDN5           degree=4
+  SOHLH2          degree=4
+  MCEE            degree=4
+  SLC37A2         degree=4
+  PROS1           degree=3
+  ANGPT2          degree=3
+  TINAGL1         degree=3
+  VWF             degree=3
+  HERC2P8         degree=2
+  SMG1P5          degree=2
+  FCN3            degree=1

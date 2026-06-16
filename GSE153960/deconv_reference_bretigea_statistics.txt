@@ -1,0 +1,22 @@
+Reference-based deconvolution (BRETIGEA) — experiment #3
+================================================================
+Reference: BRETIGEA markers (McKenzie 2018), top-50 per cell type.
+Method: SVD (brainCells) on scaled markers; sign-aligned PC1.
+Samples n=999 (ALS=684, Control=190).
+
+Cell type          ALS med  Ctrl med    delta      p(MWU)        BH q
+----------------------------------------------------------------------
+endothelial         -0.085     0.345   -0.430    2.54e-07    1.53e-06 *
+microglia            0.153    -0.226    0.380    6.39e-06    1.92e-05 *
+astrocyte            0.039     0.143   -0.104    1.91e-01    3.83e-01
+neuron               0.199     0.145    0.054    6.78e-01    8.13e-01
+oligodendrocyte      0.289     0.399   -0.110    5.84e-01    8.13e-01
+OPC                  0.197     0.236   -0.039    8.69e-01    8.69e-01
+
+Concordance with legacy z-score module scores (Spearman):
+  astrocyte        rho=+0.932
+  endothelial      rho=+0.988
+  microglia        rho=+0.978
+  neuron           rho=+0.989
+  oligodendrocyte  rho=+0.991
+  OPC              rho=+0.928

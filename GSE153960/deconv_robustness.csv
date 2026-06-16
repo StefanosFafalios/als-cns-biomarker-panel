@@ -1,0 +1,14 @@
+gene,gene_dir,top1_ct,top1_rho,top2_ct,top2_rho,gap,gap_CI_lo,gap_CI_hi,top1_argmax_freq,assignment,top1_shift_p,top1_shift_dir,shift_consistent
+SERTAD1,UP,Endothelial,0.809,Pericyte,0.749,0.059,0.04,0.08,1.0,ROBUST,3.68e-07,DOWN,False
+FCN3,UP,Endothelial,0.65,Pericyte,0.55,0.1,0.073,0.125,1.0,ROBUST,3.68e-07,DOWN,False
+PROS1,UP,Microglia,0.849,Astrocyte,0.777,0.071,0.046,0.098,1.0,ROBUST,1.25e-05,UP,True
+ANGPT2,DOWN,Endothelial,0.67,Pericyte,0.505,0.165,0.139,0.191,1.0,ROBUST,3.68e-07,DOWN,True
+EMP1,UP,Microglia,0.771,Astrocyte,0.717,0.054,0.025,0.084,1.0,ROBUST,1.25e-05,UP,True
+TINAGL1,DOWN,Endothelial,0.932,Pericyte,0.867,0.065,0.051,0.081,1.0,ROBUST,3.68e-07,DOWN,True
+CKMT2,DOWN,OPC,0.785,Pericyte,0.738,0.048,0.011,0.086,0.993,ROBUST,7.53e-02,DOWN,False
+CLDN5,DOWN,Endothelial,0.964,Pericyte,0.835,0.13,0.112,0.148,1.0,ROBUST,3.68e-07,DOWN,True
+NR4A1,DOWN,Pericyte,0.786,Endothelial,0.748,0.038,0.019,0.057,1.0,ROBUST,2.82e-03,DOWN,True
+SOHLH2,UP,Astrocyte,0.525,OPC,0.453,0.072,0.029,0.114,1.0,ROBUST,6.41e-02,UP,False
+HEXB,UP,Microglia,0.775,Astrocyte,0.709,0.065,0.032,0.099,1.0,ROBUST,1.25e-05,UP,True
+MCEE,UP,Astrocyte,0.623,Microglia,0.611,0.012,-0.027,0.049,0.73,AMBIGUOUS,6.41e-02,UP,False
+SLC37A2,UP,Microglia,0.905,Oligodendrocyte,0.777,0.129,0.105,0.153,1.0,ROBUST,1.25e-05,UP,True

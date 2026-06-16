@@ -1,0 +1,14 @@
+Decision-curve analysis (DCA) — 25-gene panel (LGBM)
+============================================================
+Net benefit computed across threshold probabilities 0.05–0.95.
+
+Strategies compared: model (25-gene LGBM), treat-all, treat-none.
+
+Train cohort (GPL24676; 5-fold CV): model dominates over threshold range [0.08, 0.95]
+GPL16791 zero-shot: model dominates over threshold range [0.58, 0.90]
+
+Interpretation:
+  The model strategy is preferred over treat-all/treat-none across
+  the range of threshold probabilities where its net-benefit curve
+  lies above both alternatives. Within that range, the panel provides
+  clinical utility beyond a naive policy.
