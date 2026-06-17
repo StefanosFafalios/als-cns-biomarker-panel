@@ -307,7 +307,7 @@ def main() -> None:
     stat_text = _VARIANT_STATS.read_text()
     # Re-derive column info directly from panel_variant_cv computation
     # We need pre_col and tr_col for each protein-coding replacement
-    from als_analysis.GSE153960.panel_variant_cv import (  # type: ignore
+    from panel_variant_cv import (  # type: ignore
         _build_replacement_lookup, _build_gene_info, _AUDIT_CSV, _REPL_CSV
     )
     repl_lookup = _build_replacement_lookup(_REPL_CSV, _AUDIT_CSV)

@@ -4,7 +4,7 @@ Mapping every `\includegraphics` reference in `manuscript.tex` /
 `supplementary.tex` to the script that produces it. Use this to verify a
 specific result without re-running the full pipeline.
 
-PNG paths are relative to `als_analysis/GSE153960/`. Each script writes its
+PNG paths are relative to `src/`. Each script writes its
 output(s) to that same directory.
 
 ## Main-text figures
@@ -107,7 +107,7 @@ script is rerun, those numbers will refresh automatically.
 
 ## Exploratory scripts not in `run_all.sh`
 
-The following scripts exist in `als_analysis/GSE153960/` but are NOT cited
+The following scripts exist in `src/` but are NOT cited
 in the manuscript or supplementary. They are kept for historical context and
 internal sensitivity analyses but are not required to reproduce the published
 results:

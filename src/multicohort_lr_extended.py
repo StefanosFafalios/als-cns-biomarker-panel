@@ -4,8 +4,8 @@
 Uses the same loading infrastructure as the existing validation scripts.
 Appends results to multicohort_baselines.{csv,txt}.
 
-Run from the coffeeBreak project root:
-    conda run -n coffeeBreak python -u als_analysis/GSE153960/multicohort_lr_extended.py
+Run from the repository root:
+    conda run -n als-cns-panel python -u src/multicohort_lr_extended.py
 """
 
 from __future__ import annotations

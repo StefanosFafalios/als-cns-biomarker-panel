@@ -8,26 +8,26 @@
 #   supplementary.tex
 #
 # Usage (from repository root):
-#   bash GSE153960/reproduce/run_all.sh           # run everything
-#   bash GSE153960/reproduce/run_all.sh fast      # skip Step 2 (feature-matrix rebuild)
-#   bash GSE153960/reproduce/run_all.sh from 24   # resume from step 24
+#   bash reproduce/run_all.sh           # run everything
+#   bash reproduce/run_all.sh fast      # skip Step 2 (feature-matrix rebuild)
+#   bash reproduce/run_all.sh from 24   # resume from step 24
 #
 # Prerequisites:
-#   1. conda env: conda env create -f GSE153960/reproduce/environment_als.yml
+#   1. conda env: conda env create -f reproduce/environment_als.yml
 #   2. GEO data in resources/    (bash download_geo_data.sh)
 #   3. SRP064478 Salmon quantification         (bash quantify_srp064478.sh) -- Step 22 only
 #
-# Each step writes its outputs to GSE153960/ alongside the script.
+# Each step writes its outputs to src/ alongside the script.
 # Step-by-step runtimes are indicated next to each invocation (wall-clock,
 # 24-core workstation). The two BayesianOptimizer steps are omitted (outputs cached as JSON); Step 2 regenerates lgbm_prefilter_X.npy (~2h).
 # =============================================================================
 set -euo pipefail
 
-PROJ_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PROJ_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CONDA_ENV="als-cns-panel"
 RUN="conda run -n $CONDA_ENV python"
-SCRIPT_DIR="$PROJ_ROOT/GSE153960"
-LOG_DIR="$SCRIPT_DIR/reproduce/logs"
+SCRIPT_DIR="$PROJ_ROOT/src"
+LOG_DIR="$PROJ_ROOT/reproduce/logs"
 mkdir -p "$LOG_DIR"
 
 # Argument parsing: support "fast" mode and "from N" resume
@@ -209,7 +209,7 @@ run_step "29_adaptive_panel"          adaptive_panel_validation.py          "~10
 # composition, #4 random-panel null for transfer, #6 OpenTargets genetic support.
 # Prereq for #3/#2: BRETIGEA R package + exported markers --
 #   Rscript -e 'install.packages("BRETIGEA"); library(BRETIGEA); \
-#     write.csv(markers_df_brain,"GSE153960/bretigea_markers.csv",row.names=FALSE)'
+#     write.csv(markers_df_brain,"src/bretigea_markers.csv",row.names=FALSE)'
 # #3 depends on 11 (legacy z-score concordance); #2 imports the estimator from #3.
 # =============================================================================
 run_step "11b_deconv_bretigea"        deconv_reference_bretigea.py          "~5m (needs bretigea_markers.csv + step 11)"
@@ -232,10 +232,6 @@ echo "Outputs in: $SCRIPT_DIR"
 echo "Logs in:    $LOG_DIR"
 echo ""
 echo "Manifest of figure -> script mapping in:"
-echo "  $SCRIPT_DIR/reproduce/FIGURE_MANIFEST.md"
+echo "  $PROJ_ROOT/reproduce/FIGURE_MANIFEST.md"
 echo ""
-echo "Now rebuild PDFs (xelatex required: supplementary.tex uses Unicode glyphs):"
-echo "  cd $SCRIPT_DIR/manuscript"
-echo "  xelatex supplementary.tex && xelatex manuscript.tex"
-echo "  xelatex supplementary.tex && xelatex manuscript.tex   # 2nd pass for xr refs"
 echo "======================================================"

@@ -23,8 +23,8 @@ Panels evaluated:
               iterative_panel_elimination.py; W.mean = 0.8921 at k=15)
               indices in 25-gene panel: [5,6,7,8,9,10,11,12,15,17,18,19,20,22,23,24]
 
-Run from the coffeeBreak project root:
-    conda run -n coffeeBreak python -u als_analysis/GSE153960/lr_vs_lgbm_zeroshot.py
+Run from the repository root:
+    conda run -n als-cns-panel python -u src/lr_vs_lgbm_zeroshot.py
 """
 from __future__ import annotations
 

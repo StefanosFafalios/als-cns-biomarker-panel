@@ -351,7 +351,7 @@ def load_dataset(
         gse_id: GEO series accession (e.g. 'GSE112676').
         platform: If given, restrict to files containing this GPL id.
         resources_dir: Directory containing per-GSE subdirectories.  Defaults
-            to ``als_analysis/resources/`` relative to this file.
+            to ``resources/`` relative to this file.
         include_meta: If ``True``, append encoded metadata columns to *X*.
             Numeric fields are included as-is; string fields are label-encoded.
             The disease-label field and internal parser fields are excluded.

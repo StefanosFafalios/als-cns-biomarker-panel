@@ -101,6 +101,6 @@ by SelectFromModel (see Discussion).
 
 ======================================================================
 OUTPUT FILES
-  Full NES/FDR table: als_analysis/GSE153960/de_gsea_robustness_results.csv
-  Enrichment plots:   als_analysis/GSE153960/de_gsea_robustness/
-  Statistics:         als_analysis/GSE153960/de_gsea_robustness_statistics.txt
+  Full NES/FDR table: src/de_gsea_robustness_results.csv
+  Enrichment plots:   src/de_gsea_robustness/
+  Statistics:         src/de_gsea_robustness_statistics.txt

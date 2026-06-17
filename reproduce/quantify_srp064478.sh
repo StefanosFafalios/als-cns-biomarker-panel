@@ -18,11 +18,11 @@
 #     --gencode -p 8
 #
 # Run from repository root:
-#   bash GSE153960/reproduce/quantify_srp064478.sh
+#   bash reproduce/quantify_srp064478.sh
 # =============================================================================
 set -euo pipefail
 
-PIPELINE="$(cd "$(dirname "$0")/../.." && pwd)/resources/SRP064478/run_parallel.sh"
+PIPELINE="$(cd "$(dirname "$0")/.." && pwd)/resources/SRP064478/run_parallel.sh"
 
 if [[ ! -f "$PIPELINE" ]]; then
     echo "ERROR: run_parallel.sh not found at $PIPELINE"

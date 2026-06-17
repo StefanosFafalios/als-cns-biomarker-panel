@@ -55,5 +55,5 @@ Sensory Perception R-HSA-9709957                          1.841  9.651e-02
 
 ======================================================================
 OUTPUT FILES
-  Full NES/FDR table: als_analysis/GSE153960/gsea_shap_ranking_results.csv
-  Enrichment plots:   als_analysis/GSE153960/gsea_shap_ranking/
+  Full NES/FDR table: src/gsea_shap_ranking_results.csv
+  Enrichment plots:   src/gsea_shap_ranking/

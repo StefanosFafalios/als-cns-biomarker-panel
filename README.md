@@ -18,75 +18,69 @@ and druggable-target annotation.
 
 ```
 .
+├── reproduce/                # pipeline runner, conda env, data-download scripts
+│   ├── run_all.sh             # master pipeline (ordered, with per-step runtimes)
+│   ├── FIGURE_MANIFEST.md     # every figure/table → producing-script mapping
+│   ├── environment_als.yml
+│   ├── download_geo_data.sh
+│   └── quantify_srp064478.sh
 ├── utils.py                  # shared data loaders (GEO series-matrix / supplementary parsers)
-├── GSE153960/
-│   ├── *.py                  # analysis scripts (one concern each, ~72 scripts)
-│   ├── *.json *.csv *.txt    # cached model hyperparameters, panels, and result tables
-│   ├── *.png                 # manuscript / supplementary figures
-│   └── reproduce/
-│       ├── run_all.sh         # master pipeline (ordered, with per-step runtimes)
-│       ├── FIGURE_MANIFEST.md # every figure/table → producing-script mapping
-│       ├── environment_als.yml
-│       ├── download_geo_data.sh
-│       └── quantify_srp064478.sh
+├── src/                      # analysis scripts (~72) + cached params, result tables, figures
 └── resources/                # (not tracked) raw GEO data — see "Data" below
 ```
 
 ## Setup
 
 ```bash
-conda env create -f GSE153960/reproduce/environment_als.yml
+conda env create -f reproduce/environment_als.yml
 conda activate als-cns-panel
 ```
 
-The pipeline depends only on the standard scientific-Python stack
-(numpy, pandas, scikit-learn, lightgbm, shap, scipy, statsmodels, matplotlib,
-h5py). It does **not** depend on any external AutoML library.
+Depends only on the standard scientific-Python stack (numpy, pandas, scikit-learn,
+lightgbm, shap, scipy, statsmodels, matplotlib, h5py) — no external AutoML library.
 
 ## Data
 
-Expression data are public and are **not** stored in this repository. Download
-them into `resources/`:
+Expression data are public and are **not** stored here. Download into `resources/`:
 
 ```bash
-bash GSE153960/reproduce/download_geo_data.sh      # GEO cohorts → resources/
-bash GSE153960/reproduce/quantify_srp064478.sh     # (optional) SRP064478 Salmon quantification
+bash reproduce/download_geo_data.sh        # GEO cohorts → resources/
+bash reproduce/quantify_srp064478.sh       # (optional) SRP064478 Salmon quantification
 ```
 
 Single-nucleus cohorts (GSE219280, GSE212630) and the BRETIGEA brain cell-type
-marker table have their own download notes inside `GSE153960/reproduce/run_all.sh`.
+marker table have download notes inside `reproduce/run_all.sh`.
 
 ## Reproducing the analysis
 
 ```bash
-bash GSE153960/reproduce/run_all.sh          # full pipeline
-bash GSE153960/reproduce/run_all.sh fast     # skip the feature-matrix rebuild (needs it cached)
-bash GSE153960/reproduce/run_all.sh from 24  # resume from a given step
+bash reproduce/run_all.sh          # full pipeline
+bash reproduce/run_all.sh fast     # skip the feature-matrix rebuild (needs it cached)
+bash reproduce/run_all.sh from 24  # resume from a given step
 ```
 
-`GSE153960/reproduce/FIGURE_MANIFEST.md` maps every figure and table to the
-script that produces it, so any single result can be regenerated without running
-the whole pipeline.
+`reproduce/FIGURE_MANIFEST.md` maps every figure and table to its producing script,
+so any single result can be regenerated without running the whole pipeline.
 
 ### The feature matrix (`lgbm_prefilter_X.npy`)
 
 The pre-filtered feature matrix (874 × 47,822, ~160 MB) is **not** tracked here.
-It is regenerated — without any external library — by the step-2 pipeline from
-the downloaded GEO data:
+It is regenerated — without any external library — by the step-2 pipeline from the
+downloaded GEO data:
 
 ```bash
-conda run -n als-cns-panel python GSE153960/lgbm_iterative_pipeline.py
+conda run -n als-cns-panel python src/lgbm_iterative_pipeline.py
 ```
 
-This reads the provided cached hyperparameters (`lgbm_best_params.json`) and
-writes `lgbm_prefilter_X.npy`, after which `run_all.sh fast` runs end-to-end.
+This reads the cached hyperparameters (`src/lgbm_best_params.json`) and writes
+`src/lgbm_prefilter_X.npy`, after which `reproduce/run_all.sh fast` runs end-to-end.
 
 ## Provenance of the cached hyperparameters
 
 LightGBM hyperparameter optimisation (full-space and top-500 Bayesian search) was
 performed with a separate AutoML library and is **not** part of this repository.
 Those two steps are omitted; their results are provided as cached artifacts
-(`lgbm_best_params.json`, `lgbm_top500_best_params.json`) and the rest of the
+(`src/lgbm_best_params.json`, `src/lgbm_top500_best_params.json`) and the rest of the
 pipeline reproduces deterministically from them.
 
 ## Data availability

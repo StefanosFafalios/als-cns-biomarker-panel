@@ -7,7 +7,7 @@
 # =============================================================================
 set -euo pipefail
 
-RES="$(cd "$(dirname "$0")/../.." && pwd)/resources"
+RES="$(cd "$(dirname "$0")/.." && pwd)/resources"
 
 dl() {
     local dest="$1"; local url="$2"
@@ -54,4 +54,4 @@ dl "$RES/GSE67196/GSE67196_rawcount.txt.gz" \
    "$GEO_FTP/GSE67nnn/GSE67196/suppl/GSE67196_rawcount.txt.gz"
 
 echo "Done. All GEO files downloaded to $RES"
-echo "Next: run GSE153960/reproduce/run_all.sh"
+echo "Next: run reproduce/run_all.sh"

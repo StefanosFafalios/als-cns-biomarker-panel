@@ -50,6 +50,6 @@ Repressors (rho < 0, AUC <= 0.4): 0
 
 ======================================================================
 OUTPUT FILES
-  Full results table: als_analysis/GSE153960/upstream_regulators_results.csv
-  Plot:               als_analysis/GSE153960/upstream_regulators.png
-  Statistics:         als_analysis/GSE153960/upstream_regulators_statistics.txt
+  Full results table: src/upstream_regulators_results.csv
+  Plot:               src/upstream_regulators.png
+  Statistics:         src/upstream_regulators_statistics.txt

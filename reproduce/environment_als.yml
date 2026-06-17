@@ -30,4 +30,4 @@ dependencies:
 # only to export the validated brain cell-type marker table. Install once:
 #   Rscript -e 'install.packages("BRETIGEA", repos="https://cloud.r-project.org"); \
 #     library(BRETIGEA); write.csv(markers_df_brain, \
-#     "als_analysis/GSE153960/bretigea_markers.csv", row.names=FALSE)'
+#     "src/bretigea_markers.csv", row.names=FALSE)'
