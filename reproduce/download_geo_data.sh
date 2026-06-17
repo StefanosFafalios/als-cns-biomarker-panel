@@ -51,7 +51,7 @@ dl "$RES/GSE234297/suppl/GSE234297_gene_offset_matrix.txt.gz" \
 echo "[GSE67196] Regional ALS scoring (Step 20)"
 mkdir -p "$RES/GSE67196"
 dl "$RES/GSE67196/GSE67196_rawcount.txt.gz" \
-   "$GEO_FTP/GSE67nnn/GSE67196/suppl/GSE67196_rawcount.txt.gz"
+   "$GEO_FTP/GSE67nnn/GSE67196/suppl/GSE67196_Petrucelli2015_ALS_genes.rawcount.txt.gz"
 
 echo "Done. All GEO files downloaded to $RES"
 echo "Next: run reproduce/run_all.sh"
