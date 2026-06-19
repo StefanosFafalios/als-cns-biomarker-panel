@@ -52,8 +52,11 @@ _COLOR_THEME = {
     "Neurodegeneration": "#6A1B9A",
     "Microglial": "#2E7D32",
 }
-# High-confidence STRING edges for comparison
-_STRING_EDGES = {("VWF", "ANGPT2"), ("VWF", "CLDN5")}
+# STRING medium-confidence edges (combined score >= 0.4), matching the STRING
+# network figure (string_network.py / Fig. S24).
+_STRING_EDGES = {
+    ("VWF", "ANGPT2"), ("VWF", "CLDN5"), ("VWF", "PROS1"), ("ANGPT2", "CLDN5"),
+}
 
 
 def _load_panel_expression() -> tuple[np.ndarray, list[str]]:
@@ -151,7 +154,7 @@ def _plot(G: nx.Graph, symbols: list[str], string_edges: set[frozenset]) -> None
     causal_vals = [causal_deg[g] for g in genes_sorted]
     str_vals    = [str_deg.get(g, 0) for g in genes_sorted]
     ax.barh(x + w/2, causal_vals, w, color="#1B5E20", label="PC causal")
-    ax.barh(x - w/2, str_vals,    w, color="#E65100", label="STRING (score≥0.7)", alpha=0.75)
+    ax.barh(x - w/2, str_vals,    w, color="#E65100", label="STRING (score≥0.4)", alpha=0.75)
     ax.set_yticks(x)
     ax.set_yticklabels(genes_sorted, fontsize=10)
     ax.invert_yaxis()
@@ -196,7 +199,7 @@ def main() -> None:
     string_only = string_edges - {frozenset(e) for e in edges}
 
     print(f"\n  Causal edges (PC skeleton): {len(edges)}")
-    print(f"  STRING high-conf edges:     {len(string_edges)}")
+    print(f"  STRING edges (score>=0.4):     {len(string_edges)}")
     print(f"  Shared:                     {len(shared)}")
     print(f"  Causal-only:                {len(causal_only)}")
     print(f"  STRING-only:                {len(string_only)}")
@@ -217,7 +220,7 @@ def main() -> None:
         f"Genes: {', '.join(symbols)}",
         "",
         f"Causal edges (skeleton): {len(edges)}",
-        f"STRING high-conf edges:  {len(string_edges)}",
+        f"STRING edges (score>=0.4):  {len(string_edges)}",
         f"Shared (agree):          {len(shared)}",
         f"Causal-only:             {len(causal_only)}",
         f"STRING-only (not found): {len(string_only)}",
