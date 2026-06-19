@@ -6,11 +6,13 @@ panel members, computes degree centrality, and retrieves STRING functional enric
 """
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import pandas as pd
 import requests
 
@@ -109,7 +111,40 @@ def _build_graph(edges: list[dict], id_to_symbol: dict[str, str]) -> nx.Graph:
     return G
 
 
-def main() -> None:
+def _load_from_cache():
+    """Rebuild graphs + frames from cached CSVs (no STRING API call)."""
+    edges_csv = SCRIPT_DIR / "string_network_edges.csv"
+    degree_csv = SCRIPT_DIR / "string_network_degree.csv"
+    enrich_csv = SCRIPT_DIR / "string_enrichment.csv"
+    if not (edges_csv.exists() and degree_csv.exists()):
+        return None
+    edges_df = pd.read_csv(edges_csv)
+    degree_df = pd.read_csv(degree_csv)
+    enrich_df = pd.read_csv(enrich_csv) if enrich_csv.exists() else pd.DataFrame()
+    G_med = nx.Graph()
+    G_med.add_nodes_from(_PROTEIN_CODING)
+    G_high = nx.Graph()
+    G_high.add_nodes_from(_PROTEIN_CODING)
+    for _, r in edges_df.iterrows():
+        a, b, s = r["Gene_A"], r["Gene_B"], float(r["Score"])
+        if a in _PROTEIN_CODING and b in _PROTEIN_CODING and a != b:
+            G_med.add_edge(a, b, weight=s)
+            if s >= 0.7:
+                G_high.add_edge(a, b, weight=s)
+    return G_med, G_high, degree_df, enrich_df
+
+
+def main(use_cache: bool = False) -> None:
+    if use_cache:
+        cached = _load_from_cache()
+        if cached is None:
+            print("Cache not found; falling back to a fresh STRING API query.")
+        else:
+            print("Replotting from cached STRING data (no API call) ...")
+            _plot(*cached)
+            print("Done. Regenerated string_network.png from cache.")
+            return
+
     print("=" * 65)
     print("STRING Protein-Protein Interaction Network")
     print("=" * 65)
@@ -203,35 +238,52 @@ def _plot(
     if degree_df["Degree"].max() > 0:
         mean_deg = degree_df["Degree"].mean()
         ax.axvline(mean_deg, color="black", linestyle="--", alpha=0.5, linewidth=1)
-        ax.text(mean_deg + 0.05, 0.5, f"mean={mean_deg:.1f}",
-                transform=ax.get_yaxis_transform(), fontsize=9)
+        ax.text(mean_deg + 0.02, 0.5, f"mean={mean_deg:.1f}",
+                transform=ax.get_yaxis_transform(), fontsize=9, va="center")
     ax.tick_params(axis="y", labelsize=10)
 
-    # Panel C — STRING enrichment (top terms)
+    # Panel C — STRING enrichment (top functional terms).
+    # Exclude the publications (PMID) and generic neighbourhood categories,
+    # whose "description" is a paper title / non-functional label, and tag
+    # each remaining term with its STRING category for clarity.
     ax = axes[2]
+    _exclude_cat = {"PMID", "NetworkNeighborAL"}
+
+    def _term_label(desc: str, cat: str) -> str:
+        desc = str(desc)
+        if len(desc) > 42:
+            desc = desc[:39] + "..."
+        cat = str(cat).strip()
+        return f"{desc}  [{cat}]" if cat else desc
+
     if not enrich_df.empty and "description" in enrich_df.columns:
         fdr_col = "fdr" if "fdr" in enrich_df.columns else "p_value"
-        if fdr_col in enrich_df.columns:
-            sig = enrich_df[enrich_df[fdr_col] < 0.05].head(15)
-        else:
-            sig = enrich_df.head(15)
+        sig = enrich_df.copy()
+        if "category" in sig.columns:
+            sig = sig[~sig["category"].isin(_exclude_cat)]
+        if fdr_col in sig.columns:
+            sig = sig[sig[fdr_col] < 0.05].sort_values(fdr_col)
+        sig = sig.head(15)
         if not sig.empty:
+            cats = sig["category"] if "category" in sig.columns else [""] * len(sig)
+            labels = [_term_label(d, c) for d, c in zip(sig["description"], cats)][::-1]
             neg_log_p = -np.log10(sig[fdr_col].clip(1e-300).values[::-1])
-            ax.barh(sig["description"].values[::-1], neg_log_p, color="#FF8F00")
+            ax.barh(labels, neg_log_p, color="#FF8F00")
             ax.axvline(-np.log10(0.05), color="red", linestyle="--",
                        linewidth=1, label="FDR=0.05")
             ax.set_xlabel("-log10(FDR)", fontsize=10)
-            ax.set_title("STRING functional enrichment\n(FDR < 0.05)", fontsize=11)
+            ax.set_title("STRING functional enrichment\n(FDR < 0.05; publications excluded)",
+                         fontsize=11)
             ax.legend(fontsize=9)
         else:
-            ax.text(0.5, 0.5, "No enrichment\nat FDR < 0.05", ha="center",
+            ax.text(0.5, 0.5, "No functional enrichment\nat FDR < 0.05", ha="center",
                     va="center", transform=ax.transAxes, fontsize=11)
             ax.set_title("STRING functional enrichment", fontsize=11)
     else:
         ax.text(0.5, 0.5, "Enrichment\nnot available", ha="center",
                 va="center", transform=ax.transAxes, fontsize=11)
         ax.set_title("STRING functional enrichment", fontsize=11)
-    ax.tick_params(axis="y", labelsize=10)
+    ax.tick_params(axis="y", labelsize=9)
 
     plt.tight_layout()
     plt.savefig(SCRIPT_DIR / "string_network.png", dpi=150, bbox_inches="tight")
@@ -294,5 +346,4 @@ def _write_statistics(
 
 
 if __name__ == "__main__":
-    import numpy as np
-    main()
+    main(use_cache="--cache" in sys.argv)

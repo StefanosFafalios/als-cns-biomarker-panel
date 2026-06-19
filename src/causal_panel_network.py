@@ -106,15 +106,28 @@ def _plot(G: nx.Graph, symbols: list[str], string_edges: set[frozenset]) -> None
         "#FF6F00" if frozenset(e) in shared else "#546E7A"
         for e in G.edges()
     ]
-    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=1200, ax=ax, alpha=0.9)
-    nx.draw_networkx_labels(G, pos, font_size=10, font_weight="bold", ax=ax)
+    node_coll = nx.draw_networkx_nodes(
+        G, pos, node_color=node_colors, node_size=1200, ax=ax, alpha=0.9
+    )
+    node_coll.set_zorder(3)  # nodes drawn on top of the legend
+    lbls = nx.draw_networkx_labels(G, pos, font_size=10, font_weight="bold", ax=ax)
+    for _t in lbls.values():
+        _t.set_zorder(4)
     if G.edges():
-        nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=2.5, ax=ax, alpha=0.75)
+        edge_coll = nx.draw_networkx_edges(
+            G, pos, edge_color=edge_colors, width=2.5, ax=ax, alpha=0.75
+        )
+        try:
+            edge_coll.set_zorder(1)
+        except AttributeError:  # directed graphs return a list of patches
+            for _e in edge_coll:
+                _e.set_zorder(1)
     for theme, color in _COLOR_THEME.items():
         ax.plot([], [], "o", color=color, label=theme, markersize=10)
     ax.plot([], [], "-", color="#FF6F00", label="Also in STRING", linewidth=2)
     ax.plot([], [], "-", color="#546E7A", label="Causal only", linewidth=2)
-    ax.legend(loc="lower left", fontsize=9, framealpha=0.85)
+    leg = ax.legend(loc="lower left", fontsize=9, framealpha=0.85)
+    leg.set_zorder(2)  # legend sits behind the network nodes
     ax.set_title(
         f"PC causal skeleton (Fisher-Z, α={ALPHA})\n"
         f"{G.number_of_nodes()} nodes · {G.number_of_edges()} conditional-dependence edges",
