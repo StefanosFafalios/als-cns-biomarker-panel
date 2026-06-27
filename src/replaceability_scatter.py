@@ -112,21 +112,21 @@ for _, row in df.iterrows():
 
 # Gene labels — offset to reduce overlap
 label_offsets: dict[str, tuple[float, float]] = {
-    "CKMT2":   (-0.00015, -5),
-    "NR4A1":   (+0.00005, -6),
-    "TINAGL1": (-0.00025, +3),
-    "SERTAD1": (+0.00005, +3),
-    "EMP1":    (-0.00030, +3),
-    "MECOM":   (+0.00005, +3),
-    "HEXB":    (+0.00005, +3),
-    "PROS1":   (-0.00015, +3),
-    "VWF":     (+0.00005, -6),
-    "CLDN5":   (-0.00030, +3),
-    "FCN3":    (+0.00005, +3),
-    "ANGPT2":  (+0.00005, +3),
-    "MCEE":    (+0.00005, -6),
-    "SLC37A2": (-0.00030, +3),
-    "SOHLH2":  (+0.00005, +3),
+    "CKMT2":   (-0.00007, -3),
+    "NR4A1":   (+0.00004, -3),
+    "TINAGL1": (-0.00012, +2),
+    "SERTAD1": (+0.00004, +2),
+    "EMP1":    (-0.00014, +2),
+    "MECOM":   (+0.00004, +2),
+    "HEXB":    (+0.00004, +2),
+    "PROS1":   (-0.00007, +2),
+    "VWF":     (+0.00004, -3),
+    "CLDN5":   (-0.00014, +2),
+    "FCN3":    (+0.00004, +2),
+    "ANGPT2":  (+0.00004, +2),
+    "MCEE":    (+0.00004, -3),
+    "SLC37A2": (-0.00014, +2),
+    "SOHLH2":  (+0.00004, +2),
 }
 
 for _, row in df.iterrows():
@@ -146,9 +146,9 @@ ax.axhline(50, color="#AAAAAA", lw=0.8, ls="--", zorder=1)
 ax.axvline(0, color="#AAAAAA", lw=0.8, ls="--", zorder=1)
 
 # Quadrant annotations
-ax.text(0.72, 0.97, "Low LOO Δ\nHigh repl%\n(redundant, widely substitutable)",
+ax.text(0.16, 0.56, "Low LOO Δ\nHigh repl%\n(redundant, widely substitutable)",
         transform=ax.transAxes, fontsize=7, color="#888888",
-        ha="center", va="top", style="italic")
+        ha="center", va="center", style="italic")
 ax.text(0.15, 0.03, "Low LOO Δ\nLow repl%\n(redundant but unique signal)",
         transform=ax.transAxes, fontsize=7, color="#888888",
         ha="center", va="bottom", style="italic")
@@ -174,8 +174,8 @@ size_handles = [
 ]
 
 leg1 = ax.legend(handles=theme_patches, title="Biological theme",
-                  loc="upper left", fontsize=8, title_fontsize=8,
-                  framealpha=0.9)
+                  loc="lower left", bbox_to_anchor=(0.0, 0.14),
+                  fontsize=8, title_fontsize=8, framealpha=0.9)
 ax.add_artist(leg1)
 ax.legend(handles=size_handles, labels=size_labels, title="Dot size ∝ mean |SHAP|",
           loc="lower right", bbox_to_anchor=(1.0, 0.14), fontsize=7.5,

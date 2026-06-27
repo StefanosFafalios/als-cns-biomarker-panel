@@ -1,4 +1,4 @@
-name: als-cns-panel
+name: coffeeBreak
 channels:
   - conda-forge
   - defaults
@@ -19,7 +19,7 @@ dependencies:
       - mygene>=3.2.0          # gene annotation (Step 3a)
       - networkx>=3.6          # network analysis (string_network)
       - requests>=2.30         # REST APIs (DGIdb, OpenTargets — Step 7)
-      - causal-learn>=0.1.4    # IAMB Markov Blanket (Step 19)
+      - causal-learn>=0.1.4    # PC conditional-dependence network (Step 12b)
       - optuna>=3.0            # BayesianOptimizer dependency
       - dask[distributed]>=2024.1
       - bokeh>=3.1
@@ -30,4 +30,4 @@ dependencies:
 # only to export the validated brain cell-type marker table. Install once:
 #   Rscript -e 'install.packages("BRETIGEA", repos="https://cloud.r-project.org"); \
 #     library(BRETIGEA); write.csv(markers_df_brain, \
-#     "src/bretigea_markers.csv", row.names=FALSE)'
+#     "als_analysis/GSE153960/bretigea_markers.csv", row.names=FALSE)'

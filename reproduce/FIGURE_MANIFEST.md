@@ -4,7 +4,7 @@ Mapping every `\includegraphics` reference in `manuscript.tex` /
 `supplementary.tex` to the script that produces it. Use this to verify a
 specific result without re-running the full pipeline.
 
-PNG paths are relative to `src/`. Each script writes its
+PNG paths are relative to `als_analysis/GSE153960/`. Each script writes its
 output(s) to that same directory.
 
 ## Main-text figures
@@ -82,7 +82,6 @@ producing script.
 | tab:multicohort | `lr_vs_lgbm_zeroshot.txt` + `multicohort_baselines.txt` | `lr_vs_lgbm_zeroshot.py` + `multicohort_baselines.py` |
 | tab:ctd_sensitivity | `compartment_regression_sensitivity_statistics.txt` | `compartment_regression_sensitivity.py` |
 | tab:lr_baseline | `lr_baseline_statistics.txt` | `lr_baseline.py` |
-| tab:iamb_alpha | `iamb_alpha_grid_statistics.txt` | `iamb_alpha_grid.py` |
 | tab:loo_sensitivity | `panel_loo_zeroshot_statistics.txt` + `cross_cohort_loo_sensitivity.txt` | `panel_loo_zeroshot.py` + `cross_cohort_loo_sensitivity.py` |
 | tab:deconv_robust | `deconv_robustness.txt` / `.csv` | `deconv_robustness.py` (cell-type assignment bootstrap; also sets composition-driver labels in tab:bio_evidence) |
 | tab:drugrepl | `druggable_replacement_targets.csv` / `.txt` | `druggable_replacement_targets.py` (DGIdb druggable co-regulated surrogates; depends on `gene_replacement.py`) |
@@ -107,7 +106,7 @@ script is rerun, those numbers will refresh automatically.
 
 ## Exploratory scripts not in `run_all.sh`
 
-The following scripts exist in `src/` but are NOT cited
+The following scripts exist in `als_analysis/GSE153960/` but are NOT cited
 in the manuscript or supplementary. They are kept for historical context and
 internal sensitivity analyses but are not required to reproduce the published
 results:
@@ -117,6 +116,9 @@ biomarker_discovery_lr_bayesopt.py    # Alternative LR-based discovery
 loc112268270_greedy.py                # LOC112268270 lysosomal probe (deep-dive cut; now 1 sentence in main text)
 cmap_drug_repurposing.py              # CMap/LINCS repurposing (section removed: negative result, no FDR-significant hits)
 reciprocal_discovery.py               # Reciprocal discovery on GSE122649 (n=38); omitted: underpowered, panel re-discovery overfits (transfer 0.54). Due-diligence only.
+ses_markov_blanket.py                 # IAMB Markov-blanket selection; removed from paper (alpha-dependent sensitivity analysis)
+iamb_alpha_grid.py                    # IAMB alpha-tuning grid; removed from paper
+iamb_strict_alpha.py                  # IAMB strict-alpha membership; removed from paper
 lr_svm_gpl16791_validation.py         # LR/SVM comparison on GPL16791
 lr_svm_panel_analysis.py              # LR/SVM analysis on panel
 lr_svm_srp064478_validation.py        # LR/SVM on SRP064478

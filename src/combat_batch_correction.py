@@ -16,7 +16,7 @@ identical train/test split and model:
                   of additive + multiplicative platform shift);
   (C) combat    — parametric empirical-Bayes ComBat (Johnson, Li & Rabinovic,
                   Biostatistics 2007), implemented from scratch (no external
-                  dependency, mirroring the project's from-scratch IAMB).
+                  dependency).
 
 ComBat and z-standardisation are *unsupervised* in the class label: the batch
 variable is the sequencing platform only. The ALS/control label is never used
