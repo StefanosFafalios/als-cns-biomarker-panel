@@ -184,15 +184,17 @@ def _plot_ora(results: "pd.DataFrame", set_name: str, padj_col: str = "Adjusted 
     ax.set_xlabel("log10(Combined Score + 1)  [Enrichr]")
     ax.set_title(
         f"Pathway ORA — {set_name} gene set\n"
-        f"GSE153960 GPL24676 core 25-gene panel · Adj.P < {ENRICHR_PADJ}\n"
-        + "  ".join(
-            f"■ {lib.split('_')[0]}" for lib, c in colours.items()
-        ),
+        f"GSE153960 GPL24676 core 25-gene panel · Adj.P < {ENRICHR_PADJ}",
         fontsize=9,
     )
 
     from matplotlib.patches import Patch
-    legend_handles = [Patch(color=c, label=lib.split("_")[0]) for lib, c in colours.items()]
+    # Legend lists only the libraries actually present among the plotted bars
+    present_libs = list(dict.fromkeys(str(g) for g in top["Gene_set"]))
+    legend_handles = [
+        Patch(color=colours.get(lib, "#8c564b"), label=lib.split("_")[0])
+        for lib in present_libs
+    ]
     ax.legend(handles=legend_handles, fontsize=7, loc="lower right")
     ax.grid(axis="x", alpha=0.3)
     plt.tight_layout()
@@ -297,5 +299,23 @@ def main() -> None:
     print("=" * 65)
 
 
+def _replot_all() -> None:
+    """Regenerate the ORA bar figures from cached results (no Enrichr query)."""
+    import matplotlib
+    import pandas as pd
+
+    matplotlib.use("Agg")
+    combined = pd.read_csv(SCRIPT_DIR / "pathway_ora_results.csv")
+    for set_name in combined["gene_set_name"].unique():
+        subset = combined[combined["gene_set_name"] == set_name]
+        if not subset.empty:
+            _plot_ora(subset, set_name)
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--replot" in sys.argv:
+        _replot_all()
+    else:
+        main()

@@ -636,9 +636,21 @@ def _plot_iter_performance(iter_log: list[dict]) -> None:
     ax1.set_ylim(max(0.7, min(aucs) - 0.02), 1.01)
     ax1.grid(True, alpha=0.3)
 
-    for r, auc in zip(iter_log, aucs):
-        flagged = str(r.get("newly_flagged_symbols", "") or "").strip()
-        label_text = f"▲ {flagged}" if flagged else "✓ clean"
+    # The decontamination loop only advances past an iteration when it flags
+    # artifacts and stops at the first clean pass, so the final logged iteration
+    # is the clean one and every earlier iteration removed artifacts.
+    n_iters = len(iter_log)
+    for idx, (r, auc) in enumerate(zip(iter_log, aucs)):
+        raw = r.get("newly_flagged_symbols", "")
+        # CSV-loaded empty cells come back as float NaN (NaN != NaN)
+        flagged_syms = "" if (raw is None or raw != raw) else str(raw).strip()
+        if flagged_syms.lower() == "nan":
+            flagged_syms = ""
+        is_clean = idx == n_iters - 1
+        if is_clean:
+            label_text = "✓ clean"
+        else:
+            label_text = f"▲ {flagged_syms}" if flagged_syms else "▲ artifact(s) removed"
         ax1.annotate(
             label_text,
             xy=(int(r["iteration"]), auc),
@@ -646,7 +658,7 @@ def _plot_iter_performance(iter_log: list[dict]) -> None:
             textcoords="offset points",
             ha="center",
             fontsize=7,
-            color="crimson" if flagged else "green",
+            color="green" if is_clean else "crimson",
         )
 
     ax2 = ax1.twinx()
@@ -927,5 +939,18 @@ def main() -> None:
     print("=" * 65)
 
 
+def _replot_from_log() -> None:
+    """Regenerate the performance plot from the cached iteration log (no refit)."""
+    import pandas as pd
+
+    log_df = pd.read_csv(ITER_LOG_CSV)
+    _plot_iter_performance([row.to_dict() for _, row in log_df.iterrows()])
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--replot" in sys.argv:
+        _replot_from_log()
+    else:
+        main()

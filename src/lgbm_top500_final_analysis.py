@@ -322,6 +322,17 @@ def _plot_curve_top50(
         linewidth=1.2,
         label=f"Peak: k={best_k}, AUC={best_auc:.4f}",
     )
+    K_STAR = 25
+    if len(auc50) >= K_STAR:
+        ax.axvline(
+            K_STAR,
+            color="seagreen",
+            linestyle="--",
+            linewidth=1.2,
+            label=f"Core panel: k={K_STAR}, AUC={auc50[K_STAR - 1]:.4f}",
+        )
+        ax.plot(K_STAR, auc50[K_STAR - 1], "o", color="seagreen", markersize=9,
+                zorder=5)
     ax.set_xticks(k50)
     ax.set_xticklabels(labels, rotation=90, fontsize=7)
     ax.set_ylabel("Mean AUC-ROC  (5-fold stratified CV, random_state=42)")
@@ -561,5 +572,27 @@ def main() -> None:
     print("=" * 60)
 
 
+def _replot_curves() -> None:
+    """Regenerate only the incremental-curve figures from cached CSVs (no refit)."""
+    import matplotlib
+    import pandas as pd
+
+    matplotlib.use("Agg")
+    curve_scores = pd.read_csv(CURVE_CSV)["mean_auc"].tolist()
+    ranked_names = pd.read_csv(SHAP_CSV)["feature"].tolist()
+    loo_results = pd.read_csv(LOO_CSV).to_dict("records")
+    all_features = list(
+        dict.fromkeys(ranked_names[:50] + [r["feature"] for r in loo_results])
+    )
+    sym_map = _resolve_symbols(all_features)
+    _plot_curve(curve_scores)
+    _plot_curve_top50(curve_scores, ranked_names, sym_map)
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+
+    if "--replot" in sys.argv:
+        _replot_curves()
+    else:
+        main()

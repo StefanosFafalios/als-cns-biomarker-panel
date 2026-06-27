@@ -178,7 +178,8 @@ leg1 = ax.legend(handles=theme_patches, title="Biological theme",
                   framealpha=0.9)
 ax.add_artist(leg1)
 ax.legend(handles=size_handles, labels=size_labels, title="Dot size ∝ mean |SHAP|",
-          loc="lower right", fontsize=7.5, title_fontsize=7.5, framealpha=0.9)
+          loc="lower right", bbox_to_anchor=(1.0, 0.14), fontsize=7.5,
+          title_fontsize=7.5, framealpha=0.9)
 
 ax.set_xlabel("LOO Δ AUC  (within 25-gene panel context)", fontsize=11)
 ax.set_ylabel("Replaceability  (%)", fontsize=11)
