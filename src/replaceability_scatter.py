@@ -146,9 +146,9 @@ ax.axhline(50, color="#AAAAAA", lw=0.8, ls="--", zorder=1)
 ax.axvline(0, color="#AAAAAA", lw=0.8, ls="--", zorder=1)
 
 # Quadrant annotations
-ax.text(0.16, 0.56, "Low LOO Δ\nHigh repl%\n(redundant, widely substitutable)",
+ax.text(0.16, 0.97, "Low LOO Δ\nHigh repl%\n(redundant, widely substitutable)",
         transform=ax.transAxes, fontsize=7, color="#888888",
-        ha="center", va="center", style="italic")
+        ha="center", va="top", style="italic")
 ax.text(0.15, 0.03, "Low LOO Δ\nLow repl%\n(redundant but unique signal)",
         transform=ax.transAxes, fontsize=7, color="#888888",
         ha="center", va="bottom", style="italic")
