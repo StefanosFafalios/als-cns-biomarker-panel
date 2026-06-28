@@ -39,7 +39,7 @@ _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 
 # 15-gene critical panel: indices into the 25-gene ordered panel
-# (greedy backward-elimination peak, W.mean AUC = 0.8921; see panel_17gene_eval.py).
+# (greedy backward-elimination peak, W.mean AUC = 0.9029; see panel_17gene_eval.py).
 _CRITICAL_IDX = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
 
 
@@ -149,18 +149,17 @@ def main() -> None:
     X_train_log = np.log1p(X_train_raw)
     X_test_log = np.log1p(X_test_raw)
 
-    print("Applying CTD compartment regression ...")
-    X_train_res, X_test_res = _ctd_residualise(X_train_log, X_test_log, feat_train)
-
+    # CTD compartment regression is discovery-side only; calibration is assessed on
+    # raw log1p (the deployment configuration, uniform with the other cohorts).
     # 25-gene panel
-    X_tr = _extract_panel(X_train_res, feat_train, panel_features)
-    X_te = _extract_panel(X_test_res, feat_test, panel_features)
+    X_tr = _extract_panel(X_train_log, feat_train, panel_features)
+    X_te = _extract_panel(X_test_log, feat_test, panel_features)
     print(f"  25-gene panel matched: train {X_tr.shape}, test {X_te.shape}")
 
     # 15-gene critical panel (subset of the 25-gene panel)
     crit_features = [panel_features[i] for i in _CRITICAL_IDX]
-    X_tr_c = _extract_panel(X_train_res, feat_train, crit_features)
-    X_te_c = _extract_panel(X_test_res, feat_test, crit_features)
+    X_tr_c = _extract_panel(X_train_log, feat_train, crit_features)
+    X_te_c = _extract_panel(X_test_log, feat_test, crit_features)
     print(f"  critical panel matched: train {X_tr_c.shape}, test {X_te_c.shape}")
 
     print("\nComputing 5-fold CV + zero-shot scores (both panels) ...")

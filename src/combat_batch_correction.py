@@ -243,10 +243,11 @@ def main() -> None:
     X_test_raw, feat_test, y_test, _ = _load_platform("GPL16791")
     assert feat_train == feat_test
 
-    print("log1p + CTD compartment regression (fit on GPL24676) ...")
-    X_tr_res, X_te_res = _ctd_residualise(
-        np.log1p(X_train_raw), np.log1p(X_test_raw), feat_train
-    )
+    # CTD is discovery-side only; the ComBat comparison is on raw log1p (uniform
+    # with the other zero-shot cohorts).
+    print("log1p (raw; no CTD) ...")
+    X_tr_res = np.log1p(X_train_raw)
+    X_te_res = np.log1p(X_test_raw)
 
     # ---- (A) baseline: no correction --------------------------------------
     X_tr_p = _extract_panel(X_tr_res, feat_train, panel_features)

@@ -81,9 +81,9 @@ def main() -> None:
 
     X_train_log = np.log1p(X_train_raw)
     X_test_log = np.log1p(X_test_raw)
-    X_train_res, X_test_res = _ctd_residualise(X_train_log, X_test_log, feat_train)
-    X_tr = _extract_panel(X_train_res, feat_train, panel_features)
-    X_te = _extract_panel(X_test_res, feat_test, panel_features)
+    # CTD is discovery-side only; LR baseline uses raw log1p (uniform with cohorts)
+    X_tr = _extract_panel(X_train_log, feat_train, panel_features)
+    X_te = _extract_panel(X_test_log, feat_test, panel_features)
     print(f"  Train: {X_tr.shape}  Test: {X_te.shape}")
 
     # 5-fold CV — both models

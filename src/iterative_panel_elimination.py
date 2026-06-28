@@ -145,28 +145,14 @@ def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]
         X_log: (874, 58929) plain log1p, float32  (for symbol-matched cohorts)
         feat: versioned Ensembl feature names
     """
-    from sklearn.decomposition import PCA
-    from sklearn.linear_model import LinearRegression
-
+    # CTD compartment regression is discovery-side only; cross-cohort transfer now
+    # uses raw log1p for every cohort, so the memory-heavy CTD-residualised matrix
+    # is no longer built. Returns (X_log, y, X_log, feat) for signature compatibility.
     (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources")
-    X_raw = ds.X.values.astype(np.float32)
+    X_log = np.log1p(ds.X.values.astype(np.float32))
     y = ds.y.values.astype(int)
     feat = list(ds.X.columns)
-    X_log = np.log1p(X_raw)
-
-    base_ids = [n.split(".")[0] for n in feat]
-    pcs = []
-    for comp_bases in _COMPARTMENTS.values():
-        base_set = set(comp_bases)
-        idx = [i for i, b in enumerate(base_ids) if b in base_set]
-        if not idx:
-            continue
-        pca = PCA(n_components=1, random_state=0)
-        pcs.append(pca.fit_transform(X_log[:, idx]))
-    Z = np.hstack(pcs)
-    reg = LinearRegression().fit(Z, X_log)
-    X_ctd = (X_log - reg.predict(Z)).astype(np.float32)
-    return X_ctd, y, X_log, feat
+    return X_log, y, X_log, feat
 
 
 def _load_gpl16791_ctd(
@@ -450,17 +436,24 @@ def main() -> None:
     X_train_ctd, y_train, X_train_log, feat_train = _load_gpl24676_ctd()
     feat_train_base_map: dict[str, int] = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
 
-    # Pre-extract 25-column matrices (CTD and log1p)
+    # Pre-extract 25-column matrices. Cross-cohort transfer now uses raw log1p for
+    # ALL cohorts (CTD is discovery-side only); the GPL16791 arm below is fed raw
+    # log1p, so the "ctd"-named arrays hold raw log1p for uniformity.
     panel_train_cols: list[int] = [feat_train_base_map[b] for b in feat25_bases]
-    Xtr25_ctd: np.ndarray = X_train_ctd[:, panel_train_cols].astype(np.float32)
+    Xtr25_ctd: np.ndarray = X_train_log[:, panel_train_cols].astype(np.float32)
     Xtr25_log: np.ndarray = X_train_log[:, panel_train_cols].astype(np.float32)
 
     # -----------------------------------------------------------------------
     # Load GPL16791 with CTD
     # -----------------------------------------------------------------------
-    print("Loading GPL16791 (CTD) ...")
-    X16_ctd, y16 = _load_gpl16791_ctd(X_train_log, feat_train)
-    X16_25_ctd: np.ndarray = X16_ctd[:, panel_train_cols].astype(np.float32)
+    print("Loading GPL16791 (raw log1p; CTD is discovery-side only) ...")
+    (ds16,) = load_dataset(
+        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
+    )
+    assert list(ds16.X.columns) == feat_train
+    X16_log_full = np.log1p(ds16.X.values.astype(np.float32))
+    y16 = ds16.y.values.astype(int)
+    X16_25_ctd: np.ndarray = X16_log_full[:, panel_train_cols].astype(np.float32)
     print(f"  GPL16791: n={len(y16)}, ALS={y16.sum()}, Ctrl={(y16==0).sum()}")
 
     # -----------------------------------------------------------------------

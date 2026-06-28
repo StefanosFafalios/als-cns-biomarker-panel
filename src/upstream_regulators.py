@@ -69,7 +69,7 @@ AUC_REPRESSOR_THRESH = 0.40
 SPEARMAN_THRESH = 0.30
 
 # 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean = 0.8921; equal cohort weights)
+# (greedy backward elimination peak at k=15, W.mean = 0.9029; equal cohort weights)
 # Excludes EMP1: largest individual negative D_ZS in one-pass LOO but redundant
 # in a 16-gene context (greedy elimination drops at step 10 with positive D_ZS).
 _UP_GENES = [

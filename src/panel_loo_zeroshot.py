@@ -166,27 +166,14 @@ def _stratified_boot_indices(
 # ---------------------------------------------------------------------------
 
 def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
-    from sklearn.decomposition import PCA
-    from sklearn.linear_model import LinearRegression
+    # CTD compartment regression is discovery-side only; cross-cohort transfer now
+    # uses raw log1p for every cohort, so the memory-heavy CTD-residualised matrix
+    # is no longer built. Returns (X_log, y, X_log, feat) for signature compatibility.
     (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources")
-    X_raw = ds.X.values.astype(np.float32)
+    X_log = np.log1p(ds.X.values.astype(np.float32))
     y = ds.y.values.astype(int)
     feat = list(ds.X.columns)
-    X_log = np.log1p(X_raw)
-    base_ids = [n.split(".")[0] for n in feat]
-    pcs = []
-    for comp_bases in _COMPARTMENTS.values():
-        base_set = set(comp_bases)
-        idx = [i for i, b in enumerate(base_ids) if b in base_set]
-        if not idx:
-            continue
-        pca = PCA(n_components=1, random_state=0)
-        pcs.append(pca.fit_transform(X_log[:, idx]))
-    Z = np.hstack(pcs)
-    from sklearn.linear_model import LinearRegression as LR
-    reg = LR().fit(Z, X_log)
-    X_ctd = (X_log - reg.predict(Z)).astype(np.float32)
-    return X_ctd, y, X_log, feat
+    return X_log, y, X_log, feat
 
 
 def _load_gpl16791_ctd(
@@ -215,6 +202,22 @@ def _load_gpl16791_ctd(
     reg = LinearRegression().fit(Z_tr, X_train_log)
     X16_ctd = (X16_log - reg.predict(Z_te)).astype(np.float32)
     return X16_ctd, y16
+
+
+def _load_gpl16791_raw(feat_train: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    """Load GPL16791 as plain log1p (no CTD), Ensembl-ID matched to training.
+
+    Compartment regression is retained only for discovery-side feature selection;
+    cross-cohort transfer (including GPL16791) is evaluated on raw log1p, uniform
+    with the symbol-matched cohorts (the configuration that transfers best; see
+    the compartment-regression sensitivity analysis).
+    """
+    (ds16,) = load_dataset(
+        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
+    )
+    assert list(ds16.X.columns) == feat_train
+    X16_log = np.log1p(ds16.X.values.astype(np.float32))
+    return X16_log, ds16.y.values.astype(int)
 
 
 def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
@@ -331,7 +334,7 @@ def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
 def _panel_ensemble_scores(
     panel_idx: list[int],
     Xtr25_ctd: np.ndarray, y_train: np.ndarray,
-    X16_25_ctd: np.ndarray,
+    X16_25_raw: np.ndarray,
     Xtr25_log: np.ndarray,
     X76_25: np.ndarray, avail76: list[int],
     X122_25: np.ndarray, avail122: list[int],
@@ -349,10 +352,10 @@ def _panel_ensemble_scores(
     panel_set = set(panel_idx)
     out: dict[str, np.ndarray] = {}
 
-    # GPL16791 — CTD, all panel genes available
+    # GPL16791 — raw log1p (CTD removed; uniform with the symbol-matched cohorts)
     if len(panel_idx) >= 1:
-        Xtr = Xtr25_ctd[:, panel_idx]
-        Xte = X16_25_ctd[:, panel_idx]
+        Xtr = Xtr25_log[:, panel_idx]
+        Xte = X16_25_raw[:, panel_idx]
         sc = StandardScaler().fit(Xtr)
         out["GPL16791"] = _ensemble_scores(
             sc.transform(Xtr), y_train, sc.transform(Xte), params
@@ -454,10 +457,10 @@ def main() -> None:
     Xtr25_ctd = X_train_ctd[:, panel_train_cols].astype(np.float32)
     Xtr25_log = X_train_log[:, panel_train_cols].astype(np.float32)
 
-    # ---- Load GPL16791 ----
-    print("Loading GPL16791 (CTD) ...")
-    X16_ctd, y16 = _load_gpl16791_ctd(X_train_log, feat_train)
-    X16_25_ctd = X16_ctd[:, panel_train_cols].astype(np.float32)
+    # ---- Load GPL16791 (raw log1p — uniform with the other zero-shot cohorts) ----
+    print("Loading GPL16791 (raw log1p; CTD is discovery-side only) ...")
+    X16_log_full, y16 = _load_gpl16791_raw(feat_train)
+    X16_25_raw = X16_log_full[:, panel_train_cols].astype(np.float32)
 
     # ---- Load GSE76220 ----
     print("Loading GSE76220 ...")
@@ -490,7 +493,7 @@ def main() -> None:
 
     score_kwargs = dict(
         Xtr25_ctd=Xtr25_ctd, y_train=y_train,
-        X16_25_ctd=X16_25_ctd,
+        X16_25_raw=X16_25_raw,
         Xtr25_log=Xtr25_log,
         X76_25=X76_25, avail76=avail76,
         X122_25=X122_25, avail122=avail122,

@@ -272,12 +272,12 @@ def main() -> None:
     X_train_log = np.log1p(X_train_raw)
     X_test_log = np.log1p(X_test_raw)
 
-    print("\nFitting CTD compartment regression on GPL24676 ...")
-    X_train_res, X_test_res = _ctd_residualise(X_train_log, X_test_log, feat_train)
-
-    print("\nExtracting 25-gene panel ...")
-    X_tr = _extract_panel(X_train_res, feat_train, panel_features)
-    X_te = _extract_panel(X_test_res, feat_test, panel_features)
+    # CTD compartment regression is discovery-side only; the GPL16791 transfer is
+    # evaluated on raw log1p, uniform with the symbol-matched cohorts (the
+    # configuration that transfers best; see compartment-regression sensitivity).
+    print("\nExtracting 25-gene panel (raw log1p; no CTD) ...")
+    X_tr = _extract_panel(X_train_log, feat_train, panel_features)
+    X_te = _extract_panel(X_test_log, feat_test, panel_features)
     print(f"  Train: {X_tr.shape}  Test: {X_te.shape}")
 
     params = json.loads(_PARAMS_PATH.read_text())

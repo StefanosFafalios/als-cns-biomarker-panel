@@ -57,7 +57,7 @@ LASSO_JOBS = -1        # parallel jobs (-1 = all cores)
 REPL_R_THRESHOLD = 0.10  # minimum |Pearson r| in GPL16791 for replication
 
 # 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean = 0.8921; equal cohort weights)
+# (greedy backward elimination peak at k=15, W.mean = 0.9029; equal cohort weights)
 _CRITICAL_CODING_GENES: frozenset[str] = frozenset({
     "FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
     "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1",

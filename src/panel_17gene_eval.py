@@ -1,6 +1,6 @@
 """Zero-shot evaluation of the 15-gene critical panel on 4 CNS cohorts (equal weights).
 
-Critical panel = greedy backward elimination peak (W.mean AUC = 0.8921 at k=15)
+Critical panel = greedy backward elimination peak (W.mean AUC = 0.9029 at k=15)
 under equal cohort weighting (0.25 per cohort). Source: iterative_panel_elimination.py.
 This replaces the prior one-pass-LOO 16-gene definition, which the v2 bootstrap-CI
 analysis (panel_loo_zeroshot.py) showed was inflated by combinatorial redundancy
@@ -116,26 +116,13 @@ def _zero_shot_ci(
 # ---------------------------------------------------------------------------
 
 def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
-    from sklearn.decomposition import PCA
-    from sklearn.linear_model import LinearRegression
+    # CTD compartment regression is discovery-side only; cross-cohort transfer now
+    # uses raw log1p for every cohort, so the CTD-residualised matrix is not built.
     (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources")
-    X_raw = ds.X.values.astype(np.float32)
+    X_log = np.log1p(ds.X.values.astype(np.float32))
     y = ds.y.values.astype(int)
     feat = list(ds.X.columns)
-    X_log = np.log1p(X_raw)
-    base_ids = [n.split(".")[0] for n in feat]
-    pcs = []
-    for comp_bases in _COMPARTMENTS.values():
-        base_set = set(comp_bases)
-        idx = [i for i, b in enumerate(base_ids) if b in base_set]
-        if not idx:
-            continue
-        pca = PCA(n_components=1, random_state=0)
-        pcs.append(pca.fit_transform(X_log[:, idx]))
-    Z = np.hstack(pcs)
-    reg = LinearRegression().fit(Z, X_log)
-    X_ctd = (X_log - reg.predict(Z)).astype(np.float32)
-    return X_ctd, y, X_log, feat
+    return X_log, y, X_log, feat
 
 
 def _load_gpl16791_ctd(
@@ -283,7 +270,7 @@ def main() -> None:
 
     print("=" * 70)
     print("15-gene critical panel — zero-shot AUC with 95% CI (equal cohort weights)")
-    print("Greedy backward elimination peak (W.mean = 0.8921 at k=15)")
+    print("Greedy backward elimination peak (W.mean = 0.9029 at k=15)")
     print("Weights: GPL16791=0.250  GSE76220=0.250  GSE122649=0.250  SRP064478=0.250")
     print("=" * 70)
 
@@ -302,18 +289,21 @@ def main() -> None:
     panel_bases = [feat25_bases[i] for i in _CRITICAL_IDX]
     print(f"\n15-gene critical panel: {', '.join(panel_syms)}\n")
 
-    # ---- Load GPL24676 ----
-    print("Loading GPL24676 (CTD + log1p) ...")
+    # ---- Load GPL24676 (raw log1p; CTD is discovery-side only) ----
+    print("Loading GPL24676 (raw log1p) ...")
     X_train_ctd, y_train, X_train_log, feat_train = _load_gpl24676_ctd()
     feat_train_base_map: dict[str, int] = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
     panel_train_cols: list[int] = [feat_train_base_map[b] for b in feat25_bases]
-    Xtr25_ctd = X_train_ctd[:, panel_train_cols].astype(np.float32)
+    Xtr25_ctd = X_train_log[:, panel_train_cols].astype(np.float32)
     Xtr25_log = X_train_log[:, panel_train_cols].astype(np.float32)
 
-    # ---- Load GPL16791 ----
-    print("Loading GPL16791 (CTD) ...")
-    X16_ctd, y16 = _load_gpl16791_ctd(X_train_log, feat_train)
-    X16_25_ctd = X16_ctd[:, panel_train_cols].astype(np.float32)
+    # ---- Load GPL16791 (raw log1p — uniform with other zero-shot cohorts) ----
+    print("Loading GPL16791 (raw log1p; CTD is discovery-side only) ...")
+    (ds16,) = load_dataset("GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources")
+    assert list(ds16.X.columns) == feat_train
+    X16_log_full = np.log1p(ds16.X.values.astype(np.float32))
+    y16 = ds16.y.values.astype(int)
+    X16_25_ctd = X16_log_full[:, panel_train_cols].astype(np.float32)
 
     # ---- Load GSE76220 ----
     print("Loading GSE76220 ...")
@@ -427,7 +417,7 @@ def main() -> None:
         "=" * 70,
         "",
         "Source: greedy backward elimination peak (iterative_panel_elimination.py),",
-        "  W.mean AUC = 0.8921 at k=15 (peak of the elimination trajectory).",
+        "  W.mean AUC = 0.9029 at k=15 (peak of the elimination trajectory).",
         "  Supersedes the prior one-pass-LOO 16-gene definition: the v2 bootstrap-CI",
         "  analysis (panel_loo_zeroshot.py) showed individual-LOO D_ZS values inflated",
         "  by combinatorial redundancy (e.g. EMP1 had the largest individual",
@@ -469,7 +459,7 @@ def main() -> None:
         f"  Weighted mean AUC = {wmean:.4f}",
         "",
         "Note: 'Genes' = number of panel genes matched in that cohort's vocabulary.",
-        "      GPL16791 uses CTD compartment regression (same as training).",
+        "      GPL16791 evaluated on raw log1p (CTD is discovery-side only).",
         "      GSE76220, GSE122649 matched by HGNC symbol.",
         "      SRP064478 matched by Ensembl base ID (captures pseudogenes).",
     ]

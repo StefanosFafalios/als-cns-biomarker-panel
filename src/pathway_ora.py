@@ -45,7 +45,7 @@ ENRICHR_PADJ = 0.05         # Enrichr Adjusted P-value cutoff for display
 TOP_TERMS = 15              # top terms per library to display in plots
 
 # 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean = 0.8921; equal cohort weights)
+# (greedy backward elimination peak at k=15, W.mean = 0.9029; equal cohort weights)
 _CRITICAL_CODING_GENES: frozenset[str] = frozenset({
     "FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
     "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1",

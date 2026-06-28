@@ -20,11 +20,8 @@ Per-cohort preprocessing:
 Panels evaluated:
   25-gene   : full core panel (lgbm_core25_panel.csv)
   15-crit   : 15 cross-cohort critical genes (greedy backward elimination peak,
-              iterative_panel_elimination.py; W.mean = 0.8921 at k=15)
+              iterative_panel_elimination.py; W.mean = 0.9029 at k=15)
               indices in 25-gene panel: [5,6,7,8,9,10,11,12,15,17,18,19,20,22,23,24]
-
-Run from the repository root:
-    conda run -n als-cns-panel python -u src/lr_vs_lgbm_zeroshot.py
 """
 from __future__ import annotations
 
@@ -64,7 +61,7 @@ RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 
 # 15-gene critical panel: indices in the 25-gene panel
-# (greedy backward elimination peak at k=15, W.mean = 0.8921; equal cohort weights)
+# (greedy backward elimination peak at k=15, W.mean = 0.9029; equal cohort weights)
 # HERC2P8 SMG1P5 SERTAD1 FCN3 PROS1 ANGPT2 SNORD97 TINAGL1 CKMT2 CLDN5
 # NR4A1 SOHLH2 HEXB MCEE SLC37A2
 CRITICAL_IDX: list[int] = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
@@ -345,8 +342,8 @@ def main() -> None:
     feat_train_base_map = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
     panel_cols = [feat_train_base_map[b] for b in feat25_bases]
     crit_cols = [panel_cols[i] for i in CRITICAL_IDX]
-    Xtr_ctd_25 = X_train_ctd[:, panel_cols].astype(np.float32)
-    Xtr_ctd_16 = X_train_ctd[:, crit_cols].astype(np.float32)
+    Xtr_ctd_25 = X_train_log[:, panel_cols].astype(np.float32)  # raw (CTD discovery-side only)
+    Xtr_ctd_16 = X_train_log[:, crit_cols].astype(np.float32)
     Xtr_log_25 = X_train_log[:, panel_cols].astype(np.float32)
     Xtr_log_16 = X_train_log[:, crit_cols].astype(np.float32)
     print(f"  n={len(y_train)}  ALS={y_train.sum()}  Ctrl={(y_train==0).sum()}")
@@ -356,10 +353,13 @@ def main() -> None:
     # ================================================================
     # GPL16791 — CTD preprocessing
     # ================================================================
-    print("\nGPL16791 (CTD, n=636) ...")
-    X16_ctd, y16 = _load_gpl16791_ctd(X_train_log, feat_train)
-    Xte_16_25 = X16_ctd[:, panel_cols].astype(np.float32)
-    Xte_16_16 = X16_ctd[:, crit_cols].astype(np.float32)
+    print("\nGPL16791 (raw log1p, n=636) ...")
+    (ds16,) = load_dataset("GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources")
+    assert list(ds16.X.columns) == feat_train
+    X16_raw = np.log1p(ds16.X.values.astype(np.float32))
+    y16 = ds16.y.values.astype(int)
+    Xte_16_25 = X16_raw[:, panel_cols].astype(np.float32)
+    Xte_16_16 = X16_raw[:, crit_cols].astype(np.float32)
     print(f"  25-gene (25/25):")
     _eval_cohort("GPL16791", "CNS multi-region", len(y16), "25-gene", 25,
                  Xtr_ctd_25, y_train, Xte_16_25, y16, params, rows)
