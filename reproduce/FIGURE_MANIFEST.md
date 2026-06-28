@@ -21,6 +21,7 @@ output(s) to that same directory.
 | fig:gse122649 | `additional_cohort_gse122649.png` | `additional_cohort_gse122649.py` | §3.4.1 |
 | fig:srp064478 | `srp064478_validation.png` | `srp064478_figure.py` (depends on `srp064478_validation.py`) | §3.4.1 |
 | fig:cross_cohort_loo | `panel_loo_zeroshot.png` | `panel_loo_zeroshot.py` (v2) | §3.4.2 |
+| fig:validations | `combined_validation_roc.png` | `combined_validation_roc.py` (step 22b; depends on all external validations) | §3.4 |
 | fig:gse67196 | `gse67196_regional_scoring.png` | `gse67196_regional_scoring.py` | §3.4.3 |
 | fig:blood | `blood_validation_gse234297.png` | `blood_validation_gse234297.py` | §3.4.4 |
 | fig:pathway_ora_up | `pathway_ora_up_in_als.png` | `pathway_ora.py` | §3.6 |

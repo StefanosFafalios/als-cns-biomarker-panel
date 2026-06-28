@@ -104,6 +104,7 @@ if find "$PROJ_ROOT/als_analysis/resources/SRP064478/quant" -name "quant.sf" 2>/
    wc -l | grep -q "^15$"; then
     run_step "22_external_srp064478"  srp064478_validation.py               "~5m"
     run_step "22a_srp064478_figure"   srp064478_figure.py                   "<5m"
+    run_step "22b_combined_roc"       combined_validation_roc.py            "<5m (Fig3 combined 4-cohort ROC grid; needs all external validations)"
 else
     echo "[22_external_srp064478] SKIPPED — run quantify_srp064478.sh first (15/15 quant.sf required)"
 fi
