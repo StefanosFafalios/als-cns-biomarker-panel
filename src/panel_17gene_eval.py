@@ -50,7 +50,7 @@ _GSE122649_SOFT_URL = (
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 
-# 15-gene critical panel (greedy backward elimination peak, equal weights, W.mean=0.8921)
+# 15-gene critical panel (greedy backward elimination peak, equal weights, W.mean=0.9029)
 # Indices into the 25-gene ordered panel (lgbm_core25_panel.csv).
 _CRITICAL_IDX = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
 

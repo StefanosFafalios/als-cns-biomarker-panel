@@ -46,7 +46,7 @@ _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 RANDOM_STATE = 42
 
 # 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean=0.8921; equal cohort weights)
+# (greedy backward elimination peak at k=15, W.mean=0.9029; equal cohort weights)
 # Pseudogenes (HERC2P8, SMG1P5) and snoRNA (SNORD97) excluded from cell-type analyses
 _CRITICAL_CODING_GENES: frozenset[str] = frozenset(
     {
