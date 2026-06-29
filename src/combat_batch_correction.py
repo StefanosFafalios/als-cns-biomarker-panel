@@ -3,7 +3,7 @@
 zero-shot transfer (addresses manuscript Limitation 4).
 
 Baseline pipeline (calibration_analysis.py / external_validation_gpl16791.py):
-    raw RSEM -> log1p -> CTD compartment regression (fit on train)
+    raw RSEM -> log1p (CTD is discovery-side only)
              -> extract 25-gene panel -> LightGBM (top-500 params).
 
 This script inserts an explicit batch-correction step between CTD

@@ -336,7 +336,7 @@ def main() -> None:
     print("\nEvaluating 15-gene critical panel with 95% CI ...\n")
     results: dict[str, tuple[float, float, float]] = {}
 
-    # GPL16791 — CTD, all 15 available
+    # GPL16791 — raw log1p, all 15 available
     Xtr = Xtr25_ctd[:, _CRITICAL_IDX]
     Xte = X16_25_ctd[:, _CRITICAL_IDX]
     sc = StandardScaler().fit(Xtr)

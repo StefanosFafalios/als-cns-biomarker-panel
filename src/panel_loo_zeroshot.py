@@ -20,7 +20,7 @@ Critical gene set (primary, equal-weighted):
   i.e. removing g credibly degrades generalisation under cohort-level resampling.
 
 Cohorts (blood excluded):
-  GPL16791   n=636  CTD regression, Ensembl base ID
+  GPL16791   n=636  raw log1p, Ensembl base ID
   GSE76220   n=20   plain log1p, HGNC symbol
   GSE122649  n=38   plain log1p, HGNC symbol
   SRP064478  n=15   plain log1p, Ensembl base ID

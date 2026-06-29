@@ -2,7 +2,7 @@
 across CNS validation cohorts.
 
 Cohorts (blood excluded):
-  GPL16791   n=636  w=0.25  CTD regression, Ensembl base ID
+  GPL16791   n=636  w=0.25  raw log1p, Ensembl base ID
   GSE76220   n=20   w=0.25  plain log1p, HGNC symbol
   GSE122649  n=38   w=0.25  plain log1p, HGNC symbol
   SRP064478  n=15   w=0.25  plain log1p, Ensembl base ID
@@ -311,7 +311,7 @@ def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 def _wmean_auc(
     panel_idx: list[int],
-    # GPL16791 (CTD) pre-extracted 25-column matrices
+    # GPL16791 (raw log1p) pre-extracted 25-column matrices
     Xtr25_ctd: np.ndarray,
     y_train: np.ndarray,
     X16_25_ctd: np.ndarray,
@@ -344,7 +344,7 @@ def _wmean_auc(
     wmean = 0.0
     cohort_aucs: dict[str, float] = {}
 
-    # ---- GPL16791 (all 25 genes available, CTD-corrected) ----
+    # ---- GPL16791 (all 25 genes available, raw log1p) ----
     Xtr = Xtr25_ctd[:, panel_idx]
     Xte = X16_25_ctd[:, panel_idx]
     sc = StandardScaler().fit(Xtr)
@@ -444,7 +444,7 @@ def main() -> None:
     Xtr25_log: np.ndarray = X_train_log[:, panel_train_cols].astype(np.float32)
 
     # -----------------------------------------------------------------------
-    # Load GPL16791 with CTD
+    # Load GPL16791 (raw log1p; CTD is discovery-side only)
     # -----------------------------------------------------------------------
     print("Loading GPL16791 (raw log1p; CTD is discovery-side only) ...")
     (ds16,) = load_dataset(

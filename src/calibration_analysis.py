@@ -5,7 +5,7 @@ expected calibration error) for the zero-shot predictions of BOTH the
 25-gene panel and the 15-gene critical sub-panel on:
   - GPL16791 (n=636, primary cross-platform validation)
 Both panels are evaluated identically: the same LightGBM model (top-500
-hyperparameters) on CTD-residualised data, with 5-fold CV self-calibration
+hyperparameters) on raw log1p data (CTD is discovery-side only), with 5-fold CV self-calibration
 on the GPL24676 training cohort. The two reliability curves are overlaid in
 each cohort panel for direct comparison.
 
@@ -243,7 +243,7 @@ def main() -> None:
         "=" * 60,
         "Discrimination + calibration on training and primary external cohort.",
         "Both panels use the same LightGBM model (top-500 hyperparameters) on",
-        "CTD-residualised data; the critical panel is the 15-gene greedy-elimination",
+        "raw log1p data (CTD is discovery-side only); the critical panel is the 15-gene greedy-elimination",
         "subset of the 25-gene panel.",
         "",
         "Brier score (smaller is better; 0 = perfect, 0.25 = uninformative).",

@@ -11,7 +11,7 @@ Identical pipeline for LGBM and LR-L2:
   4. Predict on scaled test data; compute AUC + bootstrap 95% CI.
 
 Per-cohort preprocessing:
-  GPL16791  : CTD compartment regression (GPL24676-fitted) then StandardScaler
+  GPL16791  : raw log1p then StandardScaler (CTD is discovery-side only)
   GSE76220  : log1p only, HGNC symbol matching
   GSE122649 : log1p only, HGNC symbol matching
   SRP064478 : log1p only, Ensembl base-ID matching (Salmon)
@@ -22,6 +22,7 @@ Panels evaluated:
   15-crit   : 15 cross-cohort critical genes (greedy backward elimination peak,
               iterative_panel_elimination.py; W.mean = 0.9029 at k=15)
               indices in 25-gene panel: [5,6,7,8,9,10,11,12,15,17,18,19,20,22,23,24]
+
 """
 from __future__ import annotations
 
@@ -351,7 +352,7 @@ def main() -> None:
     rows: list[dict] = []
 
     # ================================================================
-    # GPL16791 — CTD preprocessing
+    # GPL16791 — raw log1p (CTD is discovery-side only)
     # ================================================================
     print("\nGPL16791 (raw log1p, n=636) ...")
     (ds16,) = load_dataset("GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources")
@@ -475,7 +476,7 @@ def main() -> None:
         "LGBM   : lgbm_top500_best_params.json, colsample_bytree=1.0",
         "LR-L2  : LogisticRegressionCV(cv=5, penalty='l2', solver='liblinear')",
         "Scaler : StandardScaler fit on GPL24676 training columns (same for both models)",
-        "Prepro : CTD regression for GPL16791; log1p for GSE76220/GSE122649/SRP064478/GSE234297",
+        "Prepro : raw log1p for all cohorts (CTD is discovery-side only)",
         "",
     ]
     lines: list[str] = header[:]
