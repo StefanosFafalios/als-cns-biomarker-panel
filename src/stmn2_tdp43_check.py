@@ -27,7 +27,11 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import (  # noqa: E402
+    critical_panel_directions,
+    load_critical_panel,
+    load_dataset,
+)
 
 STMN2_BASE = "ENSG00000104435"
 
@@ -87,20 +91,17 @@ def main() -> None:
     # No saved panel scores available, so we use a panel-membership proxy
     # via the up-down composite z-score using the protein-coding critical
     # panel
+    #
+    # Membership and direction are both derived from the canonical artifacts:
+    # panel_critical.csv (greedy + non-inferiority stopping rule) and
+    # gene_profiling_summary.csv (discovery-cohort differential expression).
+    _panel = load_critical_panel(protein_coding_only=True)
+    _dirs = critical_panel_directions(protein_coding_only=True)
     UP_GENES = {
-        "ENSG00000142748": "FCN3",
-        "ENSG00000184500": "PROS1",
-        "ENSG00000134531": "EMP1",
-        "ENSG00000120669": "SOHLH2",
-        "ENSG00000049860": "HEXB",
-        "ENSG00000124370": "MCEE",
-        "ENSG00000134955": "SLC37A2",
+        r.ensg: r.symbol for r in _panel.itertuples() if _dirs[r.symbol] == "up"
     }
     DOWN_GENES = {
-        "ENSG00000091879": "ANGPT2",
-        "ENSG00000131730": "CKMT2",
-        "ENSG00000184113": "CLDN5",
-        "ENSG00000142910": "TINAGL1",
+        r.ensg: r.symbol for r in _panel.itertuples() if _dirs[r.symbol] == "down"
     }
 
     def _find(base: str) -> str | None:

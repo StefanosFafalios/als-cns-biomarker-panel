@@ -54,37 +54,118 @@ _REQUEST_DELAY = 1.0  # seconds between API calls
 # Ensembl IDs are base IDs (no version suffix)
 # ---------------------------------------------------------------------------
 
+# TODO(panel-refresh): this is the protein-coding subset of the *25-gene* panel,
+# not the critical panel, so it was left as-is by the panel_critical.csv migration.
+# The critical panel has changed (PROS1 and SERTAD1 out; EMP1 and MECOM in).
+# Decide whether this table should be narrowed to the critical panel; if so, drop the
+# PROS1/SERTAD1 (and VWF) entries and refresh every loo_delta / shap_rank value from
+# panel_critical.csv — do not hand-edit them.
 _PROTEIN_CODING_GENES: list[dict[str, str]] = [
-    {"symbol": "MECOM",   "ensg": "ENSG00000085276", "direction": "down_in_ALS",
-     "loo_delta": "+0.0011", "shap_rank": "1"},
-    {"symbol": "SERTAD1", "ensg": "ENSG00000197019", "direction": "up_in_ALS",
-     "loo_delta": "+0.0038", "shap_rank": "4"},
-    {"symbol": "FCN3",    "ensg": "ENSG00000142748", "direction": "up_in_ALS",
-     "loo_delta": "+0.0020", "shap_rank": "6"},
-    {"symbol": "PROS1",   "ensg": "ENSG00000184500", "direction": "up_in_ALS",
-     "loo_delta": "+0.0004", "shap_rank": "7"},
-    {"symbol": "ANGPT2",  "ensg": "ENSG00000091879", "direction": "down_in_ALS",
-     "loo_delta": "+0.0012", "shap_rank": "8"},
-    {"symbol": "EMP1",    "ensg": "ENSG00000134531", "direction": "up_in_ALS",
-     "loo_delta": "+0.0020", "shap_rank": "10"},
-    {"symbol": "TINAGL1", "ensg": "ENSG00000142910", "direction": "down_in_ALS",
-     "loo_delta": "+0.0013", "shap_rank": "12"},
-    {"symbol": "CKMT2",   "ensg": "ENSG00000131730", "direction": "down_in_ALS",
-     "loo_delta": "+0.0010", "shap_rank": "13"},
-    {"symbol": "VWF",     "ensg": "ENSG00000110799", "direction": "down_in_ALS",
-     "loo_delta": "+0.0009", "shap_rank": "15"},
-    {"symbol": "CLDN5",   "ensg": "ENSG00000184113", "direction": "down_in_ALS",
-     "loo_delta": "+0.0009", "shap_rank": "16"},
-    {"symbol": "NR4A1",   "ensg": "ENSG00000123358", "direction": "down_in_ALS",
-     "loo_delta": "+0.0005", "shap_rank": "17"},
-    {"symbol": "SOHLH2",  "ensg": "ENSG00000120669", "direction": "up_in_ALS",
-     "loo_delta": "-0.0018", "shap_rank": "19"},
-    {"symbol": "HEXB",    "ensg": "ENSG00000049860", "direction": "up_in_ALS",
-     "loo_delta": "+0.0002", "shap_rank": "21"},
-    {"symbol": "MCEE",    "ensg": "ENSG00000124370", "direction": "up_in_ALS",
-     "loo_delta": "+0.0008", "shap_rank": "24"},
-    {"symbol": "SLC37A2", "ensg": "ENSG00000134955", "direction": "up_in_ALS",
-     "loo_delta": "+0.0012", "shap_rank": "25"},
+    {
+        "symbol": "MECOM",
+        "ensg": "ENSG00000085276",
+        "direction": "down_in_ALS",
+        "loo_delta": "+0.0011",
+        "shap_rank": "1",
+    },
+    {
+        "symbol": "SERTAD1",
+        "ensg": "ENSG00000197019",
+        "direction": "up_in_ALS",
+        "loo_delta": "+0.0038",
+        "shap_rank": "4",
+    },
+    {
+        "symbol": "FCN3",
+        "ensg": "ENSG00000142748",
+        "direction": "up_in_ALS",
+        "loo_delta": "+0.0020",
+        "shap_rank": "6",
+    },
+    {
+        "symbol": "PROS1",
+        "ensg": "ENSG00000184500",
+        "direction": "up_in_ALS",
+        "loo_delta": "+0.0004",
+        "shap_rank": "7",
+    },
+    {
+        "symbol": "ANGPT2",
+        "ensg": "ENSG00000091879",
+        "direction": "down_in_ALS",
+        "loo_delta": "+0.0012",
+        "shap_rank": "8",
+    },
+    {
+        "symbol": "EMP1",
+        "ensg": "ENSG00000134531",
+        "direction": "up_in_ALS",
+        "loo_delta": "+0.0020",
+        "shap_rank": "10",
+    },
+    {
+        "symbol": "TINAGL1",
+        "ensg": "ENSG00000142910",
+        "direction": "down_in_ALS",
+        "loo_delta": "+0.0013",
+        "shap_rank": "12",
+    },
+    {
+        "symbol": "CKMT2",
+        "ensg": "ENSG00000131730",
+        "direction": "down_in_ALS",
+        "loo_delta": "+0.0010",
+        "shap_rank": "13",
+    },
+    {
+        "symbol": "VWF",
+        "ensg": "ENSG00000110799",
+        "direction": "down_in_ALS",
+        "loo_delta": "+0.0009",
+        "shap_rank": "15",
+    },
+    {
+        "symbol": "CLDN5",
+        "ensg": "ENSG00000184113",
+        "direction": "down_in_ALS",
+        "loo_delta": "+0.0009",
+        "shap_rank": "16",
+    },
+    {
+        "symbol": "NR4A1",
+        "ensg": "ENSG00000123358",
+        "direction": "down_in_ALS",
+        "loo_delta": "+0.0005",
+        "shap_rank": "17",
+    },
+    {
+        "symbol": "SOHLH2",
+        "ensg": "ENSG00000120669",
+        "direction": "up_in_ALS",
+        "loo_delta": "-0.0018",
+        "shap_rank": "19",
+    },
+    {
+        "symbol": "HEXB",
+        "ensg": "ENSG00000049860",
+        "direction": "up_in_ALS",
+        "loo_delta": "+0.0002",
+        "shap_rank": "21",
+    },
+    {
+        "symbol": "MCEE",
+        "ensg": "ENSG00000124370",
+        "direction": "up_in_ALS",
+        "loo_delta": "+0.0008",
+        "shap_rank": "24",
+    },
+    {
+        "symbol": "SLC37A2",
+        "ensg": "ENSG00000134955",
+        "direction": "up_in_ALS",
+        "loo_delta": "+0.0012",
+        "shap_rank": "25",
+    },
 ]
 
 
@@ -102,22 +183,26 @@ _PROTEIN_CODING_GENES: list[dict[str, str]] = [
 #   → cannot be explained by composition alone → per-cell dysregulation likely
 # ---------------------------------------------------------------------------
 
+# TODO(panel-refresh): keyed by the 25-gene panel's protein-coding members, kept in
+# sync with _PROTEIN_CODING_GENES above. If that table is narrowed to the new critical
+# panel (PROS1/SERTAD1 out, EMP1/MECOM in), the dominant_ct / rho / ct_als_dir values
+# must be re-derived from cell_type_deconvolution.py rather than edited by hand.
 _DECONV: dict[str, dict] = {
-    "MECOM":   {"dominant_ct": "Endothelial", "rho": 0.929, "ct_als_dir": "down"},
+    "MECOM": {"dominant_ct": "Endothelial", "rho": 0.929, "ct_als_dir": "down"},
     "SERTAD1": {"dominant_ct": "Endothelial", "rho": 0.809, "ct_als_dir": "down"},
-    "FCN3":    {"dominant_ct": "Endothelial", "rho": 0.650, "ct_als_dir": "down"},
-    "PROS1":   {"dominant_ct": "Microglia",   "rho": 0.849, "ct_als_dir": "up"},
-    "ANGPT2":  {"dominant_ct": "Endothelial", "rho": 0.670, "ct_als_dir": "down"},
-    "EMP1":    {"dominant_ct": "Microglia",   "rho": 0.771, "ct_als_dir": "up"},
+    "FCN3": {"dominant_ct": "Endothelial", "rho": 0.650, "ct_als_dir": "down"},
+    "PROS1": {"dominant_ct": "Microglia", "rho": 0.849, "ct_als_dir": "up"},
+    "ANGPT2": {"dominant_ct": "Endothelial", "rho": 0.670, "ct_als_dir": "down"},
+    "EMP1": {"dominant_ct": "Microglia", "rho": 0.771, "ct_als_dir": "up"},
     "TINAGL1": {"dominant_ct": "Endothelial", "rho": 0.932, "ct_als_dir": "down"},
-    "CKMT2":   {"dominant_ct": "OPC",         "rho": 0.785, "ct_als_dir": "ns"},
-    "VWF":     {"dominant_ct": "Endothelial", "rho": 0.957, "ct_als_dir": "down"},
-    "CLDN5":   {"dominant_ct": "Endothelial", "rho": 0.964, "ct_als_dir": "down"},
-    "NR4A1":   {"dominant_ct": "Pericyte",    "rho": 0.786, "ct_als_dir": "down"},
-    "SOHLH2":  {"dominant_ct": "Astrocyte",   "rho": 0.525, "ct_als_dir": "ns"},
-    "HEXB":    {"dominant_ct": "Microglia",   "rho": 0.775, "ct_als_dir": "up"},
-    "MCEE":    {"dominant_ct": "Astrocyte",   "rho": 0.623, "ct_als_dir": "ns"},
-    "SLC37A2": {"dominant_ct": "Microglia",   "rho": 0.905, "ct_als_dir": "up"},
+    "CKMT2": {"dominant_ct": "OPC", "rho": 0.785, "ct_als_dir": "ns"},
+    "VWF": {"dominant_ct": "Endothelial", "rho": 0.957, "ct_als_dir": "down"},
+    "CLDN5": {"dominant_ct": "Endothelial", "rho": 0.964, "ct_als_dir": "down"},
+    "NR4A1": {"dominant_ct": "Pericyte", "rho": 0.786, "ct_als_dir": "down"},
+    "SOHLH2": {"dominant_ct": "Astrocyte", "rho": 0.525, "ct_als_dir": "ns"},
+    "HEXB": {"dominant_ct": "Microglia", "rho": 0.775, "ct_als_dir": "up"},
+    "MCEE": {"dominant_ct": "Astrocyte", "rho": 0.623, "ct_als_dir": "ns"},
+    "SLC37A2": {"dominant_ct": "Microglia", "rho": 0.905, "ct_als_dir": "up"},
 }
 
 
@@ -189,12 +274,14 @@ def _query_dgidb(symbols: list[str]) -> dict[str, list[dict]]:
             approved = bool(drug_obj.get("approved", False))
             types = [t.get("type", "") for t in (intx.get("interactionTypes") or [])]
             sources = [s.get("sourceDbName", "") for s in (intx.get("sources") or [])]
-            result[gene_sym].append({
-                "drug": drug_name,
-                "interaction_types": "|".join(types) if types else "unspecified",
-                "approved": approved,
-                "sources": "|".join(sources),
-            })
+            result[gene_sym].append(
+                {
+                    "drug": drug_name,
+                    "interaction_types": "|".join(types) if types else "unspecified",
+                    "approved": approved,
+                    "sources": "|".join(sources),
+                }
+            )
     return result
 
 
@@ -305,20 +392,26 @@ def main() -> None:
         intx_list = dgidb_results.get(sym, [])
         approved_drugs = [i["drug"] for i in intx_list if i.get("approved")]
         clinical_drugs = [
-            i["drug"] for i in intx_list
-            if not i.get("approved") and any(
-                src in i.get("sources", "") for src in
-                ["CIViC", "ChEMBL", "ClinicalTrials", "FDA"]
+            i["drug"]
+            for i in intx_list
+            if not i.get("approved")
+            and any(
+                src in i.get("sources", "")
+                for src in ["CIViC", "ChEMBL", "ClinicalTrials", "FDA"]
             )
         ]
         inhibitors = [
-            i["drug"] for i in intx_list
+            i["drug"]
+            for i in intx_list
             if "inhibitor" in i.get("interaction_types", "").lower()
         ]
         activators = [
-            i["drug"] for i in intx_list
-            if any(t in i.get("interaction_types", "").lower()
-                   for t in ["activator", "agonist", "inducer"])
+            i["drug"]
+            for i in intx_list
+            if any(
+                t in i.get("interaction_types", "").lower()
+                for t in ["activator", "agonist", "inducer"]
+            )
         ]
 
         # OpenTargets
@@ -342,25 +435,29 @@ def main() -> None:
         ct_als_dir = dc.get("ct_als_dir", "ns")
         per_cell = _per_cell_evidence(direction, dc) if dc else "unknown"
 
-        rows.append({
-            "shap_rank": shap_rank,
-            "symbol": sym,
-            "ensembl_id": ensg,
-            "direction": direction,
-            "loo_delta": loo,
-            "tractability": tractability,
-            "n_dgidb_interactions": len(intx_list),
-            "approved_drugs_dgidb": "|".join(approved_drugs[:5]) if approved_drugs else "",
-            "inhibitors_dgidb": "|".join(inhibitors[:5]) if inhibitors else "",
-            "activators_dgidb": "|".join(activators[:5]) if activators else "",
-            "n_ot_drugs": n_ot_drugs,
-            "phase3_drugs_ot": "|".join(phase3_drugs[:5]) if phase3_drugs else "",
-            "has_approved_drug": bool(approved_drugs or phase3_drugs),
-            "dominant_ct": dominant_ct,
-            "deconv_rho": deconv_rho,
-            "ct_als_dir": ct_als_dir,
-            "per_cell_evidence": per_cell,
-        })
+        rows.append(
+            {
+                "shap_rank": shap_rank,
+                "symbol": sym,
+                "ensembl_id": ensg,
+                "direction": direction,
+                "loo_delta": loo,
+                "tractability": tractability,
+                "n_dgidb_interactions": len(intx_list),
+                "approved_drugs_dgidb": "|".join(approved_drugs[:5])
+                if approved_drugs
+                else "",
+                "inhibitors_dgidb": "|".join(inhibitors[:5]) if inhibitors else "",
+                "activators_dgidb": "|".join(activators[:5]) if activators else "",
+                "n_ot_drugs": n_ot_drugs,
+                "phase3_drugs_ot": "|".join(phase3_drugs[:5]) if phase3_drugs else "",
+                "has_approved_drug": bool(approved_drugs or phase3_drugs),
+                "dominant_ct": dominant_ct,
+                "deconv_rho": deconv_rho,
+                "ct_als_dir": ct_als_dir,
+                "per_cell_evidence": per_cell,
+            }
+        )
 
     summary_df = pd.DataFrame(rows).sort_values("shap_rank")
     summary_df.to_csv(SCRIPT_DIR / "drug_targets_summary.csv", index=False)
@@ -431,12 +528,16 @@ def main() -> None:
         lines.append("  None.")
     else:
         for _, r in tier1.iterrows():
-            lines.append(f"  {r['symbol']} ({r['direction']}, SHAP rank {r['shap_rank']}):")
+            lines.append(
+                f"  {r['symbol']} ({r['direction']}, SHAP rank {r['shap_rank']}):"
+            )
             lines.append(
                 f"    Dominant CT: {r['dominant_ct']} (ρ={r['deconv_rho']:.3f}, "
                 f"CT is {r['ct_als_dir']} in ALS) — gene goes OPPOSITE → per-cell"
             )
-            lines.append(f"    LOO Δ={r['loo_delta']}  Tractability: {r['tractability']}")
+            lines.append(
+                f"    LOO Δ={r['loo_delta']}  Tractability: {r['tractability']}"
+            )
             if r["approved_drugs_dgidb"]:
                 lines.append(f"    DGIdb approved: {r['approved_drugs_dgidb']}")
             if r["inhibitors_dgidb"]:
@@ -456,12 +557,16 @@ def main() -> None:
         lines.append("  None.")
     else:
         for _, r in tier2.iterrows():
-            lines.append(f"  {r['symbol']} ({r['direction']}, SHAP rank {r['shap_rank']}):")
+            lines.append(
+                f"  {r['symbol']} ({r['direction']}, SHAP rank {r['shap_rank']}):"
+            )
             lines.append(
                 f"    Dominant CT: {r['dominant_ct']} (ρ={r['deconv_rho']:.3f}, "
                 f"CT not significant in ALS)"
             )
-            lines.append(f"    LOO Δ={r['loo_delta']}  Tractability: {r['tractability']}")
+            lines.append(
+                f"    LOO Δ={r['loo_delta']}  Tractability: {r['tractability']}"
+            )
             if r["approved_drugs_dgidb"]:
                 lines.append(f"    DGIdb approved: {r['approved_drugs_dgidb']}")
             if r["phase3_drugs_ot"]:
@@ -494,8 +599,8 @@ def main() -> None:
 
     actionable = summary_df[summary_df["has_approved_drug"]]
     tier1_genes = tier1["symbol"].tolist() if not tier1.empty else []
-    print(f"\n  Summary CSV   → drug_targets_summary.csv")
-    print(f"  Statistics    → drug_targets_statistics.txt")
+    print("\n  Summary CSV   → drug_targets_summary.csv")
+    print("  Statistics    → drug_targets_statistics.txt")
     print(f"\n  Tier 1 (sign reversal / per-cell): {tier1_genes}")
     print(f"  Actionable (approved/phase-3 drug): {actionable['symbol'].tolist()}")
     print("\nDone.")

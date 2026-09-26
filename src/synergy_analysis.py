@@ -99,9 +99,9 @@ def _get_pool(symbols: list[str]) -> list[int]:
 
 def _cv_auc(X_sub: np.ndarray, y: np.ndarray, params: dict) -> float:
     """5-fold stratified CV AUC for a sub-matrix."""
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
     aucs = []

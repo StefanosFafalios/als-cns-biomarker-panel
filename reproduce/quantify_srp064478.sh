@@ -17,7 +17,7 @@
 #     -i resources/SRP064478/index/salmon_hg38 \
 #     --gencode -p 8
 #
-# Run from repository root:
+# Run from the repository root:
 #   bash reproduce/quantify_srp064478.sh
 # =============================================================================
 set -euo pipefail

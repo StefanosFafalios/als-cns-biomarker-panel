@@ -45,14 +45,13 @@ from __future__ import annotations
 import sys
 import warnings
 from pathlib import Path
-from typing import Any
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy import stats
 from scipy.stats import mannwhitneyu
 
 ALS_DIR = Path(__file__).parents[1]
@@ -64,8 +63,7 @@ SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
 
 _MATRIX_PATH = (
-    RESOURCES_DIR / "GSE153960" / "matrix"
-    / "GSE153960-GPL24676_series_matrix.txt.gz"
+    RESOURCES_DIR / "GSE153960" / "matrix" / "GSE153960-GPL24676_series_matrix.txt.gz"
 )
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -78,20 +76,20 @@ N_BOOTSTRAP = 2_000
 
 # 15 protein-coding panel genes
 _CODING_GENES: list[dict[str, str]] = [
-    {"symbol": "MECOM",   "ensg": "ENSG00000085276", "direction": "down_in_ALS"},
+    {"symbol": "MECOM", "ensg": "ENSG00000085276", "direction": "down_in_ALS"},
     {"symbol": "SERTAD1", "ensg": "ENSG00000197019", "direction": "up_in_ALS"},
-    {"symbol": "FCN3",    "ensg": "ENSG00000142748", "direction": "up_in_ALS"},
-    {"symbol": "PROS1",   "ensg": "ENSG00000184500", "direction": "up_in_ALS"},
-    {"symbol": "ANGPT2",  "ensg": "ENSG00000091879", "direction": "down_in_ALS"},
-    {"symbol": "EMP1",    "ensg": "ENSG00000134531", "direction": "up_in_ALS"},
+    {"symbol": "FCN3", "ensg": "ENSG00000142748", "direction": "up_in_ALS"},
+    {"symbol": "PROS1", "ensg": "ENSG00000184500", "direction": "up_in_ALS"},
+    {"symbol": "ANGPT2", "ensg": "ENSG00000091879", "direction": "down_in_ALS"},
+    {"symbol": "EMP1", "ensg": "ENSG00000134531", "direction": "up_in_ALS"},
     {"symbol": "TINAGL1", "ensg": "ENSG00000142910", "direction": "down_in_ALS"},
-    {"symbol": "CKMT2",   "ensg": "ENSG00000131730", "direction": "down_in_ALS"},
-    {"symbol": "VWF",     "ensg": "ENSG00000110799", "direction": "down_in_ALS"},
-    {"symbol": "CLDN5",   "ensg": "ENSG00000184113", "direction": "down_in_ALS"},
-    {"symbol": "NR4A1",   "ensg": "ENSG00000123358", "direction": "down_in_ALS"},
-    {"symbol": "SOHLH2",  "ensg": "ENSG00000120669", "direction": "up_in_ALS"},
-    {"symbol": "HEXB",    "ensg": "ENSG00000049860", "direction": "up_in_ALS"},
-    {"symbol": "MCEE",    "ensg": "ENSG00000124370", "direction": "up_in_ALS"},
+    {"symbol": "CKMT2", "ensg": "ENSG00000131730", "direction": "down_in_ALS"},
+    {"symbol": "VWF", "ensg": "ENSG00000110799", "direction": "down_in_ALS"},
+    {"symbol": "CLDN5", "ensg": "ENSG00000184113", "direction": "down_in_ALS"},
+    {"symbol": "NR4A1", "ensg": "ENSG00000123358", "direction": "down_in_ALS"},
+    {"symbol": "SOHLH2", "ensg": "ENSG00000120669", "direction": "up_in_ALS"},
+    {"symbol": "HEXB", "ensg": "ENSG00000049860", "direction": "up_in_ALS"},
+    {"symbol": "MCEE", "ensg": "ENSG00000124370", "direction": "up_in_ALS"},
     {"symbol": "SLC37A2", "ensg": "ENSG00000134955", "direction": "up_in_ALS"},
 ]
 
@@ -169,9 +167,19 @@ def _plot(
     axes[0].axvline(0, color="black", lw=0.8)
     for i, (_, row) in enumerate(sub.iterrows()):
         if row["bh_q"] < FDR_THRESH:
-            x = row["rb_ftd_vs_als"] + 0.01 if row["rb_ftd_vs_als"] >= 0 else row["rb_ftd_vs_als"] - 0.01
-            axes[0].text(x, i, "*", va="center", fontsize=10,
-                         ha="left" if row["rb_ftd_vs_als"] >= 0 else "right")
+            x = (
+                row["rb_ftd_vs_als"] + 0.01
+                if row["rb_ftd_vs_als"] >= 0
+                else row["rb_ftd_vs_als"] - 0.01
+            )
+            axes[0].text(
+                x,
+                i,
+                "*",
+                va="center",
+                fontsize=10,
+                ha="left" if row["rb_ftd_vs_als"] >= 0 else "right",
+            )
     axes[0].set_xlabel("Rank-biserial r (ALS-FTD vs pure ALS)\nred = higher in ALS-FTD")
     axes[0].set_title(
         f"Panel genes: ALS-FTD vs pure ALS\n"
@@ -193,15 +201,20 @@ def _plot(
             colours_sc.append("#9467bd")  # direction reversal
         else:
             colours_sc.append("#ff7f0e")  # subtype-divergent
-    axes[1].scatter(cd["rb_als_ctrl"], cd["rb_ftd_ctrl"], c=colours_sc, s=60, alpha=0.85, zorder=3)
+    axes[1].scatter(
+        cd["rb_als_ctrl"], cd["rb_ftd_ctrl"], c=colours_sc, s=60, alpha=0.85, zorder=3
+    )
     lim = max(abs(cd[["rb_als_ctrl", "rb_ftd_ctrl"]].values.ravel())) * 1.1
     axes[1].plot([-lim, lim], [-lim, lim], "k--", lw=0.8, label="Perfect concordance")
     axes[1].axhline(0, color="gray", lw=0.5)
     axes[1].axvline(0, color="gray", lw=0.5)
     for _, row in cd.iterrows():
         axes[1].annotate(
-            row["symbol"], (row["rb_als_ctrl"], row["rb_ftd_ctrl"]),
-            fontsize=7, ha="center", va="bottom",
+            row["symbol"],
+            (row["rb_als_ctrl"], row["rb_ftd_ctrl"]),
+            fontsize=7,
+            ha="center",
+            va="bottom",
         )
     axes[1].set_xlabel("rb (pure ALS vs Control)")
     axes[1].set_ylabel("rb (ALS-FTD vs Control)")
@@ -216,8 +229,13 @@ def _plot(
     # --- Panel 3: ROC curve for within-ALS subtype classification ---
     if cv_scores is not None and y_als is not None:
         fpr, tpr, _ = roc_curve(y_als, cv_scores)
-        axes[2].plot(fpr, tpr, lw=2, color="#9467bd",
-                     label=f"5-fold CV AUC = {auc_cv:.4f}\n95% CI [{ci_lo:.4f}, {ci_hi:.4f}]")
+        axes[2].plot(
+            fpr,
+            tpr,
+            lw=2,
+            color="#9467bd",
+            label=f"5-fold CV AUC = {auc_cv:.4f}\n95% CI [{ci_lo:.4f}, {ci_hi:.4f}]",
+        )
     axes[2].plot([0, 1], [0, 1], "k--", lw=0.8)
     axes[2].set_xlabel("False Positive Rate")
     axes[2].set_ylabel("True Positive Rate")
@@ -243,10 +261,11 @@ def _plot(
 
 def main() -> None:
     import json
-    from lightgbm import LGBMClassifier
+
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     print("=" * 65)
     print("ALS subtype DE: ALS-FTD vs pure ALS (Step 15)")
@@ -309,25 +328,33 @@ def main() -> None:
 
         _, p_ftd_als = mannwhitneyu(ftd_expr, als_expr, alternative="two-sided")
 
-        panel_records.append({
-            "symbol": sym,
-            "feat": feat,
-            "rb_ftd_vs_als": rb_ftd_als,
-            "p_ftd_vs_als": p_ftd_als,
-            "rb_als_ctrl": rb_als_ctrl,
-            "rb_ftd_ctrl": rb_ftd_ctrl,
-            "n_als": n_als,
-            "n_ftd": n_ftd,
-            "n_ctrl": n_ctrl,
-        })
+        panel_records.append(
+            {
+                "symbol": sym,
+                "feat": feat,
+                "rb_ftd_vs_als": rb_ftd_als,
+                "p_ftd_vs_als": p_ftd_als,
+                "rb_als_ctrl": rb_als_ctrl,
+                "rb_ftd_ctrl": rb_ftd_ctrl,
+                "n_als": n_als,
+                "n_ftd": n_ftd,
+                "n_ctrl": n_ctrl,
+            }
+        )
 
     panel_df = pd.DataFrame(panel_records)
     panel_df["bh_q"] = _bh_correct(panel_df["p_ftd_vs_als"].values)
     panel_df = panel_df.sort_values("p_ftd_vs_als")
 
-    print(f"\n  {'Symbol':<12} {'rb_FTD_ALS':>10} {'p':>10} {'q_BH':>10} {'rb_ALS_ctrl':>12} {'rb_FTD_ctrl':>12}")
+    print(
+        f"\n  {'Symbol':<12} {'rb_FTD_ALS':>10} {'p':>10} {'q_BH':>10} {'rb_ALS_ctrl':>12} {'rb_FTD_ctrl':>12}"
+    )
     for _, row in panel_df.iterrows():
-        sig = "*" if row["bh_q"] < FDR_THRESH else (" ~" if row["p_ftd_vs_als"] < 0.1 else "")
+        sig = (
+            "*"
+            if row["bh_q"] < FDR_THRESH
+            else (" ~" if row["p_ftd_vs_als"] < 0.1 else "")
+        )
         print(
             f"  {row['symbol']:<12} {row['rb_ftd_vs_als']:>+10.3f} "
             f"{row['p_ftd_vs_als']:>10.3e} {row['bh_q']:>10.3e} "
@@ -357,12 +384,15 @@ def main() -> None:
     X_als = X_panel[als_any_mask.values]
     y_als = als_ftd_mask[als_any_mask].astype(int).values  # 1=ALS-FTD, 0=pure ALS
 
-    print(f"  Samples: ALS-FTD={y_als.sum()}, pure ALS={(y_als==0).sum()}")
+    print(f"  Samples: ALS-FTD={y_als.sum()}, pure ALS={(y_als == 0).sum()}")
 
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
     params["verbose"] = -1
-    cv_params = {**params, "min_child_samples": max(1, params.get("min_child_samples", 20) // 4)}
+    cv_params = {
+        **params,
+        "min_child_samples": max(1, params.get("min_child_samples", 20) // 4),
+    }
 
     scaler = StandardScaler()
     X_als_sc = scaler.fit_transform(X_als).astype(np.float32)
@@ -378,7 +408,7 @@ def main() -> None:
             warnings.filterwarnings("ignore")
             cv_scores[te_idx] = clf.predict_proba(X_als_sc[te_idx])[:, 1]
         fold_auc = float(roc_auc_score(y_als[te_idx], cv_scores[te_idx]))
-        print(f"  Fold {fold+1} AUC: {fold_auc:.4f}")
+        print(f"  Fold {fold + 1} AUC: {fold_auc:.4f}")
 
     auc_cv = float(roc_auc_score(y_als, cv_scores))
     rng = np.random.default_rng(RANDOM_STATE)
@@ -401,7 +431,7 @@ def main() -> None:
 
     for i, feat in enumerate(sfm_features):
         if (i + 1) % 500 == 0:
-            print(f"  {i+1}/{n_genes} ...")
+            print(f"  {i + 1}/{n_genes} ...")
         ensg_base = feat.split(".")[0]
         fname = _match_feature(ensg_base, feature_names)
         if fname is None:
@@ -411,13 +441,15 @@ def main() -> None:
         ftd_vals = X_log[idx, ftd_idx]
         rb = _rank_biserial(ftd_vals, als_vals)
         _, p = mannwhitneyu(ftd_vals, als_vals, alternative="two-sided")
-        sfm_records.append({
-            "shap_rank": shap_df.iloc[i]["rank"],
-            "feature": feat,
-            "mean_abs_shap": shap_df.iloc[i]["mean_abs_shap"],
-            "rb_ftd_vs_als": rb,
-            "p": p,
-        })
+        sfm_records.append(
+            {
+                "shap_rank": shap_df.iloc[i]["rank"],
+                "feature": feat,
+                "mean_abs_shap": shap_df.iloc[i]["mean_abs_shap"],
+                "rb_ftd_vs_als": rb,
+                "p": p,
+            }
+        )
 
     sfm_df = pd.DataFrame(sfm_records)
     sfm_df["bh_q"] = _bh_correct(sfm_df["p"].values)
@@ -428,22 +460,32 @@ def main() -> None:
 
     # Map top genes to symbols via MyGeneInfo
     import time
+
     import mygene
+
     top_ensg = [f.split(".")[0] for f in sfm_df.head(50)["feature"].tolist()]
     mg = mygene.MyGeneInfo()
     sym_map: dict[str, str] = {}
     for attempt in range(3):
         try:
-            hits = mg.querymany(top_ensg, scopes="ensembl.gene", fields="symbol",
-                                species="human", verbose=False)
+            hits = mg.querymany(
+                top_ensg,
+                scopes="ensembl.gene",
+                fields="symbol",
+                species="human",
+                verbose=False,
+            )
             for h in hits:
                 if "symbol" in h:
                     sym_map[h["query"]] = h["symbol"]
             break
         except Exception as exc:
-            print(f"  MyGeneInfo attempt {attempt+1} failed: {exc}"); time.sleep(5)
+            print(f"  MyGeneInfo attempt {attempt + 1} failed: {exc}")
+            time.sleep(5)
 
-    sfm_df["symbol"] = sfm_df["feature"].apply(lambda f: sym_map.get(f.split(".")[0], f.split(".")[0]))
+    sfm_df["symbol"] = sfm_df["feature"].apply(
+        lambda f: sym_map.get(f.split(".")[0], f.split(".")[0])
+    )
 
     # -----------------------------------------------------------------------
     # Plot
@@ -455,7 +497,9 @@ def main() -> None:
     # Statistics file
     # -----------------------------------------------------------------------
     sig_panel = panel_df[panel_df["bh_q"] < FDR_THRESH]
-    trend_panel = panel_df[(panel_df["p_ftd_vs_als"] < 0.1) & (panel_df["bh_q"] >= FDR_THRESH)]
+    trend_panel = panel_df[
+        (panel_df["p_ftd_vs_als"] < 0.1) & (panel_df["bh_q"] >= FDR_THRESH)
+    ]
     sig_sfm = sfm_df[sfm_df["bh_q"] < FDR_THRESH]
 
     lines = [
@@ -464,7 +508,7 @@ def main() -> None:
         "NOTE: C9orf72 genetic status not in public GEO metadata.",
         "ALS-FTD label used as C9orf72-enriched proxy (~50% of fALS-FTD carry C9 repeat).",
         "",
-        f"Dataset: GSE153960 GPL24676 (n={n_als+n_ftd+n_ctrl})",
+        f"Dataset: GSE153960 GPL24676 (n={n_als + n_ftd + n_ctrl})",
         f"  Pure ALS (sALS):  n={n_als}",
         f"  ALS-FTD:          n={n_ftd}  (C9-enriched proxy)",
         f"  Control:          n={n_ctrl}",
@@ -476,7 +520,11 @@ def main() -> None:
         "-" * 68,
     ]
     for _, row in panel_df.iterrows():
-        sig = " *" if row["bh_q"] < FDR_THRESH else (" ~" if row["p_ftd_vs_als"] < 0.1 else "")
+        sig = (
+            " *"
+            if row["bh_q"] < FDR_THRESH
+            else (" ~" if row["p_ftd_vs_als"] < 0.1 else "")
+        )
         lines.append(
             f"{row['symbol']:<12} {row['rb_ftd_vs_als']:>+10.3f} "
             f"{row['p_ftd_vs_als']:>10.3e} {row['bh_q']:>10.3e} "
@@ -517,16 +565,16 @@ def main() -> None:
         "─" * 70,
         "ANALYSIS 3: Within-ALS subtype classification (25-gene panel, 5-fold CV)",
         "─" * 70,
-        f"Target: ALS-FTD (1) vs pure ALS (0)",
+        "Target: ALS-FTD (1) vs pure ALS (0)",
         f"AUC (5-fold CV): {auc_cv:.4f}",
         f"Bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]",
         "",
         "─" * 70,
-        f"ANALYSIS 4: Full 3,704-gene screen — ALS-FTD vs pure ALS",
+        "ANALYSIS 4: Full 3,704-gene screen — ALS-FTD vs pure ALS",
         "─" * 70,
         f"Significant at BH-FDR < {FDR_THRESH}: {n_sig} / {len(sfm_df)} genes",
         "",
-        f"Top 30 by p-value:",
+        "Top 30 by p-value:",
         f"{'Rank':>5} {'Symbol':<14} {'Feature':<22} {'rb_FTD_ALS':>10} {'p':>10} {'BH-q':>10}",
         "-" * 73,
     ]

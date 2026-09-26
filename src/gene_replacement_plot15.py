@@ -7,28 +7,48 @@ transferable panel members, and writes gene_replacement.png.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib.pyplot as plt  # noqa: E402
 
 BASE = Path(__file__).parent
+sys.path.insert(0, str(BASE.parent))
 
+from utils import critical_panel_symbols  # noqa: E402
+
+# The 15 protein-coding members of the *25-gene* panel. This is the plot's x-axis
+# universe and is deliberately NOT the critical panel: the grey bars are exactly
+# the genes greedy elimination dropped. The 25-gene panel is the greedy's input
+# and does not change when the critical panel does.
 _PC15 = {
-    "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-    "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+    "MECOM",
+    "SERTAD1",
+    "FCN3",
+    "PROS1",
+    "ANGPT2",
+    "EMP1",
+    "TINAGL1",
+    "CKMT2",
+    "VWF",
+    "CLDN5",
+    "NR4A1",
+    "SOHLH2",
+    "HEXB",
+    "MCEE",
+    "SLC37A2",
 }
 
-# Members of the 15-gene greedy-tail critical panel (protein-coding only)
-_CRITICAL_PC = {
-    "FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
-    "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1",
-}
+# Protein-coding members of the canonical critical panel (panel_critical.csv)
+_CRITICAL_PC = set(critical_panel_symbols(protein_coding_only=True))
 
-# Gene-level drug targets (4 lowest replaceability among critical-panel PCs)
-_GENE_LEVEL = {"CKMT2", "NR4A1", "TINAGL1", "SERTAD1"}
+# Number of gene-level drug targets to star (lowest replaceability among the
+# critical-panel protein-coding members). Derived in main(), not hardcoded: the
+# membership of _CRITICAL_PC changes with the canonical panel definition.
+_N_GENE_LEVEL = 4
 
 _CLEAN_STATS = BASE / "gene_replacement_clean_statistics.txt"
 
@@ -53,11 +73,13 @@ def _parse_clean_stats() -> list[dict]:
                     n_repl_clean = int(parts[4])
                 except (ValueError, IndexError):
                     continue
-                rows.append({
-                    "symbol": symbol,
-                    "repl_pct_clean": repl_pct_clean,
-                    "n_repl_clean": n_repl_clean,
-                })
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "repl_pct_clean": repl_pct_clean,
+                        "n_repl_clean": n_repl_clean,
+                    }
+                )
     return rows
 
 
@@ -70,12 +92,23 @@ def main() -> None:
     n_repl = [r["n_repl_clean"] for r in rows]
     repl_pct = [r["repl_pct_clean"] / 100.0 for r in rows]
 
-    # Colour: red = 15-crit member; grey = greedy dropout (MECOM, VWF, EMP1)
+    # rows is sorted by n_repl_clean descending, so the tail is the least
+    # replaceable — those are the genes to drug directly.
+    gene_level = {
+        r["symbol"] for r in rows if r["symbol"] in _CRITICAL_PC
+    }
+    gene_level = set(
+        sorted(gene_level, key=lambda s: n_repl[symbols.index(s)])[:_N_GENE_LEVEL]
+    )
+
+    # Colour: red = critical-panel member; grey = greedy-elimination dropout
     colors = ["#C62828" if s in _CRITICAL_PC else "#888" for s in symbols]
 
-    # Label decoration: ★ for gene-level drug targets (lowest 4 replaceability)
+    # Label decoration: ★ for gene-level drug targets (lowest replaceability)
     deco_symbols = [
-        f"★ {s}" if s in _GENE_LEVEL else (f"{s}" if s in _CRITICAL_PC else f"{s} (dropped)")
+        f"★ {s}"
+        if s in gene_level
+        else (f"{s}" if s in _CRITICAL_PC else f"{s} (dropped)")
         for s in symbols
     ]
 
@@ -106,16 +139,30 @@ def main() -> None:
 
     # Legend
     from matplotlib.patches import Patch
+
     legend_handles = [
-        Patch(facecolor="#C62828", label="15-crit panel member (greedy-tail survivor)"),
-        Patch(facecolor="#888",    label="Greedy-elimination dropout (MECOM, VWF, EMP1)"),
+        Patch(facecolor="#C62828", label="Critical-panel member (greedy-tail survivor)"),
+        Patch(
+            facecolor="#888",
+            label="Greedy-elimination dropout ("
+            + ", ".join(sorted(s for s in symbols if s not in _CRITICAL_PC))
+            + ")",
+        ),
     ]
-    fig.legend(handles=legend_handles, loc="lower center", ncol=2,
-                bbox_to_anchor=(0.5, -0.02), fontsize=9, frameon=False)
+    fig.legend(
+        handles=legend_handles,
+        loc="lower center",
+        ncol=2,
+        bbox_to_anchor=(0.5, -0.02),
+        fontsize=9,
+        frameon=False,
+    )
 
     plt.suptitle(
         "Gene Replacement Analysis — 15 Protein-Coding Panel Members  (n=874, 5-fold CV)\n"
-        "★ = lowest-replaceability gene-level drug targets (CKMT2, NR4A1, TINAGL1, SERTAD1)",
+        "★ = lowest-replaceability gene-level drug targets ("
+        + ", ".join(sorted(gene_level))
+        + ")",
         fontsize=10,
     )
     plt.tight_layout()

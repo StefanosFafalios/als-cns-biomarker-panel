@@ -42,25 +42,13 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 from drug_targets import _query_dgidb
+from utils import critical_panel_symbols
 
 _REPL_CSV = SCRIPT_DIR / "gene_replacement_results.csv"
 _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 
-# 12 protein-coding members of the 15-gene critical panel (drug-relevant set)
-_HIGH_SIGNAL = [
-    "FCN3",
-    "PROS1",
-    "ANGPT2",
-    "TINAGL1",
-    "CKMT2",
-    "CLDN5",
-    "NR4A1",
-    "SOHLH2",
-    "HEXB",
-    "MCEE",
-    "SLC37A2",
-    "SERTAD1",
-]
+# Protein-coding members of the critical panel (drug-relevant set)
+_HIGH_SIGNAL = critical_panel_symbols(protein_coding_only=True)
 _TOP_K = 30  # top co-expressed substitutes per gene to screen for druggability
 
 # Quantification-artifact gene families (regex), aligned with
@@ -273,7 +261,8 @@ def main() -> None:
         )
     lines += [
         "",
-        "Low-replaceability gene-level targets (CKMT2, NR4A1, TINAGL1, SERTAD1)",
+        "Low-replaceability gene-level targets (see gene_replacement.png for the",
+        "current set; derived from gene_replacement_clean_statistics.txt, not fixed)",
         "have few/no non-inferior protein-coding substitutes -> drug the gene itself.",
     ]
     (SCRIPT_DIR / "druggable_replacement_targets.txt").write_text(

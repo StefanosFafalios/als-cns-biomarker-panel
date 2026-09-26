@@ -1,5 +1,7 @@
 """Quick probe: split FTLD/PSP scores by institution to detect FTLD-TDP vs PSP."""
+
 from __future__ import annotations
+
 import json
 import sys
 import warnings
@@ -13,9 +15,9 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR.parent))
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import _load_suppl_expression, _parse_series_matrix
-from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
+from utils import PanelLGBMClassifier as LGBMClassifier
+from utils import _load_suppl_expression, _parse_series_matrix
 
 matrix_path = (
     ALS_DIR / "resources/GSE153960/matrix/GSE153960-GPL24676_series_matrix.txt.gz"
@@ -30,9 +32,7 @@ panel = pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv")
 feat_names = list(expr_df.index)
 feat_base = {n.split(".")[0]: i for i, n in enumerate(feat_names)}
 panel_cols = [
-    feat_base[f.split(".")[0]]
-    for f in panel["feature"]
-    if f.split(".")[0] in feat_base
+    feat_base[f.split(".")[0]] for f in panel["feature"] if f.split(".")[0] in feat_base
 ]
 
 with warnings.catch_warnings():
@@ -100,17 +100,23 @@ for tissue, sub in ftld_meta.groupby("tissue"):
         f"  IQR=[{np.percentile(s, 25):.3f}, {np.percentile(s, 75):.3f}]"
     )
 
-cortex = ftld_meta[ftld_meta["tissue"].str.contains("Cortex Frontal|Cortex Temporal", na=False)]["score"].values
+cortex = ftld_meta[
+    ftld_meta["tissue"].str.contains("Cortex Frontal|Cortex Temporal", na=False)
+]["score"].values
 cerebellum = ftld_meta[ftld_meta["tissue"] == "Cerebellum"]["score"].values
 _, p = mannwhitneyu(cortex, cerebellum, alternative="two-sided")
-print(f"\nFrontal+Temporal cortex (n={len(cortex)}) vs Cerebellum (n={len(cerebellum)}):")
+print(
+    f"\nFrontal+Temporal cortex (n={len(cortex)}) vs Cerebellum (n={len(cerebellum)}):"
+)
 print(f"  Cortex     median={np.median(cortex):.4f}")
 print(f"  Cerebellum median={np.median(cerebellum):.4f}")
 print(f"  Mann-Whitney U p={p:.3e}")
 
 # Per-subject median — rank subjects high to low
 print("\nPer-subject median score:")
-subj_med = ftld_meta.groupby("subject id")["score"].median().sort_values(ascending=False)
+subj_med = (
+    ftld_meta.groupby("subject id")["score"].median().sort_values(ascending=False)
+)
 print("  HIGH scorers (FTLD-TDP candidates):")
 print(subj_med.head(8).to_string())
 print("  LOW scorers (PSP candidates):")

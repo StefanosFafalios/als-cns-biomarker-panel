@@ -1,6 +1,6 @@
-"""Cross-cohort surrogate substitution for the 15-gene critical panel.
+"""Cross-cohort surrogate substitution for the critical panel.
 
-When the 15-gene critical panel is matched against external cohorts, three
+When the critical panel is matched against external cohorts, several
 non-coding members are missing in at least one cohort vocabulary:
 
   HERC2P8 (pseudogene)  — absent in GSE76220, GSE122649 (HGNC-keyed)
@@ -27,6 +27,7 @@ Output:
   cross_cohort_substitution_statistics.txt
   cross_cohort_substitution.png
 """
+
 from __future__ import annotations
 
 import gzip
@@ -43,7 +44,11 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import critical_panel_label, load_dataset, zero_shot_scale  # noqa: E402
+
+# Panel size is derived, so every reader-facing label must be too.
+_CRIT_LABEL = critical_panel_label()
+
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -63,31 +68,69 @@ N_SEEDS = 5  # ensemble seeds (lighter than panel_loo to keep runtime tight)
 N_BOOTSTRAP = 1_000
 MAX_CANDIDATES_PER_GAP = 60  # cap per (cohort, gene) gap to keep runtime tight
 
-# 15-gene critical panel indices in the 25-gene ordered panel
-_CRITICAL_IDX = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
 
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     "erythrocyte": (
-        "ENSG00000206172", "ENSG00000188536", "ENSG00000244734",
-        "ENSG00000158578", "ENSG00000170180", "ENSG00000133742",
-        "ENSG00000159111", "ENSG00000105610", "ENSG00000179364",
+        "ENSG00000206172",
+        "ENSG00000188536",
+        "ENSG00000244734",
+        "ENSG00000158578",
+        "ENSG00000170180",
+        "ENSG00000133742",
+        "ENSG00000159111",
+        "ENSG00000105610",
+        "ENSG00000179364",
         "ENSG00000223609",
     ),
     "platelet": (
-        "ENSG00000163736", "ENSG00000163737", "ENSG00000185245",
+        "ENSG00000163736",
+        "ENSG00000163737",
+        "ENSG00000185245",
     ),
     "endothelial": (
-        "ENSG00000261371", "ENSG00000179776", "ENSG00000110799",
+        "ENSG00000261371",
+        "ENSG00000179776",
+        "ENSG00000110799",
     ),
 }
 
 # Family patterns flagged as quantification-artifact gene families
 # (olfactory receptors, taste receptors, prostate/testis expressed)
 _ARTIFACT_FAMILY_PATTERNS = (
-    re.compile(r"^OR\d"), re.compile(r"^TAS"), re.compile(r"^PATE"),
-    re.compile(r"^DEFB"), re.compile(r"^KRTAP"), re.compile(r"^MS4A"),
-    re.compile(r"^VN1R"), re.compile(r"^LCE"), re.compile(r"^SPRR"),
+    re.compile(r"^OR\d"),
+    re.compile(r"^TAS"),
+    re.compile(r"^PATE"),
+    re.compile(r"^DEFB"),
+    re.compile(r"^KRTAP"),
+    re.compile(r"^MS4A"),
+    re.compile(r"^VN1R"),
+    re.compile(r"^LCE"),
+    re.compile(r"^SPRR"),
 )
+
+
+def _critical_idx(feat25_bases: list[str]) -> list[int]:
+    """Positions of the critical panel within the 25-gene ordered panel.
+
+    Derived from panel_critical.csv, never hardcoded. The literal this replaced was
+    stale for a month after the 2026-07-31 redefinition and was invisible to every
+    audit: it names no gene, so symbol greps miss it, and it reads no panel file, so
+    the dependency audit misses it too.
+
+    Args:
+        feat25_bases: Unversioned Ensembl IDs of the 25-gene panel, in panel order.
+
+    Returns:
+        Indices into ``feat25_bases`` for the critical-panel members.
+    """
+    from utils import critical_panel_features
+
+    want = {f.split(".")[0] for f in critical_panel_features()}
+    idx = [i for i, b in enumerate(feat25_bases) if b in want]
+    if len(idx) != len(want):
+        missing = want - {feat25_bases[i] for i in idx}
+        raise SystemExit(f"critical panel members absent from 25-gene panel: {missing}")
+    return idx
 
 
 def _is_protein_coding_safe(symbol: str, biotype: str) -> bool:
@@ -103,20 +146,26 @@ def _is_protein_coding_safe(symbol: str, biotype: str) -> bool:
 
 def _bootstrap_auc(y, scores, n=N_BOOTSTRAP, seed=RANDOM_STATE):
     from sklearn.metrics import roc_auc_score
+
     rng = np.random.default_rng(seed)
     pos = np.where(y == 1)[0]
     neg = np.where(y == 0)[0]
     out = np.empty(n, dtype=np.float64)
     for b in range(n):
-        idx = np.concatenate([rng.choice(pos, len(pos), replace=True),
-                              rng.choice(neg, len(neg), replace=True)])
+        idx = np.concatenate(
+            [
+                rng.choice(pos, len(pos), replace=True),
+                rng.choice(neg, len(neg), replace=True),
+            ]
+        )
         out[b] = roc_auc_score(y[idx], scores[idx])
     return float(np.percentile(out, 2.5)), float(np.percentile(out, 97.5))
 
 
 def _ensemble_scores(X_tr, y_tr, X_te, params, seeds=tuple(range(N_SEEDS))):
     """Average predict_proba across N_SEEDS seeds; returns scores on X_te."""
-    from lightgbm import LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
+
     scores = np.zeros(len(X_te), dtype=np.float64)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -129,11 +178,14 @@ def _ensemble_scores(X_tr, y_tr, X_te, params, seeds=tuple(range(N_SEEDS))):
 
 # ---- Data loaders ----
 
+
 def _load_gpl24676_ctd():
     from sklearn.decomposition import PCA
     from sklearn.linear_model import LinearRegression
-    (ds,) = load_dataset("GSE153960", platform="GPL24676",
-                          resources_dir=ALS_DIR / "resources")
+
+    (ds,) = load_dataset(
+        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
+    )
     X_raw = ds.X.values.astype(np.float32)
     y = ds.y.values.astype(int)
     feat = list(ds.X.columns)
@@ -155,14 +207,21 @@ def _load_gpl24676_ctd():
 
 def _load_gse76220():
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR / "resources")
-    return (np.log1p(ds.X.values.astype(np.float32)),
-            list(ds.X.columns), ds.y.values.astype(int))
+    return (
+        # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+        # despite the 'RPKM' filename). A further log1p would null every value
+        # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+        # log-base and length-normalisation differences vs log1p(counts) training.
+        ds.X.values.astype(np.float32),
+        list(ds.X.columns),
+        ds.y.values.astype(int),
+    )
 
 
 def _parse_gse122649_soft():
-    import requests
-    r = requests.get(_GSE122649_SOFT_URL, timeout=60, stream=True)
-    content = gzip.decompress(r.content).decode("utf-8", errors="ignore")
+    from utils import geo_soft_text
+
+    content = geo_soft_text("GSE122649")
     meta: dict[str, str] = {}
     for s in re.split(r"\^SAMPLE", content)[1:]:
         acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
@@ -218,6 +277,7 @@ def _load_gse122649():
 
 def _load_srp064478():
     import pandas as pd
+
     meta = pd.read_csv(_SRP_META, sep="\t").set_index("SRR")
     quants: list[pd.Series] = []
     tx_ids: list[str] | None = None
@@ -260,13 +320,17 @@ def _load_srp064478():
 def _resolve_symbols(ensg_list):
     """Resolve Ensembl base IDs to {symbol, biotype} via mygene."""
     import mygene
+
     mg = mygene.MyGeneInfo()
     out = {}
     chunk = 500
     for i in range(0, len(ensg_list), chunk):
         res = mg.querymany(
-            ensg_list[i:i + chunk], scopes="ensembl.gene",
-            fields="symbol,type_of_gene", species="human", verbose=False,
+            ensg_list[i : i + chunk],
+            scopes="ensembl.gene",
+            fields="symbol,type_of_gene",
+            species="human",
+            verbose=False,
         )
         for r in res:
             if r.get("notfound"):
@@ -280,15 +344,16 @@ def _resolve_symbols(ensg_list):
 
 def main() -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import pandas as pd
     from sklearn.metrics import roc_auc_score
-    from sklearn.preprocessing import StandardScaler
+
     warnings.filterwarnings("ignore", category=UserWarning)
 
     print("=" * 70)
-    print("Cross-cohort surrogate substitution for 15-gene critical panel")
+    print(f"Cross-cohort surrogate substitution for the {_CRIT_LABEL} panel")
     print("=" * 70)
 
     params_raw = json.loads(_PARAMS_PATH.read_text())
@@ -296,15 +361,17 @@ def main() -> None:
 
     # ---- Panel ----
     df_panel = pd.read_csv(_PANEL_CSV)
-    feat_col = next(c for c in df_panel.columns
-                     if "feature" in c.lower() or "ensg" in c.lower())
+    feat_col = next(
+        c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower()
+    )
     sym_col = next(c for c in df_panel.columns if "symbol" in c.lower())
     feat25 = df_panel[feat_col].tolist()
     sym25 = df_panel[sym_col].tolist()
     feat25_bases = [f.split(".")[0] for f in feat25]
-    panel_syms = [sym25[i] for i in _CRITICAL_IDX]
-    panel_bases = [feat25_bases[i] for i in _CRITICAL_IDX]
-    print(f"\n15-gene critical panel: {', '.join(panel_syms)}\n")
+    crit_idx = _critical_idx(feat25_bases)
+    panel_syms = [sym25[i] for i in crit_idx]
+    panel_bases = [feat25_bases[i] for i in crit_idx]
+    print(f"\n{len(panel_syms)}-gene critical panel: {', '.join(panel_syms)}\n")
 
     # ---- Replacement candidate pool ----
     print("Loading gene_replacement_results.csv ...")
@@ -340,7 +407,7 @@ def main() -> None:
         return gaps
 
     cohort_specs = [
-        ("GSE76220",  vocab76_map,  y76,  X76_log,  True),
+        ("GSE76220", vocab76_map, y76, X76_log, True),
         ("GSE122649", vocab122_map, y122, X122_log, True),
         ("SRP064478", srp_vocab_map, y_srp, Xsrp_log, False),
     ]
@@ -354,9 +421,11 @@ def main() -> None:
 
     candidates_per_panel = {}
     for sym in missing_panel:
-        sub_df = repl_df[repl_df["panel_symbol"] == sym].sort_values(
-            "replacement_auc", ascending=False
-        ).head(MAX_CANDIDATES_PER_GAP * 4)  # over-pull so we have headroom after filter
+        sub_df = (
+            repl_df[repl_df["panel_symbol"] == sym]
+            .sort_values("replacement_auc", ascending=False)
+            .head(MAX_CANDIDATES_PER_GAP * 4)
+        )  # over-pull so we have headroom after filter
         candidates_per_panel[sym] = sub_df["candidate_ensg"].tolist()
 
     all_cands = sorted({c for cs in candidates_per_panel.values() for c in cs})
@@ -368,7 +437,9 @@ def main() -> None:
         out = []
         for c_ensg in candidates_per_panel[panel_sym]:
             info = sym_resolved.get(c_ensg, {})
-            if not _is_protein_coding_safe(info.get("symbol", ""), info.get("biotype", "")):
+            if not _is_protein_coding_safe(
+                info.get("symbol", ""), info.get("biotype", "")
+            ):
                 continue
             if by_symbol:
                 if info["symbol"] not in cohort_vocab_map:
@@ -376,17 +447,27 @@ def main() -> None:
             else:
                 if c_ensg not in cohort_vocab_map:
                     continue
-            out.append({
-                "ensg": c_ensg,
-                "symbol": info["symbol"],
-            })
+            out.append(
+                {
+                    "ensg": c_ensg,
+                    "symbol": info["symbol"],
+                }
+            )
             if len(out) >= MAX_CANDIDATES_PER_GAP:
                 break
         return out
 
     # ---- Build baseline (14-of-15) per cohort ----
-    def _eval_panel_for_cohort(cohort_name, vocab_map, y_te, X_te_log, by_symbol,
-                                included_idx, extra_train_col=None, extra_te_col=None):
+    def _eval_panel_for_cohort(
+        cohort_name,
+        vocab_map,
+        y_te,
+        X_te_log,
+        by_symbol,
+        included_idx,
+        extra_train_col=None,
+        extra_te_col=None,
+    ):
         """Train on GPL24676 with the given indices (CTD for GPL16791 unused here;
         the 3 cohorts use raw log1p), score on cohort. extra_train_col / extra_te_col
         allow appending a candidate gene's columns alongside the panel."""
@@ -404,9 +485,8 @@ def main() -> None:
         if extra_train_col is not None:
             Xtr = np.hstack([Xtr, extra_train_col.reshape(-1, 1)])
             Xte = np.hstack([Xte, extra_te_col.reshape(-1, 1)])
-        sc = StandardScaler().fit(Xtr)
-        scores = _ensemble_scores(sc.transform(Xtr), y_train,
-                                    sc.transform(Xte), params)
+        Xtr_sc, Xte_sc = zero_shot_scale(Xtr, Xte, cohort_name)
+        scores = _ensemble_scores(Xtr_sc, y_train, Xte_sc, params)
         return float(roc_auc_score(y_te, scores)), scores
 
     # ---- Run substitution analysis per cohort × gap ----
@@ -418,13 +498,15 @@ def main() -> None:
             print("  No gaps — skipping.")
             continue
         # 14-of-15 baseline (drop the missing genes; no substitution)
-        included = [i for i in range(15) if i not in {g[0] for g in gaps}]
+        included = [i for i in range(len(panel_syms)) if i not in {g[0] for g in gaps}]
         baseline_auc, baseline_scores = _eval_panel_for_cohort(
             c_name, v_map, y_te, X_te, by_sym, included
         )
         baseline_lo, baseline_hi = _bootstrap_auc(y_te, baseline_scores)
-        print(f"  Baseline (dropping {len(gaps)} missing): AUC={baseline_auc:.4f} "
-              f"[{baseline_lo:.3f}, {baseline_hi:.3f}]")
+        print(
+            f"  Baseline (dropping {len(gaps)} missing): AUC={baseline_auc:.4f} "
+            f"[{baseline_lo:.3f}, {baseline_hi:.3f}]"
+        )
 
         # Per-gap substitution
         for gap_k, gap_sym, gap_base in gaps:
@@ -432,16 +514,21 @@ def main() -> None:
             sub_cands = _filter_candidates(gap_sym, v_map, by_sym)
             if not sub_cands:
                 print(f"    No protein-coding substitutes available in {c_name} vocab.")
-                results.append({
-                    "cohort": c_name, "missing_gene": gap_sym,
-                    "baseline_auc": baseline_auc,
-                    "baseline_ci": (baseline_lo, baseline_hi),
-                    "best_sub": None, "best_sub_symbol": None,
-                    "best_sub_auc": None, "best_sub_ci": None,
-                    "delta": None, "n_cands_tested": 0,
-                })
+                results.append(
+                    {
+                        "cohort": c_name,
+                        "missing_gene": gap_sym,
+                        "baseline_auc": baseline_auc,
+                        "baseline_ci": (baseline_lo, baseline_hi),
+                        "best_sub": None,
+                        "best_sub_symbol": None,
+                        "best_sub_auc": None,
+                        "best_sub_ci": None,
+                        "delta": None,
+                        "n_cands_tested": 0,
+                    }
+                )
                 continue
-            included_with_gap = included + [gap_k]
             # Train column for candidate = GPL24676 log expression column
             best_auc = -1.0
             best_sub = None
@@ -463,47 +550,68 @@ def main() -> None:
                 # included = baseline panel-minus-all-cohort-missing (no need to
                 # drop gap_k again since it's already absent from included).
                 auc, scores = _eval_panel_for_cohort(
-                    c_name, v_map, y_te, X_te, by_sym, included,
-                    extra_train_col=tr_col, extra_te_col=te_col,
+                    c_name,
+                    v_map,
+                    y_te,
+                    X_te,
+                    by_sym,
+                    included,
+                    extra_train_col=tr_col,
+                    extra_te_col=te_col,
                 )
                 if auc > best_auc:
                     best_auc = auc
                     best_sub = cand
                     best_ci = _bootstrap_auc(y_te, scores)
             if best_sub is None:
-                print(f"    No working substitution found.")
-                results.append({
-                    "cohort": c_name, "missing_gene": gap_sym,
-                    "baseline_auc": baseline_auc,
-                    "baseline_ci": (baseline_lo, baseline_hi),
-                    "best_sub": None, "best_sub_symbol": None,
-                    "best_sub_auc": None, "best_sub_ci": None,
-                    "delta": None, "n_cands_tested": len(sub_cands),
-                })
+                print("    No working substitution found.")
+                results.append(
+                    {
+                        "cohort": c_name,
+                        "missing_gene": gap_sym,
+                        "baseline_auc": baseline_auc,
+                        "baseline_ci": (baseline_lo, baseline_hi),
+                        "best_sub": None,
+                        "best_sub_symbol": None,
+                        "best_sub_auc": None,
+                        "best_sub_ci": None,
+                        "delta": None,
+                        "n_cands_tested": len(sub_cands),
+                    }
+                )
                 continue
             delta = best_auc - baseline_auc
-            print(f"    Best substitute: {best_sub['symbol']} ({best_sub['ensg']})  "
-                  f"AUC={best_auc:.4f} [{best_ci[0]:.3f}, {best_ci[1]:.3f}]  "
-                  f"Δ={delta:+.4f}")
-            results.append({
-                "cohort": c_name, "missing_gene": gap_sym,
-                "baseline_auc": baseline_auc,
-                "baseline_ci": (baseline_lo, baseline_hi),
-                "best_sub": best_sub["ensg"], "best_sub_symbol": best_sub["symbol"],
-                "best_sub_auc": best_auc, "best_sub_ci": best_ci,
-                "delta": delta, "n_cands_tested": len(sub_cands),
-            })
+            print(
+                f"    Best substitute: {best_sub['symbol']} ({best_sub['ensg']})  "
+                f"AUC={best_auc:.4f} [{best_ci[0]:.3f}, {best_ci[1]:.3f}]  "
+                f"Δ={delta:+.4f}"
+            )
+            results.append(
+                {
+                    "cohort": c_name,
+                    "missing_gene": gap_sym,
+                    "baseline_auc": baseline_auc,
+                    "baseline_ci": (baseline_lo, baseline_hi),
+                    "best_sub": best_sub["ensg"],
+                    "best_sub_symbol": best_sub["symbol"],
+                    "best_sub_auc": best_auc,
+                    "best_sub_ci": best_ci,
+                    "delta": delta,
+                    "n_cands_tested": len(sub_cands),
+                }
+            )
 
     # ---- Joint multi-gap substitution: apply ALL best subs simultaneously per cohort ----
     joint_results = []
     for c_name, v_map, y_te, X_te, by_sym in cohort_specs:
-        cohort_results = [r for r in results
-                           if r["cohort"] == c_name and r["best_sub"] is not None]
+        cohort_results = [
+            r for r in results if r["cohort"] == c_name and r["best_sub"] is not None
+        ]
         if len(cohort_results) < 2:
             continue
         print(f"\n--- Joint substitution (all gaps): {c_name} ---")
         gaps = _gaps(c_name, v_map, by_sym)
-        included = [i for i in range(15) if i not in {g[0] for g in gaps}]
+        included = [i for i in range(len(panel_syms)) if i not in {g[0] for g in gaps}]
         baseline_auc = cohort_results[0]["baseline_auc"]
         baseline_ci = cohort_results[0]["baseline_ci"]
         # Build training matrix: panel cols + all best-sub cols
@@ -538,31 +646,35 @@ def main() -> None:
         else:
             te_cols = [v_map[b] for b in panel_bases_use]
         Xte_joint = np.hstack([X_te[:, te_cols], np.column_stack(sub_te_cols)])
-        sc_j = StandardScaler().fit(Xtr_joint)
-        scores_j = _ensemble_scores(sc_j.transform(Xtr_joint), y_train,
-                                       sc_j.transform(Xte_joint), params)
+        Xtr_j_sc, Xte_j_sc = zero_shot_scale(Xtr_joint, Xte_joint, c_name)
+        scores_j = _ensemble_scores(Xtr_j_sc, y_train, Xte_j_sc, params)
         auc_j = float(roc_auc_score(y_te, scores_j))
         lo_j, hi_j = _bootstrap_auc(y_te, scores_j)
         delta_j = auc_j - baseline_auc
         print(f"  Joint subs: {' + '.join(sub_syms_used)}")
         print(f"  Joint AUC = {auc_j:.4f} [{lo_j:.3f}, {hi_j:.3f}]  Δ={delta_j:+.4f}")
-        joint_results.append({
-            "cohort": c_name, "subs": sub_syms_used,
-            "baseline_auc": baseline_auc, "baseline_ci": baseline_ci,
-            "joint_auc": auc_j, "joint_ci": (lo_j, hi_j),
-            "delta": delta_j,
-        })
+        joint_results.append(
+            {
+                "cohort": c_name,
+                "subs": sub_syms_used,
+                "baseline_auc": baseline_auc,
+                "baseline_ci": baseline_ci,
+                "joint_auc": auc_j,
+                "joint_ci": (lo_j, hi_j),
+                "delta": delta_j,
+            }
+        )
 
     # ---- Save text output ----
     lines = [
-        "Cross-cohort surrogate substitution for the 15-gene critical panel",
+        f"Cross-cohort surrogate substitution for the {_CRIT_LABEL} panel",
         "=" * 70,
         "",
         f"Method: for each (cohort, missing_gene) gap, scan up to "
         f"{MAX_CANDIDATES_PER_GAP} protein-coding genome-wide replacement candidates",
-        f"(from gene_replacement_results.csv with is_replacement=True) that are",
-        f"both protein-coding (excluding olfactory/taste/keratin/defensin/PATE",
-        f"families) and present in the target cohort vocabulary. Retrain on",
+        "(from gene_replacement_results.csv with is_replacement=True) that are",
+        "both protein-coding (excluding olfactory/taste/keratin/defensin/PATE",
+        "families) and present in the target cohort vocabulary. Retrain on",
         f"GPL24676 with substitution; score zero-shot ({N_SEEDS}-seed ensemble,",
         f"stratified bootstrap B={N_BOOTSTRAP}).",
         "",
@@ -585,10 +697,13 @@ def main() -> None:
 
     # Joint substitution lines
     if joint_results:
-        lines += ["", "Joint multi-gap substitution (all single-gap best subs applied):",
-                  f"{'Cohort':<12s} {'Subs':<42s} {'Baseline AUC':<22s} "
-                  f"{'Joint AUC':<22s} {'Δ':>8s}",
-                  "-" * 110]
+        lines += [
+            "",
+            "Joint multi-gap substitution (all single-gap best subs applied):",
+            f"{'Cohort':<12s} {'Subs':<42s} {'Baseline AUC':<22s} "
+            f"{'Joint AUC':<22s} {'Δ':>8s}",
+            "-" * 110,
+        ]
         for jr in joint_results:
             base_str = f"{jr['baseline_auc']:.4f} [{jr['baseline_ci'][0]:.3f},{jr['baseline_ci'][1]:.3f}]"
             joint_str = f"{jr['joint_auc']:.4f} [{jr['joint_ci'][0]:.3f},{jr['joint_ci'][1]:.3f}]"
@@ -606,27 +721,38 @@ def main() -> None:
     if results:
         n = len(results)
         fig, ax = plt.subplots(figsize=(10, max(3.5, 0.7 * n)))
-        labels = [f"{r['cohort']} | {r['missing_gene']} → {r['best_sub_symbol']}"
-                  if r["best_sub_symbol"]
-                  else f"{r['cohort']} | {r['missing_gene']} (no sub)"
-                  for r in results]
+        labels = [
+            f"{r['cohort']} | {r['missing_gene']} → {r['best_sub_symbol']}"
+            if r["best_sub_symbol"]
+            else f"{r['cohort']} | {r['missing_gene']} (no sub)"
+            for r in results
+        ]
         y = np.arange(n)
         baselines = [r["baseline_auc"] for r in results]
-        subs = [r["best_sub_auc"] if r["best_sub_auc"] is not None else r["baseline_auc"]
-                for r in results]
+        subs = [
+            r["best_sub_auc"] if r["best_sub_auc"] is not None else r["baseline_auc"]
+            for r in results
+        ]
         ax.barh(y - 0.18, baselines, 0.35, color="#888", label="Baseline (drop gene)")
         ax.barh(y + 0.18, subs, 0.35, color="#1f78b4", label="With substitution")
         for i, r in enumerate(results):
             if r["delta"] is not None:
-                ax.text(max(baselines[i], subs[i]) + 0.005, y[i],
-                        f"Δ={r['delta']:+.3f}", va="center", fontsize=8)
+                ax.text(
+                    max(baselines[i], subs[i]) + 0.005,
+                    y[i],
+                    f"Δ={r['delta']:+.3f}",
+                    va="center",
+                    fontsize=8,
+                )
         ax.set_yticks(y)
         ax.set_yticklabels(labels, fontsize=9)
         ax.set_xlim(0.4, 1.05)
         ax.axvline(0.5, color="grey", lw=0.5, ls=":")
         ax.set_xlabel("Zero-shot AUC")
-        ax.set_title("Cross-cohort surrogate substitution: "
-                     "filling 15-crit panel gaps with protein-coding alternatives")
+        ax.set_title(
+            "Cross-cohort surrogate substitution: "
+            f"filling {_CRIT_LABEL} panel gaps with protein-coding alternatives"
+        )
         ax.legend(loc="lower right", fontsize=8)
         ax.invert_yaxis()
         plt.tight_layout()

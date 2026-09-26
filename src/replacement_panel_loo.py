@@ -6,7 +6,7 @@ the two weakest members swapped out for their greedy-identified replacements:
   SOHLH2 → KIF2A   (SOHLH2: most redundant; LOO Δ = -0.0018 within main cohort)
   VWF    → TM4SF1  (VWF: atypical cross-platform transfer; best swap for GSE76220)
 
-This gives a clean 15-gene panel where every member is protein-coding, and
+This gives a clean panel where every member is protein-coding, and
 both new genes were already validated as part of the 4-swap greedy panel.
 
 For each of the 15 panel genes, drops it and evaluates the 14-gene reduced
@@ -28,6 +28,7 @@ Outputs:
   replacement_panel_loo.txt  — results table
   replacement_panel_loo.png  — ZS and LOO Δ bar charts
 """
+
 from __future__ import annotations
 
 import json
@@ -42,8 +43,6 @@ ALS_DIR = SCRIPT_DIR.parent
 
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
-
 from additional_cohort_gse122649 import (  # noqa: E402
     _RAW_TAR,
     _RAW_TAR_URL,
@@ -51,6 +50,7 @@ from additional_cohort_gse122649 import (  # noqa: E402
     _extract_counts,
     _parse_soft,
 )
+from utils import load_dataset  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -62,14 +62,27 @@ TOTAL_N = N_76220 + N_122649
 
 # Original 15 protein-coding panel members (symbols)
 _PROTEIN_CODING_PANEL = {
-    "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-    "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+    "MECOM",
+    "SERTAD1",
+    "FCN3",
+    "PROS1",
+    "ANGPT2",
+    "EMP1",
+    "TINAGL1",
+    "CKMT2",
+    "VWF",
+    "CLDN5",
+    "NR4A1",
+    "SOHLH2",
+    "HEXB",
+    "MCEE",
+    "SLC37A2",
 }
 
 # Greedy replacement mappings (symbol_out → symbol_in)
 _REPLACEMENTS = {
-    "SOHLH2": ("KIF2A",  "ENSG00000068796"),
-    "VWF":    ("TM4SF1", "ENSG00000169908"),
+    "SOHLH2": ("KIF2A", "ENSG00000068796"),
+    "VWF": ("TM4SF1", "ENSG00000169908"),
 }
 
 
@@ -89,7 +102,11 @@ def _load_gse76220_log1p() -> tuple[np.ndarray, list[str], np.ndarray]:
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR / "resources")
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        X = np.log1p(ds.X.values.astype(np.float32))
+        # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+        # despite the 'RPKM' filename). A further log1p would null every value
+        # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+        # log-base and length-normalisation differences vs log1p(counts) training.
+        X = ds.X.values.astype(np.float32)
     return X, list(ds.X.columns), ds.y.values.astype(int)
 
 
@@ -106,16 +123,17 @@ def _zeroshot_auc(
     te_cols: list[int],
     y_te: np.ndarray,
     params: dict,
+    cohort: str,
 ) -> float:
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
-    from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
+    from utils import zero_shot_scale
 
     X_tr = np.log1p(X_tr_raw[:, tr_cols])
     X_te = X_te_log[:, te_cols]
-    sc = StandardScaler()
-    X_tr_sc = sc.fit_transform(X_tr).astype(np.float32)
-    X_te_sc = sc.transform(X_te).astype(np.float32)
+    _tr, _te = zero_shot_scale(X_tr, X_te, cohort)
+    X_tr_sc = _tr.astype(np.float32)
+    X_te_sc = _te.astype(np.float32)
     clf = LGBMClassifier(**params)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -129,9 +147,9 @@ def _loo_cv_auc(
     y: np.ndarray,
     params: dict,
 ) -> float:
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     loo_params = {**params, "min_child_samples": 1}
     X = X_log[:, cols]
@@ -241,8 +259,14 @@ def main() -> None:
     panel_entries = _build_replacement_panel(feat_train)
 
     params = json.loads(_PARAMS_PATH.read_text())
-    params.update({"colsample_bytree": 1.0, "random_state": RANDOM_STATE,
-                   "n_jobs": -1, "verbose": -1})
+    params.update(
+        {
+            "colsample_bytree": 1.0,
+            "random_state": RANDOM_STATE,
+            "n_jobs": -1,
+            "verbose": -1,
+        }
+    )
 
     # (train_col, col_76, col_122) — None if not available in that dataset
     gene_cols: list[tuple[int | None, int | None, int | None]] = []
@@ -251,9 +275,11 @@ def main() -> None:
         gene_cols.append((tr_col, sym_to_col_76.get(sym), sym_to_col_122.get(sym)))
 
     for (feat, sym), (tc, c76, c122) in zip(panel_entries, gene_cols):
-        avail = f"train={'Y' if tc is not None else 'N'}  " \
-                f"76220={'Y' if c76 is not None else 'N'}  " \
-                f"122649={'Y' if c122 is not None else 'N'}"
+        avail = (
+            f"train={'Y' if tc is not None else 'N'}  "
+            f"76220={'Y' if c76 is not None else 'N'}  "
+            f"122649={'Y' if c122 is not None else 'N'}"
+        )
         print(f"  {sym:<12}  {avail}")
 
     # Full-panel column lists (genes available in BOTH train and the cohort)
@@ -262,10 +288,16 @@ def main() -> None:
     full_tr_122 = [gc[0] for gc in gene_cols if gc[0] is not None and gc[2] is not None]
     full_te_122 = [gc[2] for gc in gene_cols if gc[0] is not None and gc[2] is not None]
 
-    native_76 = [sym for sym, gc in zip([e[1] for e in panel_entries], gene_cols)
-                 if gc[0] is not None and gc[1] is not None]
-    native_122 = [sym for sym, gc in zip([e[1] for e in panel_entries], gene_cols)
-                  if gc[0] is not None and gc[2] is not None]
+    native_76 = [
+        sym
+        for sym, gc in zip([e[1] for e in panel_entries], gene_cols)
+        if gc[0] is not None and gc[1] is not None
+    ]
+    native_122 = [
+        sym
+        for sym, gc in zip([e[1] for e in panel_entries], gene_cols)
+        if gc[0] is not None and gc[2] is not None
+    ]
 
     print(f"\n  Native in GSE76220  ({len(full_tr_76)}/15): {', '.join(native_76)}")
     print(f"  Native in GSE122649 ({len(full_tr_122)}/15): {', '.join(native_122)}")
@@ -273,12 +305,14 @@ def main() -> None:
     # ------------------------------------------------------------------
     # Baseline — full replacement panel
     # ------------------------------------------------------------------
-    print("\n[5] Baseline (full 15-gene replacement panel, native genes per cohort) ...")
+    print(
+        "\n[5] Baseline (full 15-gene replacement panel, native genes per cohort) ..."
+    )
     base_zs_76 = _zeroshot_auc(
-        X_tr_raw, full_tr_76, y_tr, X_76_log, full_te_76, y_76, params
+        X_tr_raw, full_tr_76, y_tr, X_76_log, full_te_76, y_76, params, "GSE76220"
     )
     base_zs_122 = _zeroshot_auc(
-        X_tr_raw, full_tr_122, y_tr, X_122_log, full_te_122, y_122, params
+        X_tr_raw, full_tr_122, y_tr, X_122_log, full_te_122, y_122, params, "GSE122649"
     )
     base_loo_76 = _loo_cv_auc(X_76_log, full_te_76, y_76, params)
     base_loo_122 = _loo_cv_auc(X_122_log, full_te_122, y_122, params)
@@ -302,20 +336,34 @@ def main() -> None:
 
     for i, (feat, sym) in enumerate(panel_entries):
         _, c76_i, c122_i = gene_cols[i]
-        print(f"  [{i+1:2d}/15] Remove {sym:<12}", end=" ", flush=True)
+        print(f"  [{i + 1:2d}/15] Remove {sym:<12}", end=" ", flush=True)
 
-        tr_76_r = [gc[0] for j, gc in enumerate(gene_cols)
-                   if j != i and gc[0] is not None and gc[1] is not None]
-        te_76_r = [gc[1] for j, gc in enumerate(gene_cols)
-                   if j != i and gc[0] is not None and gc[1] is not None]
-        tr_122_r = [gc[0] for j, gc in enumerate(gene_cols)
-                    if j != i and gc[0] is not None and gc[2] is not None]
-        te_122_r = [gc[2] for j, gc in enumerate(gene_cols)
-                    if j != i and gc[0] is not None and gc[2] is not None]
+        tr_76_r = [
+            gc[0]
+            for j, gc in enumerate(gene_cols)
+            if j != i and gc[0] is not None and gc[1] is not None
+        ]
+        te_76_r = [
+            gc[1]
+            for j, gc in enumerate(gene_cols)
+            if j != i and gc[0] is not None and gc[1] is not None
+        ]
+        tr_122_r = [
+            gc[0]
+            for j, gc in enumerate(gene_cols)
+            if j != i and gc[0] is not None and gc[2] is not None
+        ]
+        te_122_r = [
+            gc[2]
+            for j, gc in enumerate(gene_cols)
+            if j != i and gc[0] is not None and gc[2] is not None
+        ]
 
-        zs_76 = _zeroshot_auc(X_tr_raw, tr_76_r, y_tr, X_76_log, te_76_r, y_76, params)
+        zs_76 = _zeroshot_auc(
+            X_tr_raw, tr_76_r, y_tr, X_76_log, te_76_r, y_76, params, "GSE76220"
+        )
         zs_122 = _zeroshot_auc(
-            X_tr_raw, tr_122_r, y_tr, X_122_log, te_122_r, y_122, params
+            X_tr_raw, tr_122_r, y_tr, X_122_log, te_122_r, y_122, params, "GSE122649"
         )
         loo_76 = _loo_cv_auc(X_76_log, te_76_r, y_76, params)
         loo_122 = _loo_cv_auc(X_122_log, te_122_r, y_122, params)
@@ -325,21 +373,26 @@ def main() -> None:
         d_zs = wm_zs - base_wm_zs
         d_loo = wm_loo - base_wm_loo
 
-        results.append({
-            "symbol": sym,
-            "replaced_from": "SOHLH2" if sym == "KIF2A"
-                             else "VWF" if sym == "TM4SF1" else None,
-            "in_76220": c76_i is not None,
-            "in_122649": c122_i is not None,
-            "zs_76220": zs_76,
-            "zs_122649": zs_122,
-            "wm_zs": wm_zs,
-            "d_zs": d_zs,
-            "loo_76220": loo_76,
-            "loo_122649": loo_122,
-            "wm_loo": wm_loo,
-            "d_loo": d_loo,
-        })
+        results.append(
+            {
+                "symbol": sym,
+                "replaced_from": "SOHLH2"
+                if sym == "KIF2A"
+                else "VWF"
+                if sym == "TM4SF1"
+                else None,
+                "in_76220": c76_i is not None,
+                "in_122649": c122_i is not None,
+                "zs_76220": zs_76,
+                "zs_122649": zs_122,
+                "wm_zs": wm_zs,
+                "d_zs": d_zs,
+                "loo_76220": loo_76,
+                "loo_122649": loo_122,
+                "wm_loo": wm_loo,
+                "d_loo": d_loo,
+            }
+        )
         print(f"ZS Δ={d_zs:+.4f}  LOO Δ={d_loo:+.4f}")
 
     # ------------------------------------------------------------------
@@ -389,9 +442,9 @@ def main() -> None:
     # ------------------------------------------------------------------
     df_loo = df.sort_values("d_loo", ascending=False)
 
-    _CLR_NEW = "#ff7f0e"   # orange — replacement genes
-    _CLR_POS = "#2ca02c"   # green — dispensable
-    _CLR_NEG = "#d62728"   # red — irreplaceable
+    _CLR_NEW = "#ff7f0e"  # orange — replacement genes
+    _CLR_POS = "#2ca02c"  # green — dispensable
+    _CLR_NEG = "#d62728"  # red — irreplaceable
 
     def _bar_color(row: pd.Series, val_col: str) -> str:
         if row["symbol"] in ("KIF2A", "TM4SF1"):
@@ -435,13 +488,19 @@ def main() -> None:
     ax2.grid(axis="x", alpha=0.3)
 
     import matplotlib.patches as mpatches
+
     legend_handles = [
         mpatches.Patch(color=_CLR_NEW, label="Replacement gene (KIF2A / TM4SF1)"),
         mpatches.Patch(color=_CLR_POS, label="Dispensable (Δ ≥ 0)"),
         mpatches.Patch(color=_CLR_NEG, label="Irreplaceable (Δ < 0)"),
     ]
-    fig.legend(handles=legend_handles, loc="lower center", ncol=3,
-               fontsize=9, bbox_to_anchor=(0.5, 0.0))
+    fig.legend(
+        handles=legend_handles,
+        loc="lower center",
+        ncol=3,
+        fontsize=9,
+        bbox_to_anchor=(0.5, 0.0),
+    )
 
     fig.suptitle(
         "Replacement Panel Cross-Cohort LOO — 15-gene protein-coding panel\n"

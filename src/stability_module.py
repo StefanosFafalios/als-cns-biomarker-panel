@@ -21,6 +21,7 @@ Outputs:
   stability_module.txt  — human-readable summary
   stability_module.png  — bar chart comparing both metrics
 """
+
 from __future__ import annotations
 
 import json
@@ -64,10 +65,15 @@ def _load_sfm_matrix() -> tuple[np.ndarray, list[str]]:
 
 
 def _bootstrap_iteration(
-    X, y, rng, params, sfm_features,
+    X,
+    y,
+    rng,
+    params,
+    sfm_features,
 ) -> set[str]:
-    from lightgbm import LGBMClassifier
     import shap
+    from utils import PanelLGBMClassifier as LGBMClassifier
+
     pos_idx = np.where(y == 1)[0]
     neg_idx = np.where(y == 0)[0]
     n_pos = rng.choice(pos_idx, size=len(pos_idx), replace=True)
@@ -93,7 +99,9 @@ def _build_module_map(panel_df: pd.DataFrame) -> dict[str, set[str]]:
     rep_df = pd.read_csv(_REPLACEMENT_CSV)
     rep_df = rep_df[rep_df["is_replacement"]]
     modules: dict[str, set[str]] = {}
-    panel_base = {sym: ensg for sym, ensg in zip(panel_df["symbol"], panel_df["feature"])}
+    panel_base = {
+        sym: ensg for sym, ensg in zip(panel_df["symbol"], panel_df["feature"])
+    }
     for sym in panel_df["symbol"]:
         sub = rep_df[rep_df["panel_symbol"] == sym]
         bases = {panel_base[sym].split(".")[0]}
@@ -109,10 +117,13 @@ def _to_base(feature_id: str) -> str:
 def main() -> None:
     print("Loading SFM matrix and labels ...", flush=True)
     X, sfm_features = _load_sfm_matrix()
-    (ds,) = load_dataset("GSE153960", platform="GPL24676",
-                         resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
+    )
     y = ds.y.values.astype(int)
-    print(f"  X: {X.shape}  ALS={int(y.sum())}  Ctrl={len(y)-int(y.sum())}", flush=True)
+    print(
+        f"  X: {X.shape}  ALS={int(y.sum())}  Ctrl={len(y) - int(y.sum())}", flush=True
+    )
 
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
@@ -131,28 +142,36 @@ def main() -> None:
     rng = np.random.default_rng(RANDOM_STATE)
     iterations: list[set[str]] = []
     import time
+
     t0 = time.time()
     print(f"\nRunning {N_BOOTSTRAP} bootstrap iterations ...", flush=True)
     for b in range(N_BOOTSTRAP):
         top = _bootstrap_iteration(X, y, rng, params, sfm_features)
         iterations.append({_to_base(f) for f in top})
         if (b + 1) % 10 == 0:
-            print(f"  bootstrap {b+1}/{N_BOOTSTRAP}  elapsed: {time.time()-t0:.1f}s", flush=True)
+            print(
+                f"  bootstrap {b + 1}/{N_BOOTSTRAP}  elapsed: {time.time() - t0:.1f}s",
+                flush=True,
+            )
 
     # Compute single + module stability per panel gene
     rows = []
     for sym in panel_df["symbol"]:
-        panel_base = panel_df.loc[panel_df["symbol"] == sym, "feature"].iloc[0].split(".")[0]
+        panel_base = (
+            panel_df.loc[panel_df["symbol"] == sym, "feature"].iloc[0].split(".")[0]
+        )
         single = sum(1 for it in iterations if panel_base in it)
         mod = sum(1 for it in iterations if it & modules[sym])
-        rows.append({
-            "panel_gene": sym,
-            "panel_base": panel_base,
-            "module_size": len(modules[sym]),
-            "single_freq": single / N_BOOTSTRAP,
-            "module_freq": mod / N_BOOTSTRAP,
-            "delta": (mod - single) / N_BOOTSTRAP,
-        })
+        rows.append(
+            {
+                "panel_gene": sym,
+                "panel_base": panel_base,
+                "module_size": len(modules[sym]),
+                "single_freq": single / N_BOOTSTRAP,
+                "module_freq": mod / N_BOOTSTRAP,
+                "delta": (mod - single) / N_BOOTSTRAP,
+            }
+        )
     df = pd.DataFrame(rows).sort_values("module_freq", ascending=False)
     df.to_csv(SCRIPT_DIR / "stability_module.csv", index=False)
     print("\n" + df.to_string(index=False))
@@ -169,11 +188,20 @@ def main() -> None:
         "Stability tiers (module_freq):",
     ]
     high = df[df["module_freq"] >= 0.80]
-    mid  = df[(df["module_freq"] >= 0.50) & (df["module_freq"] < 0.80)]
-    low  = df[df["module_freq"] < 0.50]
-    lines.append(f"  HIGH (≥80%): n={len(high)} — " + (", ".join(high["panel_gene"]) if not high.empty else "(none)"))
-    lines.append(f"  MID  (50-80%): n={len(mid)} — " + (", ".join(mid["panel_gene"]) if not mid.empty else "(none)"))
-    lines.append(f"  LOW  (<50%): n={len(low)} — " + (", ".join(low["panel_gene"]) if not low.empty else "(none)"))
+    mid = df[(df["module_freq"] >= 0.50) & (df["module_freq"] < 0.80)]
+    low = df[df["module_freq"] < 0.50]
+    lines.append(
+        f"  HIGH (≥80%): n={len(high)} — "
+        + (", ".join(high["panel_gene"]) if not high.empty else "(none)")
+    )
+    lines.append(
+        f"  MID  (50-80%): n={len(mid)} — "
+        + (", ".join(mid["panel_gene"]) if not mid.empty else "(none)")
+    )
+    lines.append(
+        f"  LOW  (<50%): n={len(low)} — "
+        + (", ".join(low["panel_gene"]) if not low.empty else "(none)")
+    )
 
     (SCRIPT_DIR / "stability_module.txt").write_text("\n".join(lines))
 
@@ -181,10 +209,20 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(11, max(6, len(df) * 0.3 + 2)))
     df_sorted = df.sort_values("module_freq")
     y_pos = np.arange(len(df_sorted))
-    ax.barh(y_pos - 0.2, df_sorted["single_freq"], height=0.4,
-            color="#d62728", label="single-gene stability")
-    ax.barh(y_pos + 0.2, df_sorted["module_freq"], height=0.4,
-            color="#2ca02c", label="module stability (gene or valid replacement)")
+    ax.barh(
+        y_pos - 0.2,
+        df_sorted["single_freq"],
+        height=0.4,
+        color="#d62728",
+        label="single-gene stability",
+    )
+    ax.barh(
+        y_pos + 0.2,
+        df_sorted["module_freq"],
+        height=0.4,
+        color="#2ca02c",
+        label="module stability (gene or valid replacement)",
+    )
     ax.set_yticks(y_pos)
     ax.set_yticklabels(df_sorted["panel_gene"], fontsize=9)
     ax.axvline(0.80, ls="--", color="black", lw=0.6)

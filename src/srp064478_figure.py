@@ -1,12 +1,13 @@
-"""Regenerate srp064478_validation.png with canonical 25-gene and 15-crit results.
+"""Regenerate srp064478_validation.png with canonical 25-gene and critical-panel results.
 
 Replicates the SRP064478 loading and gene-matching logic from lr_vs_lgbm_zeroshot.py
 and produces a two-panel figure:
-  Left  : ROC curves for 25-gene (21/25) and 15-crit (14/15) LGBM panels.
+  Left  : ROC curves for the 25-gene and critical-panel LGBM models.
   Right : Per-gene Mann-Whitney rank-biserial r_b (ALS vs Control) for the
-          15-crit genes available in SRP064478 (14 genes, SNORD97 absent
+          critical-panel genes available in SRP064478 (SNORD97 absent
           from the Salmon Ensembl-cDNA index).
 """
+
 from __future__ import annotations
 
 import gzip
@@ -16,6 +17,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,7 +30,11 @@ SCRIPT_DIR = Path(__file__).parent
 ALS_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import critical_panel_label, critical_panel_size, load_dataset  # noqa: E402
+
+# Panel size is derived, so every reader-facing denominator must be too.
+_K_CRIT = critical_panel_size()
+_CRIT_LABEL = critical_panel_label()
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -39,11 +45,37 @@ _OUT_PNG = SCRIPT_DIR / "manuscript" / "srp064478_validation.png"
 
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
-CRITICAL_IDX: list[int] = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
+
+
+def _critical_idx(feat25_bases: list[str]) -> list[int]:
+    """Positions of the critical panel within the 25-gene ordered panel.
+
+    Derived from panel_critical.csv, never hardcoded. The literal this replaced was
+    stale for a month after the 2026-07-31 redefinition and was invisible to every
+    audit: it names no gene, so symbol greps miss it, and it reads no panel file, so
+    the dependency audit misses it too.
+
+    Args:
+        feat25_bases: Unversioned Ensembl IDs of the 25-gene panel, in panel order.
+
+    Returns:
+        Indices into ``feat25_bases`` for the critical-panel members.
+    """
+    from utils import critical_panel_features
+
+    want = {f.split(".")[0] for f in critical_panel_features()}
+    idx = [i for i, b in enumerate(feat25_bases) if b in want]
+    if len(idx) != len(want):
+        missing = want - {feat25_bases[i] for i in idx}
+        raise SystemExit(f"critical panel members absent from 25-gene panel: {missing}")
+    return idx
 
 
 def _bootstrap_auc(
-    y: np.ndarray, scores: np.ndarray, n: int = N_BOOTSTRAP, seed: int = RANDOM_STATE,
+    y: np.ndarray,
+    scores: np.ndarray,
+    n: int = N_BOOTSTRAP,
+    seed: int = RANDOM_STATE,
 ) -> tuple[float, float]:
     rng = np.random.default_rng(seed)
     aucs: list[float] = []
@@ -90,10 +122,13 @@ def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 
 def _train_predict(
-    X_tr: np.ndarray, y_tr: np.ndarray,
-    X_te: np.ndarray, params: dict,
+    X_tr: np.ndarray,
+    y_tr: np.ndarray,
+    X_te: np.ndarray,
+    params: dict,
 ) -> np.ndarray:
-    from lightgbm import LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
+
     sc = StandardScaler().fit(X_tr)
     clf = LGBMClassifier(**params)
     clf.fit(_safe_scale(sc, X_tr), y_tr)
@@ -105,16 +140,25 @@ def main() -> None:
     panel_df = pd.read_csv(_PANEL_CSV)
     feat25_bases = [e.split(".")[0] for e in panel_df["feature"]]
     feat25_syms = list(panel_df["symbol"])
-    base_crit = [feat25_bases[i] for i in CRITICAL_IDX]
-    sym_crit = [feat25_syms[i] for i in CRITICAL_IDX]
+    crit_idx = _critical_idx(feat25_bases)
+    base_crit = [feat25_bases[i] for i in crit_idx]
+    sym_crit = [feat25_syms[i] for i in crit_idx]
 
     params = json.loads(_PARAMS_PATH.read_text())
-    params.update({"colsample_bytree": 1.0, "n_jobs": -1, "verbose": -1,
-                   "random_state": RANDOM_STATE})
+    params.update(
+        {
+            "colsample_bytree": 1.0,
+            "n_jobs": -1,
+            "verbose": -1,
+            "random_state": RANDOM_STATE,
+        }
+    )
 
     # Load GPL24676 training (log1p only, no CTD — same as lr_vs_lgbm_zeroshot for SRP)
     print("Loading GPL24676 ...")
-    (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
+    )
     X_train_log = np.log1p(ds.X.values.astype(np.float32))
     y_train = ds.y.values.astype(int)
     feat_train = list(ds.X.columns)
@@ -127,21 +171,20 @@ def main() -> None:
     v_srp = {v: i for i, v in enumerate(vocab_srp)}
 
     # Match 25-gene panel
-    m25_tr = [b2i_tr[b] for b in feat25_bases if b in b2i_tr]
     m25_te_idx = [i for i, b in enumerate(feat25_bases) if b in v_srp]
     m25_te_cols = [v_srp[feat25_bases[i]] for i in m25_te_idx]
     m25_tr_cols = [b2i_tr[feat25_bases[i]] for i in m25_te_idx]
     n_25 = len(m25_te_idx)
 
-    # Match 15-crit panel
+    # Match critical panel
     m16_te_idx = [i for i, b in enumerate(base_crit) if b in v_srp]
     m16_te_cols = [v_srp[base_crit[i]] for i in m16_te_idx]
     m16_tr_cols = [b2i_tr[base_crit[i]] for i in m16_te_idx if base_crit[i] in b2i_tr]
     matched_crit_syms = [sym_crit[i] for i in m16_te_idx]
     n_16 = len(m16_te_idx)
 
-    print(f"  25-gene: {n_25}/25 matched; 15-crit: {n_16}/15 matched")
-    print(f"  15-crit matched genes: {matched_crit_syms}")
+    print(f"  25-gene: {n_25}/25 matched; {_CRIT_LABEL}: {n_16}/{_K_CRIT} matched")
+    print(f"  {_CRIT_LABEL} matched genes: {matched_crit_syms}")
 
     Xtr_25 = X_train_log[:, m25_tr_cols]
     Xte_25 = Xsrp_log[:, m25_te_cols]
@@ -151,21 +194,20 @@ def main() -> None:
 
     # Train and predict
     print("Training 25-gene LGBM ...")
-    sc25 = StandardScaler()
     scores_25 = _train_predict(Xtr_25, y_train, Xte_25, params)
     auc_25 = float(roc_auc_score(y_srp, scores_25))
     ci_lo_25, ci_hi_25 = _bootstrap_auc(y_srp, scores_25)
     fpr_25, tpr_25, _ = roc_curve(y_srp, scores_25)
     print(f"  AUC={auc_25:.4f}  95%CI [{ci_lo_25:.4f}, {ci_hi_25:.4f}]")
 
-    print("Training 15-crit LGBM ...")
+    print(f"Training {_CRIT_LABEL} LGBM ...")
     scores_16 = _train_predict(Xtr_16, y_train, Xte_16, params)
     auc_16 = float(roc_auc_score(y_srp, scores_16))
     ci_lo_16, ci_hi_16 = _bootstrap_auc(y_srp, scores_16)
     fpr_16, tpr_16, _ = roc_curve(y_srp, scores_16)
     print(f"  AUC={auc_16:.4f}  95%CI [{ci_lo_16:.4f}, {ci_hi_16:.4f}]")
 
-    # Per-gene Mann-Whitney for 15-crit matched genes
+    # Per-gene Mann-Whitney for critical-panel matched genes
     als_mask = y_srp == 1
     ctrl_mask = y_srp == 0
     rb_vals, pvals, syms_plot = [], [], []
@@ -188,12 +230,22 @@ def main() -> None:
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
     ax = axes[0]
-    ax.plot(fpr_25, tpr_25, lw=2, color="#1f77b4",
-            label=f"25-gene ({n_25}/25)  AUC = {auc_25:.4f}\n"
-                  f"95% CI [{ci_lo_25:.3f}, {ci_hi_25:.3f}]")
-    ax.plot(fpr_16, tpr_16, lw=2, color="#d62728",
-            label=f"15-crit ({n_16}/15)  AUC = {auc_16:.4f}\n"
-                  f"95% CI [{ci_lo_16:.3f}, {ci_hi_16:.3f}]")
+    ax.plot(
+        fpr_25,
+        tpr_25,
+        lw=2,
+        color="#1f77b4",
+        label=f"25-gene ({n_25}/25)  AUC = {auc_25:.4f}\n"
+        f"95% CI [{ci_lo_25:.3f}, {ci_hi_25:.3f}]",
+    )
+    ax.plot(
+        fpr_16,
+        tpr_16,
+        lw=2,
+        color="#d62728",
+        label=f"{_CRIT_LABEL} ({n_16}/{_K_CRIT})  AUC = {auc_16:.4f}\n"
+        f"95% CI [{ci_lo_16:.3f}, {ci_hi_16:.3f}]",
+    )
     ax.plot([0, 1], [0, 1], "k--", lw=0.8)
     ax.set_xlabel("False positive rate")
     ax.set_ylabel("True positive rate")
@@ -202,7 +254,7 @@ def main() -> None:
 
     ax2 = axes[1]
     colours = ["#d62728" if r > 0 else "#1f77b4" for r in rb_sorted]
-    bars = ax2.barh(range(len(sym_sorted)), rb_sorted, color=colours)
+    ax2.barh(range(len(sym_sorted)), rb_sorted, color=colours)
     for k, (r, p) in enumerate(zip(rb_sorted, pval_sorted)):
         if p < 0.05:
             ax2.text(r + 0.01 * np.sign(r), k, "*", va="center", ha="left", fontsize=9)
@@ -210,11 +262,12 @@ def main() -> None:
     ax2.set_yticklabels(sym_sorted, fontsize=8)
     ax2.axvline(0, color="k", lw=0.8)
     ax2.set_xlabel("Rank-biserial $r_b$ (ALS vs Control)")
-    ax2.set_title(f"Per-gene effect size — 15-crit panel\n({n_16}/15 genes matched)")
+    ax2.set_title(f"Per-gene effect size — {_CRIT_LABEL} panel\n({n_16}/{_K_CRIT} genes matched)")
     ax2.set_xlim(-1.05, 1.05)
 
     fig.suptitle("SRP064478 Cervical SC validation ($n = 15$)", fontsize=11, y=1.01)
     plt.tight_layout()
+    _OUT_PNG.parent.mkdir(exist_ok=True)  # absent in a fresh clone of the public repo
     fig.savefig(_OUT_PNG, dpi=150, bbox_inches="tight")
     print(f"\nFigure saved: {_OUT_PNG}")
 

@@ -34,22 +34,22 @@ from pathlib import Path
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
+from utils import critical_panel_symbols  # noqa: E402
+
 SCRIPT_DIR = Path(__file__).parent
 
 _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 
-PADJ_THRESHOLD = 0.05       # BH-adj p cutoff for directional gene sets
-AUC_NON_PRED = 0.60         # univariate AUC threshold for non-predictive pool
-ENRICHR_PADJ = 0.05         # Enrichr Adjusted P-value cutoff for display
-TOP_TERMS = 15              # top terms per library to display in plots
+PADJ_THRESHOLD = 0.05  # BH-adj p cutoff for directional gene sets
+AUC_NON_PRED = 0.60  # univariate AUC threshold for non-predictive pool
+ENRICHR_PADJ = 0.05  # Enrichr Adjusted P-value cutoff for display
+TOP_TERMS = 15  # top terms per library to display in plots
 
-# 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean = 0.9029; equal cohort weights)
-_CRITICAL_CODING_GENES: frozenset[str] = frozenset({
-    "FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
-    "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1",
-})
+# Protein-coding members of the critical panel (see panel_critical.csv)
+_CRITICAL_CODING_GENES: frozenset[str] = frozenset(
+    critical_panel_symbols(protein_coding_only=True)
+)
 
 _LIBRARIES: list[str] = [
     "GO_Biological_Process_2023",
@@ -77,18 +77,22 @@ def _build_gene_sets(prof_path: Path) -> dict[str, list[str]]:
     critical = prof[prof["symbol"].isin(_CRITICAL_CODING_GENES)]
 
     up = critical.loc[
-        (critical["direction"] == "up_in_ALS") & (critical["mwu_padj"] < PADJ_THRESHOLD),
+        (critical["direction"] == "up_in_ALS")
+        & (critical["mwu_padj"] < PADJ_THRESHOLD),
         "symbol",
     ].tolist()
 
     down = critical.loc[
-        (critical["direction"] == "down_in_ALS") & (critical["mwu_padj"] < PADJ_THRESHOLD),
+        (critical["direction"] == "down_in_ALS")
+        & (critical["mwu_padj"] < PADJ_THRESHOLD),
         "symbol",
     ].tolist()
 
     full = critical["symbol"].tolist()
 
-    non_pred = critical.loc[critical["univariate_auc"] < AUC_NON_PRED, "symbol"].tolist()
+    non_pred = critical.loc[
+        critical["univariate_auc"] < AUC_NON_PRED, "symbol"
+    ].tolist()
 
     # Drop ENSG-only symbols (no gene symbol → can't query Enrichr)
     def clean(lst: list[str]) -> list[str]:
@@ -135,8 +139,18 @@ def _enrichr_query(gene_list: list[str], library: str) -> "pd.DataFrame":
 
 def _empty_df() -> "pd.DataFrame":
     import pandas as pd
-    return pd.DataFrame(columns=["Term", "Overlap", "P-value", "Adjusted P-value",
-                                  "Odds Ratio", "Combined Score", "Genes"])
+
+    return pd.DataFrame(
+        columns=[
+            "Term",
+            "Overlap",
+            "P-value",
+            "Adjusted P-value",
+            "Odds Ratio",
+            "Combined Score",
+            "Genes",
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +158,9 @@ def _empty_df() -> "pd.DataFrame":
 # ---------------------------------------------------------------------------
 
 
-def _plot_ora(results: "pd.DataFrame", set_name: str, padj_col: str = "Adjusted P-value") -> None:
+def _plot_ora(
+    results: "pd.DataFrame", set_name: str, padj_col: str = "Adjusted P-value"
+) -> None:
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -170,15 +186,18 @@ def _plot_ora(results: "pd.DataFrame", set_name: str, padj_col: str = "Adjusted 
         "DisGeNET": "#d62728",
     }
 
-    bar_colours = [colours.get(str(row["Gene_set"]), "#8c564b")
-                   for _, row in top[::-1].iterrows()]
+    bar_colours = [
+        colours.get(str(row["Gene_set"]), "#8c564b") for _, row in top[::-1].iterrows()
+    ]
     scores = np.log10(top["Combined Score"].values[::-1] + 1)
 
     ax.barh(y_pos, scores, color=bar_colours, edgecolor="none")
     ax.set_yticks(y_pos)
     ax.set_yticklabels(
-        [f"{row['Term'][:60]}  [{row['Gene_set'].split('_')[0]}]"
-         for _, row in top[::-1].iterrows()],
+        [
+            f"{row['Term'][:60]}  [{row['Gene_set'].split('_')[0]}]"
+            for _, row in top[::-1].iterrows()
+        ],
         fontsize=7.5,
     )
     ax.set_xlabel("log10(Combined Score + 1)  [Enrichr]")
@@ -189,6 +208,7 @@ def _plot_ora(results: "pd.DataFrame", set_name: str, padj_col: str = "Adjusted 
     )
 
     from matplotlib.patches import Patch
+
     # Legend lists only the libraries actually present among the plotted bars
     present_libs = list(dict.fromkeys(str(g) for g in top["Gene_set"]))
     legend_handles = [

@@ -14,6 +14,7 @@ The within-cohort LOO uses HGNC-symbol matching with column-mean fill
 
 Outputs: small_cohort_loo_refit.csv, .txt
 """
+
 from __future__ import annotations
 
 import sys
@@ -41,7 +42,7 @@ def _loo_auc(X: np.ndarray, y: np.ndarray, params: dict) -> float:
     for i in range(n):
         mask = np.arange(n) != i
         X_tr, y_tr = X[mask], y[mask]
-        X_te = X[i:i + 1]
+        X_te = X[i : i + 1]
         clf = LGBMClassifier(**params)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
@@ -52,8 +53,7 @@ def _loo_auc(X: np.ndarray, y: np.ndarray, params: dict) -> float:
 
 def _load_panel_by_symbol(gse_id: str, panel_symbols: list[str]):
     try:
-        (ds,) = load_dataset(gse_id, platform=None,
-                             resources_dir=ALS_DIR / "resources")
+        (ds,) = load_dataset(gse_id, platform=None, resources_dir=ALS_DIR / "resources")
     except Exception as exc:
         print(f"  [warn] {gse_id}: {exc}")
         return None
@@ -63,7 +63,11 @@ def _load_panel_by_symbol(gse_id: str, panel_symbols: list[str]):
     y = ds.y.values.astype(int)
     matched_cols = [sym_lookup[s] for s in panel_symbols if s in sym_lookup]
     matched_syms = [s for s in panel_symbols if s in sym_lookup]
-    X_p = np.log1p(np.nan_to_num(X[:, matched_cols], nan=0.0))
+    from utils import needs_log1p
+
+    _sel = np.nan_to_num(X[:, matched_cols], nan=0.0)
+    # GSE76220 is already log2-scale; a second log1p would null values <= -1.
+    X_p = np.log1p(_sel) if needs_log1p(gse_id) else _sel
     # build full 25-col with col-mean fill
     out = np.zeros((X.shape[0], len(panel_symbols)), dtype=np.float32)
     fill = float(X_p.mean()) if X_p.size else 0.0
@@ -74,7 +78,9 @@ def _load_panel_by_symbol(gse_id: str, panel_symbols: list[str]):
             j += 1
         else:
             out[:, i] = fill
-    print(f"  [{gse_id}] n={X.shape[0]} matched={len(matched_syms)}/{len(panel_symbols)}")
+    print(
+        f"  [{gse_id}] n={X.shape[0]} matched={len(matched_syms)}/{len(panel_symbols)}"
+    )
     return out, y
 
 
@@ -84,17 +90,30 @@ def main() -> None:
 
     # Two hyperparameter regimes
     paranoid = {  # tuned for n=874 — what the manuscript currently uses
-        "n_estimators": 1500, "learning_rate": 0.04046, "num_leaves": 21,
+        "n_estimators": 1500,
+        "learning_rate": 0.04046,
+        "num_leaves": 21,
         "min_child_samples": 1,  # paper says min_child_samples=1 for within-cohort LOO
-        "colsample_bytree": 1.0, "subsample": 0.454,
-        "reg_alpha": 0.0005, "reg_lambda": 0.0001,
-        "objective": "binary", "random_state": 42, "verbosity": -1,
+        "colsample_bytree": 1.0,
+        "subsample": 0.454,
+        "reg_alpha": 0.0005,
+        "reg_lambda": 0.0001,
+        "objective": "binary",
+        "random_state": 42,
+        "verbosity": -1,
     }
     sane = {  # appropriate for small n
-        "n_estimators": 100, "learning_rate": 0.05, "num_leaves": 15,
-        "min_child_samples": 5, "colsample_bytree": 1.0, "subsample": 1.0,
-        "reg_alpha": 0.0, "reg_lambda": 0.0,
-        "objective": "binary", "random_state": 42, "verbosity": -1,
+        "n_estimators": 100,
+        "learning_rate": 0.05,
+        "num_leaves": 15,
+        "min_child_samples": 5,
+        "colsample_bytree": 1.0,
+        "subsample": 1.0,
+        "reg_alpha": 0.0,
+        "reg_lambda": 0.0,
+        "objective": "binary",
+        "random_state": 42,
+        "verbosity": -1,
     }
 
     rows = []
@@ -104,16 +123,22 @@ def main() -> None:
         if loaded is None:
             continue
         X, y = loaded
-        for label, params in [("paper_hyperparams_LOO", paranoid),
-                              ("sane_small_n_LOO", sane)]:
+        for label, params in [
+            ("paper_hyperparams_LOO", paranoid),
+            ("sane_small_n_LOO", sane),
+        ]:
             auc = _loo_auc(X, y, params)
-            rows.append({
-                "cohort": gse, "n": len(y), "n_pos": int(y.sum()),
-                "regime": label,
-                "n_estimators": params["n_estimators"],
-                "min_child_samples": params["min_child_samples"],
-                "AUC_LOO": round(auc, 4),
-            })
+            rows.append(
+                {
+                    "cohort": gse,
+                    "n": len(y),
+                    "n_pos": int(y.sum()),
+                    "regime": label,
+                    "n_estimators": params["n_estimators"],
+                    "min_child_samples": params["min_child_samples"],
+                    "AUC_LOO": round(auc, 4),
+                }
+            )
             print(f"  {label:<30} AUC={auc:.4f}")
 
     df = pd.DataFrame(rows)

@@ -256,10 +256,10 @@ def _plot(
 def main() -> None:
     import matplotlib
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from scipy.stats import mannwhitneyu
     from sklearn.metrics import roc_auc_score
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     matplotlib.use("Agg")
 

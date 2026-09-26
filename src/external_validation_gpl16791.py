@@ -34,7 +34,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset
+from utils import load_dataset, panel25_cv_auc
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -49,16 +49,26 @@ RANDOM_STATE = 42
 # CTD compartment Ensembl base IDs (same as biomarker_discovery_lgbm_bayesopt.py)
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     "erythrocyte": (
-        "ENSG00000206172", "ENSG00000188536", "ENSG00000244734",
-        "ENSG00000158578", "ENSG00000170180", "ENSG00000133742",
-        "ENSG00000159111", "ENSG00000105610", "ENSG00000179364",
+        "ENSG00000206172",
+        "ENSG00000188536",
+        "ENSG00000244734",
+        "ENSG00000158578",
+        "ENSG00000170180",
+        "ENSG00000133742",
+        "ENSG00000159111",
+        "ENSG00000105610",
+        "ENSG00000179364",
         "ENSG00000223609",
     ),
     "platelet": (
-        "ENSG00000163736", "ENSG00000163737", "ENSG00000185245",
+        "ENSG00000163736",
+        "ENSG00000163737",
+        "ENSG00000185245",
     ),
     "endothelial": (
-        "ENSG00000261371", "ENSG00000179776", "ENSG00000110799",
+        "ENSG00000261371",
+        "ENSG00000179776",
+        "ENSG00000110799",
     ),
 }
 
@@ -68,7 +78,9 @@ _COMPARTMENTS: dict[str, tuple[str, ...]] = {
 # ---------------------------------------------------------------------------
 
 
-def _load_platform(platform: str) -> tuple[np.ndarray, list[str], np.ndarray, list[str]]:
+def _load_platform(
+    platform: str,
+) -> tuple[np.ndarray, list[str], np.ndarray, list[str]]:
     """Return X_raw, feature_names, y, tissues for one platform."""
     (ds,) = load_dataset(
         "GSE153960", platform=platform, resources_dir=ALS_DIR / "resources"
@@ -77,7 +89,7 @@ def _load_platform(platform: str) -> tuple[np.ndarray, list[str], np.ndarray, li
     feature_names: list[str] = list(ds.X.columns)
     y = ds.y.values.astype(int)
     tissues: list[str] = ds.meta.get("tissue", ["unknown"] * len(y)).tolist()
-    print(f"  {platform}: n={len(y)}  ALS={y.sum()}  Ctrl={(y==0).sum()}")
+    print(f"  {platform}: n={len(y)}  ALS={y.sum()}  Ctrl={(y == 0).sum()}")
     return X_raw, feature_names, y, tissues
 
 
@@ -147,7 +159,9 @@ def _extract_panel(
 # ---------------------------------------------------------------------------
 
 
-def _bootstrap_auc(y: np.ndarray, scores: np.ndarray, n: int, rng: np.random.Generator) -> np.ndarray:
+def _bootstrap_auc(
+    y: np.ndarray, scores: np.ndarray, n: int, rng: np.random.Generator
+) -> np.ndarray:
     from sklearn.metrics import roc_auc_score
 
     aucs = []
@@ -159,7 +173,9 @@ def _bootstrap_auc(y: np.ndarray, scores: np.ndarray, n: int, rng: np.random.Gen
     return np.array(aucs)
 
 
-def _youden_threshold(fpr: np.ndarray, tpr: np.ndarray, thresholds: np.ndarray) -> float:
+def _youden_threshold(
+    fpr: np.ndarray, tpr: np.ndarray, thresholds: np.ndarray
+) -> float:
     idx = np.argmax(tpr - fpr)
     return float(thresholds[idx])
 
@@ -189,11 +205,21 @@ def _plot(
 
     # ROC curve
     ax = axes[0]
-    ax.plot(fpr, tpr, lw=2, color="#1f77b4",
-            label=f"GPL16791 zero-shot AUC = {auc:.4f}\n95% CI [{ci_lo:.4f}, {ci_hi:.4f}]")
+    ax.plot(
+        fpr,
+        tpr,
+        lw=2,
+        color="#1f77b4",
+        label=f"GPL16791 zero-shot AUC = {auc:.4f}\n95% CI [{ci_lo:.4f}, {ci_hi:.4f}]",
+    )
     ax.plot([0, 1], [0, 1], "k--", lw=0.8)
-    ax.axvline(fpr[np.argmax(tpr - fpr)], color="grey", linestyle=":", lw=0.9,
-               label=f"Youden threshold = {thresh:.3f}")
+    ax.axvline(
+        fpr[np.argmax(tpr - fpr)],
+        color="grey",
+        linestyle=":",
+        lw=0.9,
+        label=f"Youden threshold = {thresh:.3f}",
+    )
     ax.set_xlabel("False Positive Rate")
     ax.set_ylabel("True Positive Rate")
     ax.set_title(
@@ -210,13 +236,16 @@ def _plot(
     tissues_sorted = sorted(tissue_aucs.items(), key=lambda x: x[1], reverse=True)
     names = [t for t, _ in tissues_sorted]
     vals = [v for _, v in tissues_sorted]
-    colours = ["#2ca02c" if v >= 0.80 else "#1f77b4" if v >= 0.70 else "#ff7f0e"
-               for v in vals]
+    colours = [
+        "#2ca02c" if v >= 0.80 else "#1f77b4" if v >= 0.70 else "#ff7f0e" for v in vals
+    ]
     ax2.barh(list(range(len(names))), vals[::-1], color=colours[::-1], edgecolor="none")
     ax2.set_yticks(list(range(len(names))))
     ax2.set_yticklabels(names[::-1], fontsize=8)
     ax2.axvline(0.5, color="red", linestyle="--", lw=0.8, label="Chance")
-    ax2.axvline(auc, color="#1f77b4", linestyle="--", lw=0.9, label=f"Overall AUC={auc:.3f}")
+    ax2.axvline(
+        auc, color="#1f77b4", linestyle="--", lw=0.9, label=f"Overall AUC={auc:.3f}"
+    )
     ax2.set_xlabel("Zero-shot AUC-ROC per tissue (GPL16791)")
     ax2.set_title(
         "Per-tissue zero-shot AUC (GPL16791)\n"
@@ -244,12 +273,12 @@ def main() -> None:
 
     import matplotlib
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import (
         confusion_matrix,
         roc_auc_score,
         roc_curve,
     )
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     matplotlib.use("Agg")
 
@@ -289,7 +318,7 @@ def main() -> None:
         warnings.filterwarnings("ignore")
         clf.fit(X_tr, y_train)
 
-    TRAIN_CV_AUC = 0.9621  # 5-fold stratified CV from lgbm_core25_panel.py (step 2d)
+    TRAIN_CV_AUC = panel25_cv_auc()  # derived; see utils.panel25_cv_auc
     print(f"  Train 5-fold CV AUC: {TRAIN_CV_AUC:.4f}")
 
     print("\nZero-shot prediction on GPL16791 ...")
@@ -327,16 +356,25 @@ def main() -> None:
 
     # Plot
     print("\nGenerating plot ...")
-    _plot(y_test, test_scores, test_auc, ci_lo, ci_hi, TRAIN_CV_AUC, tissues_test, tissue_aucs)
+    _plot(
+        y_test,
+        test_scores,
+        test_auc,
+        ci_lo,
+        ci_hi,
+        TRAIN_CV_AUC,
+        tissues_test,
+        tissue_aucs,
+    )
 
     # Statistics file
     lines = [
         "Zero-shot Cross-platform Validation: GPL24676 → GPL16791",
         "=" * 65,
-        f"Training set  : GSE153960 GPL24676  n={len(y_train)}  ALS={y_train.sum()}  Ctrl={(y_train==0).sum()}",
-        f"Test set      : GSE153960 GPL16791  n={len(y_test)}  ALS={y_test.sum()}  Ctrl={(y_test==0).sum()}",
+        f"Training set  : GSE153960 GPL24676  n={len(y_train)}  ALS={y_train.sum()}  Ctrl={(y_train == 0).sum()}",
+        f"Test set      : GSE153960 GPL16791  n={len(y_test)}  ALS={y_test.sum()}  Ctrl={(y_test == 0).sum()}",
         f"Panel         : {len(panel_features)} genes",
-        f"Preprocessing : log1p → CTD compartment regression (erythrocyte/platelet/endothelial PC1)",
+        "Preprocessing : log1p → CTD compartment regression (erythrocyte/platelet/endothelial PC1)",
         "",
         f"Train 5-fold CV AUC        : {TRAIN_CV_AUC:.4f}",
         f"Test AUC (zero-shot)       : {test_auc:.4f}",

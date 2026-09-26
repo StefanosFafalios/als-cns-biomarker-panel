@@ -19,6 +19,7 @@ is bounded.
 
 Outputs: compartment_regression_sensitivity.csv, .txt
 """
+
 from __future__ import annotations
 
 import json
@@ -42,13 +43,16 @@ _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 
-def _extract_panel(X: np.ndarray, feat_names: list[str], panel_features: list[str]) -> np.ndarray:
+def _extract_panel(
+    X: np.ndarray, feat_names: list[str], panel_features: list[str]
+) -> np.ndarray:
     fmap = {f: i for i, f in enumerate(feat_names)}
     return X[:, [fmap[f] for f in panel_features if f in fmap]]
 
 
 def _fit_lgbm(X, y):
-    from lightgbm import LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
+
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
@@ -61,10 +65,16 @@ def _fit_lgbm(X, y):
 def _fit_lr(X, y):
     from sklearn.linear_model import LogisticRegressionCV
     from sklearn.preprocessing import StandardScaler
+
     sc = StandardScaler().fit(X)
     clf = LogisticRegressionCV(
-        cv=5, solver="liblinear", penalty="l2", scoring="roc_auc",
-        max_iter=2000, random_state=42, refit=True,
+        cv=5,
+        solver="liblinear",
+        penalty="l2",
+        scoring="roc_auc",
+        max_iter=2000,
+        random_state=42,
+        refit=True,
     )
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -75,6 +85,7 @@ def _fit_lr(X, y):
 def _cv_scores(X, y, model_fn):
     """5-fold stratified CV scores for either lgbm or lr."""
     from sklearn.model_selection import StratifiedKFold
+
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     out = np.zeros(len(y))
     for tr, va in cv.split(X, y):
@@ -113,19 +124,26 @@ def main() -> None:
     print(f"  shapes: CTD-train {X_tr_ctd.shape}  raw-train {X_tr_raw.shape}")
 
     results = []
-    for cond_name, X_tr, X_te in [("+CTD", X_tr_ctd, X_te_ctd), ("raw", X_tr_raw, X_te_raw)]:
+    for cond_name, X_tr, X_te in [
+        ("+CTD", X_tr_ctd, X_te_ctd),
+        ("raw", X_tr_raw, X_te_raw),
+    ]:
         # In-cohort 5-fold CV
         for model_name, model_fn in [("LGBM", "lgbm"), ("LR_L2", "lr")]:
             cv_s = _cv_scores(X_tr, y_train, model_fn)
-            results.append({
-                "condition": cond_name,
-                "model": model_name,
-                "evaluation": "GPL24676_5foldCV",
-                "n": len(y_train),
-                "AUC": round(float(roc_auc_score(y_train, cv_s)), 4),
-                "brier": round(float(brier_score_loss(y_train, cv_s)), 4),
-                "log_loss": round(float(log_loss(y_train, np.clip(cv_s, 1e-7, 1 - 1e-7))), 4),
-            })
+            results.append(
+                {
+                    "condition": cond_name,
+                    "model": model_name,
+                    "evaluation": "GPL24676_5foldCV",
+                    "n": len(y_train),
+                    "AUC": round(float(roc_auc_score(y_train, cv_s)), 4),
+                    "brier": round(float(brier_score_loss(y_train, cv_s)), 4),
+                    "log_loss": round(
+                        float(log_loss(y_train, np.clip(cv_s, 1e-7, 1 - 1e-7))), 4
+                    ),
+                }
+            )
 
         # Zero-shot
         lgbm = _fit_lgbm(X_tr, y_train)
@@ -134,15 +152,19 @@ def main() -> None:
         te_s_lr = lr.predict_proba(sc.transform(X_te))[:, 1]
 
         for model_name, te_s in [("LGBM", te_s_lgbm), ("LR_L2", te_s_lr)]:
-            results.append({
-                "condition": cond_name,
-                "model": model_name,
-                "evaluation": "GPL16791_zeroshot",
-                "n": len(y_test),
-                "AUC": round(float(roc_auc_score(y_test, te_s)), 4),
-                "brier": round(float(brier_score_loss(y_test, te_s)), 4),
-                "log_loss": round(float(log_loss(y_test, np.clip(te_s, 1e-7, 1 - 1e-7))), 4),
-            })
+            results.append(
+                {
+                    "condition": cond_name,
+                    "model": model_name,
+                    "evaluation": "GPL16791_zeroshot",
+                    "n": len(y_test),
+                    "AUC": round(float(roc_auc_score(y_test, te_s)), 4),
+                    "brier": round(float(brier_score_loss(y_test, te_s)), 4),
+                    "log_loss": round(
+                        float(log_loss(y_test, np.clip(te_s, 1e-7, 1 - 1e-7))), 4
+                    ),
+                }
+            )
 
     df = pd.DataFrame(results)
     df.to_csv(SCRIPT_DIR / "compartment_regression_sensitivity.csv", index=False)
@@ -152,13 +174,24 @@ def main() -> None:
     delta_rows = []
     for ev in ("GPL24676_5foldCV", "GPL16791_zeroshot"):
         for mdl in ("LGBM", "LR_L2"):
-            a = df[(df["condition"] == "+CTD") & (df["evaluation"] == ev) & (df["model"] == mdl)].iloc[0]
-            b = df[(df["condition"] == "raw") & (df["evaluation"] == ev) & (df["model"] == mdl)].iloc[0]
-            delta_rows.append({
-                "evaluation": ev, "model": mdl,
-                "dAUC_ctd_minus_raw": round(a["AUC"] - b["AUC"], 4),
-                "dBrier_ctd_minus_raw": round(a["brier"] - b["brier"], 4),
-            })
+            a = df[
+                (df["condition"] == "+CTD")
+                & (df["evaluation"] == ev)
+                & (df["model"] == mdl)
+            ].iloc[0]
+            b = df[
+                (df["condition"] == "raw")
+                & (df["evaluation"] == ev)
+                & (df["model"] == mdl)
+            ].iloc[0]
+            delta_rows.append(
+                {
+                    "evaluation": ev,
+                    "model": mdl,
+                    "dAUC_ctd_minus_raw": round(a["AUC"] - b["AUC"], 4),
+                    "dBrier_ctd_minus_raw": round(a["brier"] - b["brier"], 4),
+                }
+            )
     delta_df = pd.DataFrame(delta_rows)
     print("\n+CTD minus raw (a positive AUC delta means CTD helps):")
     print(delta_df.to_string(index=False))
@@ -182,7 +215,7 @@ def main() -> None:
         "    needs to be refitted in a CV-aware manner.",
     ]
     (SCRIPT_DIR / "compartment_regression_sensitivity.txt").write_text("\n".join(lines))
-    print(f"\nSaved -> compartment_regression_sensitivity.{{csv,txt}}")
+    print("\nSaved -> compartment_regression_sensitivity.{csv,txt}")
 
 
 if __name__ == "__main__":

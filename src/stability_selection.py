@@ -17,6 +17,7 @@ Outputs:
   stability_selection_statistics.txt
   stability_selection.png
 """
+
 from __future__ import annotations
 
 import json
@@ -59,11 +60,14 @@ def _load_sfm_matrix() -> tuple[np.ndarray, list[str]]:
 
 
 def _bootstrap_iteration(
-    X: np.ndarray, y: np.ndarray, rng: np.random.Generator,
-    params: dict, sfm_features: list[str],
+    X: np.ndarray,
+    y: np.ndarray,
+    rng: np.random.Generator,
+    params: dict,
+    sfm_features: list[str],
 ) -> set[str]:
-    from lightgbm import LGBMClassifier
     import shap
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     # Stratified resample
     pos_idx = np.where(y == 1)[0]
@@ -91,10 +95,11 @@ def _bootstrap_iteration(
 def main() -> None:
     print("Loading SFM matrix and labels ...")
     X, sfm_features = _load_sfm_matrix()
-    (ds,) = load_dataset("GSE153960", platform="GPL24676",
-                         resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
+    )
     y = ds.y.values.astype(int)
-    print(f"  X: {X.shape}  ALS={int(y.sum())}  Ctrl={len(y)-int(y.sum())}")
+    print(f"  X: {X.shape}  ALS={int(y.sum())}  Ctrl={len(y) - int(y.sum())}")
 
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
@@ -110,6 +115,7 @@ def main() -> None:
     rng = np.random.default_rng(RANDOM_STATE)
     counts: dict[str, int] = {}
     import time
+
     print(f"\nRunning {N_BOOTSTRAP} bootstrap iterations ...")
     t_start = time.time()
     for b in range(N_BOOTSTRAP):
@@ -117,33 +123,44 @@ def main() -> None:
         for f in top:
             counts[f] = counts.get(f, 0) + 1
         if (b + 1) % 10 == 0:
-            print(f"  bootstrap {b+1}/{N_BOOTSTRAP}  elapsed: {time.time()-t_start:.1f}s", flush=True)
+            print(
+                f"  bootstrap {b + 1}/{N_BOOTSTRAP}  elapsed: {time.time() - t_start:.1f}s",
+                flush=True,
+            )
 
     # Build frequency table
     rows = []
     for f, c in counts.items():
-        rows.append({
-            "feature": f,
-            "symbol": panel_sym.get(f, ""),
-            "selection_freq": c / N_BOOTSTRAP,
-            "n_selected": c,
-            "is_panel": f in panel_features,
-        })
+        rows.append(
+            {
+                "feature": f,
+                "symbol": panel_sym.get(f, ""),
+                "selection_freq": c / N_BOOTSTRAP,
+                "n_selected": c,
+                "is_panel": f in panel_features,
+            }
+        )
     df = pd.DataFrame(rows).sort_values("selection_freq", ascending=False)
     df.to_csv(SCRIPT_DIR / "stability_selection.csv", index=False)
-    print(f"\nTop-50 features by selection frequency:")
+    print("\nTop-50 features by selection frequency:")
     print(df.head(50).to_string(index=False))
 
     # Panel coverage
     panel_freq = df[df["is_panel"]]
     print(f"\nPanel gene selection frequencies (n_panel_total={len(panel_features)}):")
     for _, row in panel_freq.iterrows():
-        print(f"  {row['symbol']:<16}  freq={row['selection_freq']:.2f}  n={int(row['n_selected'])}/{N_BOOTSTRAP}")
+        print(
+            f"  {row['symbol']:<16}  freq={row['selection_freq']:.2f}  n={int(row['n_selected'])}/{N_BOOTSTRAP}"
+        )
 
     n_panel_seen = len(panel_freq)
-    print(f"\nPanel genes ever selected in {N_BOOTSTRAP} bootstraps: {n_panel_seen}/{len(panel_features)}")
+    print(
+        f"\nPanel genes ever selected in {N_BOOTSTRAP} bootstraps: {n_panel_seen}/{len(panel_features)}"
+    )
     high_stab = panel_freq[panel_freq["selection_freq"] >= 0.80]
-    mid_stab = panel_freq[(panel_freq["selection_freq"] >= 0.50) & (panel_freq["selection_freq"] < 0.80)]
+    mid_stab = panel_freq[
+        (panel_freq["selection_freq"] >= 0.50) & (panel_freq["selection_freq"] < 0.80)
+    ]
     low_stab = panel_freq[panel_freq["selection_freq"] < 0.50]
     print(f"  High stability (≥80%): {len(high_stab)} — {high_stab['symbol'].tolist()}")
     print(f"  Mid stability (50-80%): {len(mid_stab)} — {mid_stab['symbol'].tolist()}")
@@ -157,19 +174,33 @@ def main() -> None:
         "Panel gene selection frequencies:",
     ]
     for _, row in panel_freq.iterrows():
-        flag = "HIGH" if row["selection_freq"] >= 0.80 else "MID" if row["selection_freq"] >= 0.50 else "LOW"
-        lines.append(f"  [{flag:<4}] {row['symbol']:<16}  freq={row['selection_freq']:.2f}")
+        flag = (
+            "HIGH"
+            if row["selection_freq"] >= 0.80
+            else "MID"
+            if row["selection_freq"] >= 0.50
+            else "LOW"
+        )
+        lines.append(
+            f"  [{flag:<4}] {row['symbol']:<16}  freq={row['selection_freq']:.2f}"
+        )
 
     lines += [
         "",
         f"High stability (selected in ≥80% of bootstraps; n={len(high_stab)}):",
-        "  " + ", ".join(sorted(high_stab["symbol"].tolist())) if not high_stab.empty else "  (none)",
+        "  " + ", ".join(sorted(high_stab["symbol"].tolist()))
+        if not high_stab.empty
+        else "  (none)",
         "",
         f"Mid stability (50-80%; n={len(mid_stab)}):",
-        "  " + ", ".join(sorted(mid_stab["symbol"].tolist())) if not mid_stab.empty else "  (none)",
+        "  " + ", ".join(sorted(mid_stab["symbol"].tolist()))
+        if not mid_stab.empty
+        else "  (none)",
         "",
         f"Low stability (<50%; n={len(low_stab)}):",
-        "  " + ", ".join(sorted(low_stab["symbol"].tolist())) if not low_stab.empty else "  (none)",
+        "  " + ", ".join(sorted(low_stab["symbol"].tolist()))
+        if not low_stab.empty
+        else "  (none)",
         "",
         "Top-30 candidates by stability across ALL bootstraps (not restricted to panel):",
     ]
@@ -183,15 +214,24 @@ def main() -> None:
     # Plot
     fig, ax = plt.subplots(figsize=(10, max(6, len(panel_freq) * 0.3 + 2)))
     panel_freq_sorted = panel_freq.sort_values("selection_freq")
-    colors = ["#d62728" if f < 0.50 else "#ff7f0e" if f < 0.80 else "#2ca02c"
-              for f in panel_freq_sorted["selection_freq"]]
-    ax.barh(panel_freq_sorted["symbol"], panel_freq_sorted["selection_freq"],
-            color=colors, edgecolor="black", lw=0.5)
+    colors = [
+        "#d62728" if f < 0.50 else "#ff7f0e" if f < 0.80 else "#2ca02c"
+        for f in panel_freq_sorted["selection_freq"]
+    ]
+    ax.barh(
+        panel_freq_sorted["symbol"],
+        panel_freq_sorted["selection_freq"],
+        color=colors,
+        edgecolor="black",
+        lw=0.5,
+    )
     ax.axvline(0.80, ls="--", color="black", lw=0.6, label="80% (high stability)")
     ax.axvline(0.50, ls=":", color="black", lw=0.6, label="50% (mid stability)")
     ax.set_xlabel("Selection frequency across 100 bootstrap iterations")
     ax.set_xlim(0, 1)
-    ax.set_title(f"Panel gene stability — top-25 SHAP selection across {N_BOOTSTRAP} bootstraps")
+    ax.set_title(
+        f"Panel gene stability — top-25 SHAP selection across {N_BOOTSTRAP} bootstraps"
+    )
     ax.legend(loc="lower right", fontsize=8)
     plt.tight_layout()
     fig.savefig(SCRIPT_DIR / "stability_selection.png", dpi=150, bbox_inches="tight")

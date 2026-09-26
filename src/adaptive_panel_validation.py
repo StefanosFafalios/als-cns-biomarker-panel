@@ -37,15 +37,15 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 import matplotlib  # noqa: E402
-from utils import load_dataset  # noqa: E402
+from utils import load_dataset, zero_shot_scale  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 import requests  # noqa: E402
-from lightgbm import LGBMClassifier  # noqa: E402
 from sklearn.metrics import roc_auc_score, roc_curve  # noqa: E402
 from sklearn.preprocessing import StandardScaler  # noqa: E402
+from utils import PanelLGBMClassifier as LGBMClassifier  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 ALS_DIR_RES = ALS_DIR / "resources"
@@ -236,11 +236,15 @@ def _load_train() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 
 def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
-    """GSE76220 log1p RPKM — (X_log1p, gene_symbols, y)."""
+    """GSE76220 log2-RPKM as-is — (X, gene_symbols, y). No log1p: already log-scale."""
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR_RES)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        X = np.log1p(ds.X.values.astype(np.float32))
+        # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+        # despite the 'RPKM' filename). A further log1p would null every value
+        # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+        # log-base and length-normalisation differences vs log1p(counts) training.
+        X = ds.X.values.astype(np.float32)
     return X, list(ds.X.columns), ds.y.values.astype(int)
 
 
@@ -258,8 +262,9 @@ def _download_if_needed(url: str, dest: Path) -> None:
 
 
 def _parse_122649_soft() -> dict[str, str]:
-    r = requests.get(_SOFT_URL_122649, timeout=60, stream=True)
-    content = gzip.decompress(r.content).decode("utf-8", errors="ignore")
+    from utils import geo_soft_text
+
+    content = geo_soft_text("GSE122649")
     samples = re.split(r"\^SAMPLE", content)[1:]
     meta: dict[str, str] = {}
     for s in samples:
@@ -468,9 +473,12 @@ def _run_cohort(
         X_te_log = np.column_stack([X_cohort_log[:, e["te_col"]] for e in entries])
         n_genes = X_tr_log.shape[1]
 
-        scaler = StandardScaler()
-        X_tr_sc = scaler.fit_transform(X_tr_log).astype(np.float32)
-        X_te_sc = scaler.transform(X_te_log).astype(np.float32)
+        # zero_shot_scale: same-scale cohorts use the training scaler; log-scale
+        # cohorts (GSE76220) are standardised within themselves. Fitting the train
+        # scaler on log2-RPKM pins AUC to 0.5 silently.
+        X_tr_sc, X_te_sc = zero_shot_scale(X_tr_log, X_te_log, cohort_name)
+        X_tr_sc = X_tr_sc.astype(np.float32)
+        X_te_sc = X_te_sc.astype(np.float32)
 
         # Zero-shot: train on GPL24676, predict on cohort
         clf = LGBMClassifier(**{**params, "verbose": -1})

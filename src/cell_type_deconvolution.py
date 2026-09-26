@@ -32,7 +32,7 @@ import pandas as pd
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import _load_suppl_expression, _parse_series_matrix
+from utils import _load_suppl_expression, _parse_series_matrix, critical_panel_symbols
 
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
@@ -45,31 +45,18 @@ _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 
 RANDOM_STATE = 42
 
-# 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean=0.9029; equal cohort weights)
-# Pseudogenes (HERC2P8, SMG1P5) and snoRNA (SNORD97) excluded from cell-type analyses
+# Protein-coding members of the critical panel, read from panel_critical.csv.
+# Pseudogenes and snoRNAs carry no cell-type marker interpretation and are excluded.
+# Size and W.mean are deliberately not restated here: both move whenever the
+# stopping rule is rerun, and a stale number in a comment outlives the run that
+# produced it.
 _CRITICAL_CODING_GENES: frozenset[str] = frozenset(
-    {
-        "FCN3",
-        "PROS1",
-        "ANGPT2",
-        "TINAGL1",
-        "CKMT2",
-        "CLDN5",
-        "NR4A1",
-        "SOHLH2",
-        "HEXB",
-        "MCEE",
-        "SLC37A2",
-        "SERTAD1",
-    }
+    critical_panel_symbols(protein_coding_only=True)
 )
 
 # Genes that receive a cell-type composition-driver label in the manuscript
-# (tab:bio_evidence): the 12 critical-panel members plus EMP1, which is
-# greedy-dropped from the operational panel but retained as a strict-CI-core
-# biological / drug-target candidate.
-_DECONV_GENES: frozenset[str] = _CRITICAL_CODING_GENES | {"EMP1"}
+# (tab:bio_evidence).
+_DECONV_GENES: frozenset[str] = _CRITICAL_CODING_GENES
 
 # ---------------------------------------------------------------------------
 # Cell-type marker sets (consensus from Zhang 2016, Allen Brain, Jurga 2021)
@@ -313,6 +300,17 @@ def main() -> None:
     # ------------------------------------------------------------------
     print("\n[4] ALS vs Control — Mann-Whitney U per cell type ...")
     cell_types = [ct for ct in _MARKERS if not score_df[ct].isna().all()]
+    # Fail loudly here rather than 100 lines later. When the MyGeneInfo lookup in
+    # step 2 fails (it returns 504 under load), every marker set maps to zero
+    # genes, every module score is NaN, and this list comes back empty. The old
+    # behaviour was to carry on and die in `corr_df.pivot` with
+    # `KeyError: 'symbol'` -- an error that says nothing about the real cause.
+    if not cell_types:
+        raise SystemExit(
+            "no cell type has any mapped marker gene: the MyGeneInfo symbol "
+            "lookup in step 2 returned nothing (check the [WARN] line above). "
+            "This is a transient upstream failure, not a data problem -- rerun."
+        )
     stats_lines: list[str] = [
         "Cell-type Deconvolution — GSE153960 GPL24676",
         "=" * 60,
@@ -465,7 +463,7 @@ def main() -> None:
 
     fig_v.suptitle(
         "Cell-type module scores — ALS vs Non-neurological Control\n"
-        "GSE153960 GPL24676 (n=874)",
+        f"GSE153960 GPL24676 (n={len(als_idx) + len(ctrl_idx)})",
         fontsize=12,
     )
     fig_v.tight_layout()
@@ -502,8 +500,10 @@ def main() -> None:
                 )
 
     plt.colorbar(im, ax=ax_h, label="Spearman ρ", shrink=0.6)
+    # Correlations use every profiled sample (see step 5), not the 874 ALS/control
+    # subset the violins show; the title said n=874 until Step 82.
     ax_h.set_title(
-        "Panel gene × cell-type Spearman ρ\nGSE153960 GPL24676 (n=874)",
+        f"Panel gene × cell-type Spearman ρ\nGSE153960 GPL24676 (n={X_log.shape[0]})",
         fontsize=10,
     )
     fig_h.tight_layout()

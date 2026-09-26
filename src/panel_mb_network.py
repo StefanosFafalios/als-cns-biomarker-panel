@@ -39,7 +39,7 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import critical_panel_symbols, load_dataset  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -52,16 +52,14 @@ _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 
 PLATFORM_PRIMARY = "GPL24676"
 PLATFORM_REPLICATE = "GPL16791"
-LASSO_CV = 5           # folds for LassoCV alpha tuning
-LASSO_JOBS = -1        # parallel jobs (-1 = all cores)
+LASSO_CV = 5  # folds for LassoCV alpha tuning
+LASSO_JOBS = -1  # parallel jobs (-1 = all cores)
 REPL_R_THRESHOLD = 0.10  # minimum |Pearson r| in GPL16791 for replication
 
-# 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean = 0.9029; equal cohort weights)
-_CRITICAL_CODING_GENES: frozenset[str] = frozenset({
-    "FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
-    "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1",
-})
+# Protein-coding members of the critical panel (see panel_critical.csv)
+_CRITICAL_CODING_GENES: frozenset[str] = frozenset(
+    critical_panel_symbols(protein_coding_only=True)
+)
 
 # ORA libraries
 _ORA_LIBRARIES: list[str] = [
@@ -117,7 +115,9 @@ def _load_gpl16791_sfm(sfm_features: list[str]) -> np.ndarray | None:
 
     n_kept = sum(kept_mask)
     if n_kept < len(sfm_features) * 0.5:
-        print(f"  [warn] GPL16791 covers only {n_kept}/{len(sfm_features)} SFM features")
+        print(
+            f"  [warn] GPL16791 covers only {n_kept}/{len(sfm_features)} SFM features"
+        )
         return None
 
     X_raw = ds.X.values.astype(np.float32)
@@ -273,7 +273,9 @@ def _run_ora(symbols: list[str]) -> pd.DataFrame:
             print(f"    [warn] ORA {lib}: {exc}")
     if not rows:
         return pd.DataFrame()
-    return pd.concat(rows, ignore_index=True).sort_values("Combined Score", ascending=False)
+    return pd.concat(rows, ignore_index=True).sort_values(
+        "Combined Score", ascending=False
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -384,27 +386,36 @@ def main() -> None:
         t0 = time.time()
         nb_cols, alpha = _lasso_neighbours(X_primary, target_col)
         elapsed = time.time() - t0
-        print(f"    neighbours={len(nb_cols)},  alpha={alpha:.5f},  {elapsed:.1f}s", flush=True)
+        print(
+            f"    neighbours={len(nb_cols)},  alpha={alpha:.5f},  {elapsed:.1f}s",
+            flush=True,
+        )
 
         rep_cols: list[int] = []
         if X_replicate is not None:
-            rep_cols = _replicate_neighbours(X_replicate, target_col, nb_cols, X_primary)
+            rep_cols = _replicate_neighbours(
+                X_replicate, target_col, nb_cols, X_primary
+            )
             print(f"    replicated={len(rep_cols)}/{len(nb_cols)}", flush=True)
 
-        mb_records.append({
-            "symbol": sym,
-            "target_col": target_col,
-            "nb_cols": nb_cols,
-            "replicated_cols": rep_cols,
-            "lasso_alpha": alpha,
-        })
+        mb_records.append(
+            {
+                "symbol": sym,
+                "target_col": target_col,
+                "nb_cols": nb_cols,
+                "replicated_cols": rep_cols,
+                "lasso_alpha": alpha,
+            }
+        )
         all_nb_cols.update(nb_cols)
 
     print("\n[5] Annotating candidate symbols via mygene ...", flush=True)
     nb_bases = list({sfm_features[c].split(".")[0] for c in all_nb_cols})
     base_to_sym = _annotate_symbols(nb_bases)
     col_to_sym: dict[int, str] = {
-        col: base_to_sym.get(sfm_features[col].split(".")[0], sfm_features[col].split(".")[0])
+        col: base_to_sym.get(
+            sfm_features[col].split(".")[0], sfm_features[col].split(".")[0]
+        )
         for col in all_nb_cols
     }
 
@@ -417,31 +428,46 @@ def main() -> None:
             x = X_primary[:, col].astype(np.float64)
             y = X_primary[:, rec["target_col"]].astype(np.float64)
             r = float(np.corrcoef(x, y)[0, 1])
-            rows.append({
-                "panel_gene": sym,
-                "nb_gene": nb_sym,
-                "nb_feature": sfm_features[col],
-                "pearson_r": round(r, 4),
-                "replicated": col in rep_set,
-            })
+            rows.append(
+                {
+                    "panel_gene": sym,
+                    "nb_gene": nb_sym,
+                    "nb_feature": sfm_features[col],
+                    "pearson_r": round(r, 4),
+                    "replicated": col in rep_set,
+                }
+            )
 
-    results_df = pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=["panel_gene", "nb_gene", "nb_feature", "pearson_r", "replicated"]
+    results_df = (
+        pd.DataFrame(rows)
+        if rows
+        else pd.DataFrame(
+            columns=["panel_gene", "nb_gene", "nb_feature", "pearson_r", "replicated"]
+        )
     )
     out_csv = SCRIPT_DIR / "panel_mb_results.csv"
     results_df.to_csv(out_csv, index=False)
     print(f"  Saved → {out_csv.name}  ({len(results_df)} total edges)")
 
-    rep_df = results_df[results_df["replicated"]] if not results_df.empty else results_df
+    rep_df = (
+        results_df[results_df["replicated"]] if not results_df.empty else results_df
+    )
     out_rep = SCRIPT_DIR / "panel_mb_replicated.csv"
     rep_df.to_csv(out_rep, index=False)
     print(f"  Saved → {out_rep.name}  ({len(rep_df)} replicated edges)")
 
     print("\n[6] ORA on replicated neighbours ...", flush=True)
-    rep_symbols = sorted({
-        r for r in rep_df["nb_gene"].tolist()
-        if not str(r).startswith("ENSG") and not str(r).startswith("LOC")
-    }) if not rep_df.empty else []
+    rep_symbols = (
+        sorted(
+            {
+                r
+                for r in rep_df["nb_gene"].tolist()
+                if not str(r).startswith("ENSG") and not str(r).startswith("LOC")
+            }
+        )
+        if not rep_df.empty
+        else []
+    )
     print(f"  {len(rep_symbols)} candidate symbols")
     ora_df = _run_ora(rep_symbols) if rep_symbols else pd.DataFrame()
     if not ora_df.empty:
@@ -450,8 +476,13 @@ def main() -> None:
         print(f"  Saved → {out_ora.name}")
 
     print("\n[7] Plotting ...", flush=True)
-    _plot_network(mb_records, sym_to_col, sfm_features, col_to_sym,
-                  SCRIPT_DIR / "panel_mb_network.png")
+    _plot_network(
+        mb_records,
+        sym_to_col,
+        sfm_features,
+        col_to_sym,
+        SCRIPT_DIR / "panel_mb_network.png",
+    )
 
     print("\n[8] Writing statistics ...", flush=True)
     lines: list[str] = [
@@ -468,9 +499,16 @@ def main() -> None:
 
     for rec in mb_records:
         sym = rec["symbol"]
-        nb_syms = [col_to_sym.get(c, sfm_features[c].split(".")[0]) for c in rec["nb_cols"]]
-        rep_syms = [col_to_sym.get(c, sfm_features[c].split(".")[0]) for c in rec["replicated_cols"]]
-        sub = results_df[results_df["panel_gene"] == sym].sort_values("pearson_r", key=abs, ascending=False)
+        nb_syms = [
+            col_to_sym.get(c, sfm_features[c].split(".")[0]) for c in rec["nb_cols"]
+        ]
+        rep_syms = [
+            col_to_sym.get(c, sfm_features[c].split(".")[0])
+            for c in rec["replicated_cols"]
+        ]
+        sub = results_df[results_df["panel_gene"] == sym].sort_values(
+            "pearson_r", key=abs, ascending=False
+        )
         lines += [
             "─" * 55,
             f"Panel gene: {sym}   (LASSO α={rec['lasso_alpha']:.5f})",

@@ -9,8 +9,9 @@ Strategy
 1. Map the 25 core panel genes from Ensembl IDs to HGNC symbols using the
    annotation TSV produced by annotate_core25.py.
 2. Find which panel symbols are present in GSE76220 (gene-symbol keyed).
-3. For matched genes: apply log1p to both GPL24676 raw RSEM and GSE76220 RPKM.
-4. Fit a StandardScaler on the GPL24676 log1p values; apply to GSE76220.
+3. For matched genes: log1p the GPL24676 raw RSEM only. GSE76220 is already log2-scale.
+4. Per-gene standardise each cohort within itself (absorbs log-base and
+   length-normalisation differences between log1p counts and log2 RPKM).
 5. Train LightGBM (top-500 params, colsample_bytree=1.0) on all 874 GPL24676
    samples with the matched genes.
 6. Zero-shot predict on the 20 GSE76220 samples.
@@ -36,7 +37,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset
+from utils import load_dataset, panel25_cv_auc, zero_shot_scale
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -86,15 +87,20 @@ def _load_train() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 
 def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
-    """GSE76220 RPKM → log1p, return (X, gene_symbols, y).
+    """GSE76220 log2-RPKM, returned as-is: (X, gene_symbols, y).
 
-    Negative RPKM values produce NaN via log1p; LightGBM handles NaN
+    NOT log-transformed here. The file is named RPKM but holds log2-scale
+    values (-6.2..10.6, 63% negative); RPKM cannot be negative. LightGBM
     natively as missing, so they are preserved intentionally.
     """
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR / "resources")
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        X = np.log1p(ds.X.values.astype(np.float32))
+        # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+        # despite the 'RPKM' filename). A further log1p would null every value
+        # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+        # log-base and length-normalisation differences vs log1p(counts) training.
+        X = ds.X.values.astype(np.float32)
     return X, list(ds.X.columns), ds.y.values.astype(int)
 
 
@@ -137,8 +143,8 @@ def _loo_auc(X: np.ndarray, y: np.ndarray, params: dict) -> tuple[float, np.ndar
 
     Overrides min_child_samples=1 so LightGBM can split on n_train=19.
     """
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     loo_params = {**params, "min_child_samples": 1, "verbose": -1}
     scores = np.zeros(len(y))
@@ -227,9 +233,8 @@ def main() -> None:
 
     import matplotlib
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
-    from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     matplotlib.use("Agg")
 
@@ -285,9 +290,12 @@ def main() -> None:
     X_tr = np.column_stack([X_train_log[:, c] for _, _, c, _ in matched])
     X_te = np.column_stack([X_test_log[:, c] for _, _, _, c in matched])
 
-    scaler = StandardScaler()
-    X_tr_sc = scaler.fit_transform(X_tr).astype(np.float32)
-    X_te_sc = scaler.transform(X_te).astype(np.float32)
+    # Per-cohort standardisation via the shared helper. The training scaler
+    # cannot be reused: GSE76220 is log2(RPKM), so applying it drives every
+    # sample below all split thresholds and AUC pins to exactly 0.5000.
+    _tr, _te = zero_shot_scale(X_tr, X_te, "GSE76220")
+    X_tr_sc = _tr.astype(np.float32)
+    X_te_sc = _te.astype(np.float32)
 
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
@@ -298,7 +306,7 @@ def main() -> None:
         warnings.filterwarnings("ignore")
         clf.fit(X_tr_sc, y_train)
 
-    TRAIN_CV_AUC = 0.9621
+    TRAIN_CV_AUC = panel25_cv_auc()  # derived; see utils.panel25_cv_auc
     test_scores_zero = clf.predict_proba(X_te_sc)[:, 1]
     auc_zero = float(roc_auc_score(y_test, test_scores_zero))
     rng = np.random.default_rng(RANDOM_STATE)
@@ -332,9 +340,9 @@ def main() -> None:
 
     X_tr_b = np.column_stack([X_train_log[:, c] for _, _, c, _ in ext_matched])
     X_te_b = np.column_stack([X_test_log[:, c] for _, _, _, c in ext_matched])
-    scaler_b = StandardScaler()
-    X_tr_b_sc = scaler_b.fit_transform(X_tr_b).astype(np.float32)
-    X_te_b_sc = scaler_b.transform(X_te_b).astype(np.float32)
+    _tr_b, _te_b = zero_shot_scale(X_tr_b, X_te_b, "GSE76220")
+    X_tr_b_sc = _tr_b.astype(np.float32)
+    X_te_b_sc = _te_b.astype(np.float32)
 
     clf_b = LGBMClassifier(**params)
     with warnings.catch_warnings():
@@ -434,7 +442,7 @@ def main() -> None:
         "Replacement gene mapping:",
         *repl_lines_txt,
         "",
-        "Preprocessing: log1p → StandardScaler fit on GPL24676",
+        "Preprocessing: log1p (GPL24676 only) → per-cohort StandardScaler",
         "",
         f"Train 5-fold CV AUC              : {TRAIN_CV_AUC:.4f}",
         f"Zero-shot AUC (A, {len(matched)} native)      : {auc_zero:.4f}  [{ci_lo:.4f}, {ci_hi:.4f}]",

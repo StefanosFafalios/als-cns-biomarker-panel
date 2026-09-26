@@ -12,6 +12,7 @@ Compares discrimination on:
 
 Outputs: lr_baseline_summary.csv, lr_baseline_statistics.txt
 """
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,6 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 from external_validation_gpl16791 import (  # noqa: E402
-    _ctd_residualise,
     _load_platform,
 )
 
@@ -35,14 +35,17 @@ _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 
-def _extract_panel(X: np.ndarray, feat_names: list[str], panel_features: list[str]) -> np.ndarray:
+def _extract_panel(
+    X: np.ndarray, feat_names: list[str], panel_features: list[str]
+) -> np.ndarray:
     feat_to_idx = {f: i for i, f in enumerate(feat_names)}
     cols = [feat_to_idx[f] for f in panel_features if f in feat_to_idx]
     return X[:, cols]
 
 
 def _fit_lgbm(X_tr: np.ndarray, y_train: np.ndarray):
-    from lightgbm import LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
+
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
@@ -58,8 +61,13 @@ def _fit_lr(X_tr: np.ndarray, y_train: np.ndarray):
 
     scaler = StandardScaler().fit(X_tr)
     clf = LogisticRegressionCV(
-        cv=5, solver="liblinear", penalty="l2", scoring="roc_auc",
-        max_iter=2000, random_state=42, refit=True,
+        cv=5,
+        solver="liblinear",
+        penalty="l2",
+        scoring="roc_auc",
+        max_iter=2000,
+        random_state=42,
+        refit=True,
     )
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -107,16 +115,20 @@ def main() -> None:
         ("GPL16791_zeroshot", y_test, lgbm_te_scores, lr_te_scores),
     ]:
         for model_name, s in [("LGBM", s_lgbm), ("LR_L2", s_lr)]:
-            results.append({
-                "cohort": label,
-                "model": model_name,
-                "n": len(y),
-                "AUC": round(float(roc_auc_score(y, s)), 4),
-                "brier": round(float(brier_score_loss(y, s)), 4),
-                "log_loss": round(float(log_loss(y, np.clip(s, 1e-7, 1 - 1e-7))), 4),
-                "mean_pos": round(float(s[y == 1].mean()), 4),
-                "mean_neg": round(float(s[y == 0].mean()), 4),
-            })
+            results.append(
+                {
+                    "cohort": label,
+                    "model": model_name,
+                    "n": len(y),
+                    "AUC": round(float(roc_auc_score(y, s)), 4),
+                    "brier": round(float(brier_score_loss(y, s)), 4),
+                    "log_loss": round(
+                        float(log_loss(y, np.clip(s, 1e-7, 1 - 1e-7))), 4
+                    ),
+                    "mean_pos": round(float(s[y == 1].mean()), 4),
+                    "mean_neg": round(float(s[y == 0].mean()), 4),
+                }
+            )
 
     df = pd.DataFrame(results)
     df.to_csv(SCRIPT_DIR / "lr_baseline_summary.csv", index=False)

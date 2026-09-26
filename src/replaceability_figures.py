@@ -17,17 +17,17 @@
     pseudogene / ncRNA / artifact) — shows that the "module density" varies
     not just in raw count but in candidate quality.
 """
+
 from __future__ import annotations
 
-import gzip
 import json
 import re
 import sys
-import tarfile
 import warnings
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,15 +37,14 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
-
 # Reuse loaders from the substitution script
 from cross_cohort_substitution import (  # noqa: E402
+    _ensemble_scores,
     _load_gpl24676_ctd,
     _load_gse76220,
     _load_gse122649,
-    _ensemble_scores,
 )
+from utils import critical_panel_symbols, zero_shot_scale  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -53,13 +52,11 @@ _REPL_CSV = SCRIPT_DIR / "gene_replacement_results.csv"
 _REPL_CLEAN = SCRIPT_DIR / "gene_replacement_clean_statistics.txt"
 _ITER_STAT = SCRIPT_DIR / "iterative_panel_elimination_statistics.txt"
 
-# 15-gene critical panel indices in the 25-gene ordered panel
-_CRITICAL_IDX = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
-
 
 # ---------------------------------------------------------------------------
 # Data ingest
 # ---------------------------------------------------------------------------
+
 
 def _parse_drop_steps(text: str) -> dict[str, int]:
     """Parse iterative_panel_elimination_statistics.txt for per-gene drop step.
@@ -116,50 +113,101 @@ def _parse_clean_repl(text: str) -> dict[str, float]:
 # Figure 1: replaceability vs greedy drop step
 # ---------------------------------------------------------------------------
 
+
 def fig_repl_vs_greedy() -> tuple[Path, dict]:
     drop_steps = _parse_drop_steps(_ITER_STAT.read_text())
     repl = _parse_clean_repl(_REPL_CLEAN.read_text())
 
     # PC subset of the 25 panel
     pc_genes = [
-        "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-        "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+        "MECOM",
+        "SERTAD1",
+        "FCN3",
+        "PROS1",
+        "ANGPT2",
+        "EMP1",
+        "TINAGL1",
+        "CKMT2",
+        "VWF",
+        "CLDN5",
+        "NR4A1",
+        "SOHLH2",
+        "HEXB",
+        "MCEE",
+        "SLC37A2",
     ]
-    critical_pc = {"FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
-                    "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1"}
+    critical_pc = set(critical_panel_symbols(protein_coding_only=True))
 
     points = []
     for g in pc_genes:
         if g in drop_steps and g in repl:
-            points.append({
-                "gene": g, "step": drop_steps[g], "repl": repl[g],
-                "is_critical": g in critical_pc,
-            })
+            points.append(
+                {
+                    "gene": g,
+                    "step": drop_steps[g],
+                    "repl": repl[g],
+                    "is_critical": g in critical_pc,
+                }
+            )
 
     fig, ax = plt.subplots(figsize=(8.5, 6.5))
     for p in points:
         colour = "#C62828" if p["is_critical"] else "#888"
         marker = "o" if p["is_critical"] else "s"
-        ax.scatter(p["repl"], p["step"], s=110, c=colour, marker=marker,
-                    edgecolor="black", lw=0.6, zorder=3)
+        ax.scatter(
+            p["repl"],
+            p["step"],
+            s=110,
+            c=colour,
+            marker=marker,
+            edgecolor="black",
+            lw=0.6,
+            zorder=3,
+        )
         # label offset
-        ax.annotate(p["gene"], (p["repl"], p["step"]),
-                     xytext=(5, 5), textcoords="offset points", fontsize=8.5)
+        ax.annotate(
+            p["gene"],
+            (p["repl"], p["step"]),
+            xytext=(5, 5),
+            textcoords="offset points",
+            fontsize=8.5,
+        )
 
-    # Quadrant guides
-    ax.axhline(10.5, color="grey", ls="--", lw=0.7,
-                label="Greedy peak k=15 (drop step 10/11 boundary)")
+    # Quadrant guides. The retained-panel boundary follows the panel size, so a
+    # rerun of the stopping rule moves the line instead of silently mislabelling it.
+    k_crit = len(critical_panel_symbols())
+    n_dropped = len(pd.read_csv(_PANEL_CSV)) - k_crit
+    ax.axhline(
+        n_dropped + 0.5,
+        color="grey",
+        ls="--",
+        lw=0.7,
+        label=(
+            f"Greedy peak k={k_crit} (drop step {n_dropped}/{n_dropped + 1} boundary)"
+        ),
+    )
     ax.axvline(25, color="grey", ls=":", lw=0.7, label="Replaceability = 25%")
 
     ax.set_xlabel("Genome-wide replaceability (% of non-artifact candidates valid)")
-    ax.set_ylabel("Greedy backward elimination drop step\n"
-                    "(later = harder to drop = more anchored)")
+    ax.set_ylabel(
+        "Greedy backward elimination drop step\n"
+        "(later = harder to drop = more anchored)"
+    )
+    # Derived from `points`, never hardcoded: panel membership changes whenever
+    # the greedy stopping rule is rerun, and a baked-in gene list goes stale
+    # silently (it did once already).
+    low = sorted([p for p in points if p["repl"] < 25], key=lambda p: p["repl"])
+    top3 = sorted(points, key=lambda p: -p["repl"])[:3]
+    n_crit = len(critical_pc)
     ax.set_title(
         "Convergence of two independent criteria — replaceability and "
         "cross-cohort greedy elimination\n"
-        "The 4 hardest-to-replace genes (CKMT2, NR4A1, TINAGL1, SERTAD1; red) "
-        "are all in the 15-crit panel; the 3 most-replaceable PC genes "
-        "(MECOM, VWF, EMP1) are all dropped early.",
+        f"{len(low)} hardest-to-replace genes "
+        f"({', '.join(p['gene'] for p in low)}; <25%): "
+        f"{sum(p['is_critical'] for p in low)}/{len(low)} in the "
+        f"{n_crit}-PC critical panel; 3 most-replaceable PC genes "
+        f"({', '.join(p['gene'] for p in top3)}): "
+        f"{sum(not p['is_critical'] for p in top3)}/3 dropped.",
         fontsize=9,
     )
     ax.grid(alpha=0.3)
@@ -177,14 +225,27 @@ def fig_repl_vs_greedy() -> tuple[Path, dict]:
 # Figure 2: candidate-AUC distribution boxplot per PC panel gene
 # ---------------------------------------------------------------------------
 
+
 def fig_candidate_boxplot() -> tuple[Path, dict]:
     df = pd.read_csv(_REPL_CSV)
     pc_genes = [
-        "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-        "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+        "MECOM",
+        "SERTAD1",
+        "FCN3",
+        "PROS1",
+        "ANGPT2",
+        "EMP1",
+        "TINAGL1",
+        "CKMT2",
+        "VWF",
+        "CLDN5",
+        "NR4A1",
+        "SOHLH2",
+        "HEXB",
+        "MCEE",
+        "SLC37A2",
     ]
-    critical_pc = {"FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
-                    "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1"}
+    critical_pc = set(critical_panel_symbols(protein_coding_only=True))
 
     # Use only candidate AUCs (column "replacement_auc"); no baseline shift here.
     data, labels, colours = [], [], []
@@ -199,22 +260,31 @@ def fig_candidate_boxplot() -> tuple[Path, dict]:
         colours.append("#C62828" if g in critical_pc else "#888")
 
     fig, ax = plt.subplots(figsize=(11, 6.5))
-    bp = ax.boxplot(data, labels=labels, patch_artist=True, showfliers=False,
-                     widths=0.7)
+    bp = ax.boxplot(
+        data, labels=labels, patch_artist=True, showfliers=False, widths=0.7
+    )
     for patch, c in zip(bp["boxes"], colours):
         patch.set_facecolor(c)
         patch.set_alpha(0.6)
     # Baseline reference
     baseline = 0.9469  # fast-LGBM baseline used by gene_replacement.py
     threshold = baseline - 0.002
-    ax.axhline(baseline, color="black", ls="--", lw=0.8, label=f"Baseline AUC = {baseline:.4f}")
-    ax.axhline(threshold, color="grey", ls=":", lw=0.7,
-                label=f"Non-inferiority cutoff = {threshold:.4f}")
+    ax.axhline(
+        baseline, color="black", ls="--", lw=0.8, label=f"Baseline AUC = {baseline:.4f}"
+    )
+    ax.axhline(
+        threshold,
+        color="grey",
+        ls=":",
+        lw=0.7,
+        label=f"Non-inferiority cutoff = {threshold:.4f}",
+    )
     ax.set_ylabel("Candidate replacement AUC (5-fold CV)")
     ax.set_title(
         "Distribution of replacement candidate AUCs per PC panel gene "
         "(sorted by genome-wide replaceability)\n"
-        "Red = 15-crit panel member; grey = dropped by greedy elimination.",
+        f"Red = critical-panel member ({len(critical_pc)} PC); "
+        "grey = dropped by greedy elimination.",
         fontsize=10,
     )
     ax.tick_params(axis="x", rotation=35)
@@ -233,24 +303,39 @@ def fig_candidate_boxplot() -> tuple[Path, dict]:
 # Figure 3: substitution-augmented ROC overlay
 # ---------------------------------------------------------------------------
 
-# These are the cross_cohort_substitution.py findings:
+# Which pseudogene gap each cohort has, and the protein-coding surrogate that
+# cross_cohort_substitution.py nominated for it. The AUCs are NOT recorded here:
+# they are recomputed below from the current data. Earlier versions cached them
+# (GSE76220 baseline 0.9688) and those values survived two GSE76220 corrections
+# without being noticed, because nothing read them.
 _GAP_WINS = [
-    {"cohort": "GSE76220", "missing": "HERC2P8", "sub_symbol": "ZNF586",
-      "sub_ensg": None,  # filled in at runtime
-      "use_symbol_match": True, "baseline_auc": 0.9688, "sub_auc": 0.9792},
-    {"cohort": "GSE122649", "missing": "HERC2P8", "sub_symbol": "XAF1",
-      "sub_ensg": None,
-      "use_symbol_match": True, "baseline_auc": 0.8269, "sub_auc": 0.8590},
+    {
+        "cohort": "GSE76220",
+        "missing": "HERC2P8",
+        "sub_symbol": "ZNF586",
+        "sub_ensg": None,  # filled in at runtime
+        "use_symbol_match": True,
+    },
+    {
+        "cohort": "GSE122649",
+        "missing": "HERC2P8",
+        "sub_symbol": "XAF1",
+        "sub_ensg": None,
+        "use_symbol_match": True,
+    },
 ]
+
 
 # Need to find the ENSG IDs of ZNF586, XAF1 via gene_replacement_results.csv
 def _resolve_sub_ensg(repl_df: pd.DataFrame) -> dict:
     """Pull the candidate ENSG for each substitution from the replacement table."""
     import mygene
+
     mg = mygene.MyGeneInfo()
     syms = list({w["sub_symbol"] for w in _GAP_WINS})
-    res = mg.querymany(syms, scopes="symbol", fields="ensembl.gene",
-                        species="human", verbose=False)
+    res = mg.querymany(
+        syms, scopes="symbol", fields="ensembl.gene", species="human", verbose=False
+    )
     out = {}
     for r in res:
         if r.get("notfound"):
@@ -266,22 +351,25 @@ def _resolve_sub_ensg(repl_df: pd.DataFrame) -> dict:
 
 
 def fig_substitution_roc() -> tuple[Path, dict]:
+    from sklearn.metrics import roc_auc_score, roc_curve
     from sklearn.preprocessing import StandardScaler
-    from sklearn.metrics import roc_curve, roc_auc_score
+
     warnings.filterwarnings("ignore")
 
     params_raw = json.loads(_PARAMS_PATH.read_text())
     params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
 
     df_panel = pd.read_csv(_PANEL_CSV)
-    feat_col = next(c for c in df_panel.columns
-                     if "feature" in c.lower() or "ensg" in c.lower())
+    feat_col = next(
+        c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower()
+    )
     sym_col = next(c for c in df_panel.columns if "symbol" in c.lower())
     feat25 = df_panel[feat_col].tolist()
     sym25 = df_panel[sym_col].tolist()
     feat25_bases = [f.split(".")[0] for f in feat25]
-    panel_syms = [sym25[i] for i in _CRITICAL_IDX]
-    panel_bases = [feat25_bases[i] for i in _CRITICAL_IDX]
+    crit_idx = [sym25.index(s) for s in critical_panel_symbols()]
+    panel_syms = [sym25[i] for i in crit_idx]
+    panel_bases = [feat25_bases[i] for i in crit_idx]
 
     print("Loading GPL24676 ...")
     _, y_train, X_train_log, feat_train = _load_gpl24676_ctd()
@@ -296,7 +384,7 @@ def fig_substitution_roc() -> tuple[Path, dict]:
     sub_ensg = _resolve_sub_ensg(pd.read_csv(_REPL_CSV))
 
     cohorts = {
-        "GSE76220":  (y76,  X76,  v76,  True),
+        "GSE76220": (y76, X76, v76, True),
         "GSE122649": (y122, X122, v122, True),
     }
 
@@ -317,10 +405,8 @@ def fig_substitution_roc() -> tuple[Path, dict]:
         Xtr = X_train_log[:, train_cols]
         te_keys = [panel_syms[i] if by_sym else panel_bases[i] for i in included]
         Xte = X_te[:, [v_map[k] for k in te_keys]]
-        sc = StandardScaler().fit(Xtr)
-        scores_base = _ensemble_scores(sc.transform(Xtr), y_train,
-                                          sc.transform(Xte), params,
-                                          seeds=tuple(range(5)))
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, cohort)
+        scores_base = _ensemble_scores(Ztr, y_train, Zte, params, seeds=tuple(range(5)))
         auc_base = roc_auc_score(y_te, scores_base)
         fpr_b, tpr_b, _ = roc_curve(y_te, scores_base)
 
@@ -337,18 +423,32 @@ def fig_substitution_roc() -> tuple[Path, dict]:
         Xtr2 = np.hstack([Xtr, tr_col])
         Xte2 = np.hstack([Xte, te_col])
         sc2 = StandardScaler().fit(Xtr2)
-        scores_sub = _ensemble_scores(sc2.transform(Xtr2), y_train,
-                                         sc2.transform(Xte2), params,
-                                         seeds=tuple(range(5)))
+        scores_sub = _ensemble_scores(
+            sc2.transform(Xtr2),
+            y_train,
+            sc2.transform(Xte2),
+            params,
+            seeds=tuple(range(5)),
+        )
         auc_sub = roc_auc_score(y_te, scores_sub)
         fpr_s, tpr_s, _ = roc_curve(y_te, scores_sub)
 
         # Plot
         ax.plot([0, 1], [0, 1], color="grey", ls=":", lw=0.7)
-        ax.plot(fpr_b, tpr_b, color="#888", lw=2.0,
-                  label=f"Baseline 14/15 (drop {win['missing']})  AUC = {auc_base:.3f}")
-        ax.plot(fpr_s, tpr_s, color="#1565C0", lw=2.0,
-                  label=f"With {win['missing']}$\\to${win['sub_symbol']}  AUC = {auc_sub:.3f}")
+        ax.plot(
+            fpr_b,
+            tpr_b,
+            color="#888",
+            lw=2.0,
+            label=f"Baseline 14/15 (drop {win['missing']})  AUC = {auc_base:.3f}",
+        )
+        ax.plot(
+            fpr_s,
+            tpr_s,
+            color="#1565C0",
+            lw=2.0,
+            label=f"With {win['missing']}$\\to${win['sub_symbol']}  AUC = {auc_sub:.3f}",
+        )
         ax.set_xlabel("False positive rate")
         ax.set_ylabel("True positive rate")
         ax.set_title(f"{cohort} (n={len(y_te)})", fontsize=11)
@@ -371,26 +471,54 @@ def fig_substitution_roc() -> tuple[Path, dict]:
 # Figure 4: candidate biotype heatmap
 # ---------------------------------------------------------------------------
 
+
 def fig_module_heatmap() -> tuple[Path, dict]:
     df = pd.read_csv(_REPL_CSV)
     df = df[df["is_replacement"]]
     pc_genes = [
-        "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-        "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+        "MECOM",
+        "SERTAD1",
+        "FCN3",
+        "PROS1",
+        "ANGPT2",
+        "EMP1",
+        "TINAGL1",
+        "CKMT2",
+        "VWF",
+        "CLDN5",
+        "NR4A1",
+        "SOHLH2",
+        "HEXB",
+        "MCEE",
+        "SLC37A2",
     ]
-    critical_pc = {"FCN3", "PROS1", "ANGPT2", "TINAGL1", "CKMT2", "CLDN5",
-                    "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1"}
+    critical_pc = set(critical_panel_symbols(protein_coding_only=True))
 
     # Pre-resolve biotypes
     import mygene
+
     mg = mygene.MyGeneInfo()
     uniq = sorted(df["candidate_ensg"].unique().tolist())
     print(f"Resolving biotypes for {len(uniq)} candidate ENSG ...")
-    res = mg.querymany(uniq, scopes="ensembl.gene", fields="type_of_gene,symbol",
-                        species="human", verbose=False)
+    res = mg.querymany(
+        uniq,
+        scopes="ensembl.gene",
+        fields="type_of_gene,symbol",
+        species="human",
+        verbose=False,
+    )
     biotype_map = {}
-    artifact_prefixes = ("OR", "TAS", "PATE", "DEFB", "KRTAP", "VN1R",
-                          "LCE", "SPRR", "MS4A")
+    artifact_prefixes = (
+        "OR",
+        "TAS",
+        "PATE",
+        "DEFB",
+        "KRTAP",
+        "VN1R",
+        "LCE",
+        "SPRR",
+        "MS4A",
+    )
     for r in res:
         if r.get("notfound"):
             biotype_map[r["query"]] = "unresolved"
@@ -409,8 +537,14 @@ def fig_module_heatmap() -> tuple[Path, dict]:
         else:
             biotype_map[r["query"]] = "other"
 
-    biotypes = ["protein-coding", "pseudogene", "ncRNA",
-                 "artifact-PC", "other", "unresolved"]
+    biotypes = [
+        "protein-coding",
+        "pseudogene",
+        "ncRNA",
+        "artifact-PC",
+        "other",
+        "unresolved",
+    ]
     repl_pct = _parse_clean_repl(_REPL_CLEAN.read_text())
     pc_sorted = sorted(pc_genes, key=lambda g: repl_pct.get(g, 0))
     matrix = np.zeros((len(pc_sorted), len(biotypes)), dtype=int)
@@ -429,19 +563,30 @@ def fig_module_heatmap() -> tuple[Path, dict]:
     ax.set_xticklabels(biotypes, rotation=30, ha="right", fontsize=9)
     ax.set_yticks(range(len(pc_sorted)))
     ax.set_yticklabels(
-        [f"{g}{'★' if g in critical_pc else ''} ({repl_pct.get(g, 0):.0f}%)"
-         for g in pc_sorted], fontsize=9,
+        [
+            f"{g}{'★' if g in critical_pc else ''} ({repl_pct.get(g, 0):.0f}%)"
+            for g in pc_sorted
+        ],
+        fontsize=9,
     )
     for i in range(matrix.shape[0]):
         for j in range(matrix.shape[1]):
             v = matrix[i, j]
             if v:
-                ax.text(j, i, str(v), ha="center", va="center", fontsize=7.5,
-                          color="white" if v > matrix.max() / 2 else "black")
+                ax.text(
+                    j,
+                    i,
+                    str(v),
+                    ha="center",
+                    va="center",
+                    fontsize=7.5,
+                    color="white" if v > matrix.max() / 2 else "black",
+                )
     plt.colorbar(im, ax=ax, label="N valid replacement candidates")
     ax.set_title(
         "Valid replacement candidates per PC panel gene, broken down by biotype\n"
-        "(★ = member of 15-gene greedy-tail critical panel; sorted by overall replaceability)",
+        "(★ = member of the greedy-tail critical panel; "
+        "sorted by overall replaceability)",
         fontsize=10,
     )
     plt.tight_layout()
@@ -454,6 +599,7 @@ def fig_module_heatmap() -> tuple[Path, dict]:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     print("=" * 70)

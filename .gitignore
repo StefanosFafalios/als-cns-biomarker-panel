@@ -40,3 +40,6 @@ reproduce/logs/
 *.toc
 *.fls
 *.fdb_latexmk
+
+# Figure written into a manuscript/ subfolder by srp064478_figure.py
+src/manuscript/

@@ -45,8 +45,8 @@ N_BOOT = 2000
 
 def _cv_oof(x: np.ndarray, y: np.ndarray, params: dict) -> np.ndarray:
     """Return out-of-fold P(ALS) from 5-fold stratified CV."""
-    from lightgbm import LGBMClassifier
     from sklearn.model_selection import StratifiedKFold
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     oof = np.zeros(len(y))
@@ -63,8 +63,8 @@ def _cv_oof_residualised(
     genes: np.ndarray, comp: np.ndarray, y: np.ndarray, params: dict
 ) -> np.ndarray:
     """CV with within-fold OLS residualisation of each gene on composition."""
-    from lightgbm import LGBMClassifier
     from sklearn.model_selection import StratifiedKFold
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     oof = np.zeros(len(y))

@@ -4,7 +4,7 @@ Mapping every `\includegraphics` reference in `manuscript.tex` /
 `supplementary.tex` to the script that produces it. Use this to verify a
 specific result without re-running the full pipeline.
 
-PNG paths are relative to `als_analysis/GSE153960/`. Each script writes its
+PNG paths are relative to `src/`. Each script writes its
 output(s) to that same directory.
 
 ## Main-text figures
@@ -48,6 +48,8 @@ output(s) to that same directory.
 | fig:replacement_loo | `replacement_panel_loo.png` | `replacement_panel_loo.py` | S14 |
 | fig:panelmb | `panel_mb_network.png` | `panel_mb_network.py` + `panel_mb_postprocess.py` | S15 |
 | fig:loo_sensitivity | `panel_loo_zeroshot.png` (shared) | `panel_loo_zeroshot.py` | S22 |
+| fig:greedy_stop | `greedy_significance_stop.png` | `greedy_significance_stop.py` | S16 (panel-size trajectory + non-inferiority band) |
+| fig:weight_sensitivity | `cross_cohort_loo_sensitivity.png` | `cross_cohort_loo_sensitivity.py` | S17 (four-scheme weighting sensitivity) |
 | fig:calibration | `calibration_reliability.png` | `calibration_analysis.py` | S17 |
 | fig:dca | `decision_curve.png` | `decision_curve_analysis.py` | S22 |
 | fig:tfs | `upstream_regulators.png` | `upstream_regulators.py` | S5 |
@@ -65,6 +67,13 @@ output(s) to that same directory.
 | fig:random_null | `random_panel_null.png` | `random_panel_null.py` | S (robustness: transfer specificity) |
 | fig:snrna | `snrna_percell_validation.png` | `snrna_percell_validation.py` (GSE219280 snRNA; #1) | S (robustness: single-nucleus) |
 | fig:snrna2 | `snrna_validation_gse212630.png` | `snrna_validation_gse212630.py` (GSE212630 non-C9 snRNA; #2 generalisation) | S (robustness: single-nucleus) |
+| fig:top1axis | `top1_axis_check.png` | `top1_axis_check.py` (Zhou 2026 DNA-repair + cryptic-exon sets; expression deciles) | S (shared-mechanism appraisal) |
+| fig:crossdisease | `cross_disease_specificity.png` | `cross_disease_specificity.py` (AD / FTLD-TDP / HD / PD vs own controls + ALS positive control; ALS-vs-disease control-referenced z) | S (cross-disease specificity) |
+| fig:crossdisease_loo | `cross_disease_specificity_loo.png` | `cross_disease_specificity.py` (per-cohort leave-one-gene-out Δ AUC heatmap, both models) | S (cross-disease specificity) |
+| fig:crossdisease_covar | `cross_disease_covariates.png` | `cross_disease_covariates.py` (panel score vs PMI / RIN / age in the HD and PD cohorts) | S (cross-disease specificity) |
+| fig:expl_covar | `explainability_covariates.png` | `explainability_figures.py` (panel score vs PMI / RIN / age / Braak, cases and controls fitted separately) | S (explainability) |
+| fig:expl_crossdisease | `explainability_crossdisease.png` | `explainability_figures.py` (per-cohort case vs own-control score strips, constant grey control band) | S (explainability) |
+| fig:expl_deconv | `explainability_deconv.png` | `explainability_figures.py` (cell-type assignment block heatmap, bootstrap-separation asterisks) | S (explainability) |
 
 ## Tables
 
@@ -75,7 +84,10 @@ producing script.
 | Table | Data source | Producing script |
 |---|---|---|
 | tab:core25_short | `lgbm_core25_panel.csv` | `lgbm_core25_panel.py` |
-| tab:validation_summary | `lr_vs_lgbm_zeroshot.txt` + `panel_critical_eval_statistics.txt` | `lr_vs_lgbm_zeroshot.py` + `panel_17gene_eval.py` |
+| tab:critical_panel (panel membership, used throughout) | `panel_critical.csv` — **canonical panel definition**, read by every downstream script via `utils.critical_panel_symbols()` | `greedy_significance_stop.py` |
+| panel-size stopping rule (§3.4.2) | `greedy_significance_stop.txt` / `.csv` / `.png` | `greedy_significance_stop.py` |
+| tab:validation_summary | `lr_vs_lgbm_zeroshot.txt` + `panel_critical_eval_statistics.txt` | `lr_vs_lgbm_zeroshot.py` + `panel_critical_eval.py` |
+| donor-grouped internal CV AUC (abstract, §3.1, limitations) + GPL16791 donor-disjoint AUCs (§3.4, Fig 3 caption, S-tab:validation) | `donor_leakage_sensitivity_statistics.txt` / `.csv` | `donor_leakage_sensitivity.py` |
 | tab:bio_evidence, tab:druggability | `drug_targets_statistics.txt` + `cell_type_deconvolution_statistics.txt` + `drug_targets_surrogates.txt` (Tier-S surrogate rows) | `drug_targets.py` + `cell_type_deconvolution.py` + `drug_targets_surrogates.py` |
 | tab:specificity | `disease_specificity_statistics.txt` | `disease_specificity.py` |
 | tab:tfs | `upstream_regulators_statistics.txt` | `upstream_regulators.py` |
@@ -89,6 +101,11 @@ producing script.
 | tab:combat | `combat_batch_correction_statistics.txt` | `combat_batch_correction.py` |
 | tab:incremental | `incremental_over_composition_statistics.txt` | `incremental_over_composition.py` (panel vs composition; #2) |
 | (sec:genetic_support, text) | `genetic_support_opentargets_statistics.txt` | `genetic_support_opentargets.py` (OpenTargets ALS genetic support; #6) |
+| tab:top1axis | `top1_axis_check_statistics.txt` / `.csv` | `top1_axis_check.py` (Zhou 2026 DNA-repair + cryptic-exon sets; expression deciles) |
+| tab:crossdisease | `cross_disease_specificity_statistics.txt` / `.csv` | `cross_disease_specificity.py` (cross-disease sensitivity matrix; Braak dose-response; FTLD-U region contrast) |
+| (sec:crossdisease, ALS-vs-disease) | `cross_disease_specificity_als_vs_disease.csv` | `cross_disease_specificity.py` (control-referenced z, ALS vs each other disease) |
+| (sec:crossdisease, LOO) | `cross_disease_specificity_loo.csv` | `cross_disease_specificity.py` (per-cohort leave-one-gene-out Δ AUC) |
+| (sec:crossdisease, covariates) | `cross_disease_covariates_statistics.txt` / `.csv` / `_adjusted.csv` | `cross_disease_covariates.py` (PMI / RIN / age confounding check) |
 
 ## Statistics-text references in narrative
 
@@ -107,7 +124,7 @@ script is rerun, those numbers will refresh automatically.
 
 ## Exploratory scripts not in `run_all.sh`
 
-The following scripts exist in `als_analysis/GSE153960/` but are NOT cited
+The following scripts exist in `src/` but are NOT cited
 in the manuscript or supplementary. They are kept for historical context and
 internal sensitivity analyses but are not required to reproduce the published
 results:
@@ -126,4 +143,5 @@ lr_svm_srp064478_validation.py        # LR/SVM on SRP064478
 universal_replacement_profile.py      # Universal replacement profiling
 validation_panel_loo.py               # Legacy panel LOO (superseded by panel_loo_zeroshot.py v2)
 cross_cohort_panel_loo.py             # Legacy cross-cohort LOO (superseded by iterative_panel_elimination.py)
+colsample_sensitivity.py              # colsample_bytree transfer sensitivity; internal check, not cited
 ```

@@ -51,8 +51,21 @@ N_BOOTSTRAP = 2_000
 PLATFORM = "GPL24676"
 
 _PC_SYMS: set[str] = {
-    "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-    "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+    "MECOM",
+    "SERTAD1",
+    "FCN3",
+    "PROS1",
+    "ANGPT2",
+    "EMP1",
+    "TINAGL1",
+    "CKMT2",
+    "VWF",
+    "CLDN5",
+    "NR4A1",
+    "SOHLH2",
+    "HEXB",
+    "MCEE",
+    "SLC37A2",
 }
 
 
@@ -133,7 +146,9 @@ def _load_train(
             pc_pairs.append((ensg_v, ensg_v.split(".")[0], sym))
 
     # Load GPL24676
-    (ds,) = load_dataset("GSE153960", platform=PLATFORM, resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform=PLATFORM, resources_dir=ALS_DIR / "resources"
+    )
     X_log = np.log1p(ds.X.values.astype(np.float32))
     feat_map = {n: i for i, n in enumerate(ds.X.columns)}
 
@@ -191,8 +206,13 @@ def _plot(
 
     # --- Panel A: zero-shot ROC ---
     fpr, tpr, _ = roc_curve(y, scores_zero)
-    axes[0].plot(fpr, tpr, lw=2, color="#1f77b4",
-                 label=f"Zero-shot AUC = {auc_zero:.4f}\n95%CI [{ci_lo:.4f}, {ci_hi:.4f}]")
+    axes[0].plot(
+        fpr,
+        tpr,
+        lw=2,
+        color="#1f77b4",
+        label=f"Zero-shot AUC = {auc_zero:.4f}\n95%CI [{ci_lo:.4f}, {ci_hi:.4f}]",
+    )
     axes[0].plot([0, 1], [0, 1], "k--", lw=0.8)
     axes[0].set_xlabel("FPR")
     axes[0].set_ylabel("TPR")
@@ -217,8 +237,9 @@ def _plot(
     for i, (rb, p) in enumerate(zip(rb_vals, pvals)):
         if p < 0.05:
             x = rb + 0.01 if rb >= 0 else rb - 0.01
-            axes[1].text(x, i, "*", va="center", fontsize=10,
-                         ha="left" if rb >= 0 else "right")
+            axes[1].text(
+                x, i, "*", va="center", fontsize=10, ha="left" if rb >= 0 else "right"
+            )
     axes[1].set_yticks(y_pos)
     axes[1].set_yticklabels(syms_mwu, fontsize=8)
     axes[1].set_xlabel("Rank-biserial r (ALS vs Control)")
@@ -241,11 +262,10 @@ def _plot(
 
 
 def main() -> None:
-    import pandas as pd
-    from lightgbm import LGBMClassifier
     from scipy.stats import mannwhitneyu
     from sklearn.metrics import roc_auc_score
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     print("=" * 65)
     print("SRP064478 Cervical Spinal Cord Validation (Ladd et al. 2017)")
@@ -254,7 +274,9 @@ def main() -> None:
     # ------------------------------------------------------------------
     print("\n[1] Loading Salmon quantification results ...")
     X_srp, transcript_ids, y_srp = _load_salmon_quant(_QUANT_DIR)
-    print(f"  SRP064478: {X_srp.shape}  ALS={int(y_srp.sum())}  Ctrl={int((y_srp==0).sum())}")
+    print(
+        f"  SRP064478: {X_srp.shape}  ALS={int(y_srp.sum())}  Ctrl={int((y_srp == 0).sum())}"
+    )
 
     # ------------------------------------------------------------------
     print("\n[2] Loading GPL24676 training data ...")
@@ -303,7 +325,9 @@ def main() -> None:
     else:
         # ENST IDs: need tx2gene. Build from Ensembl cDNA FASTA headers.
         print("  ENST IDs detected — building tx2gene from FASTA headers ...")
-        import gzip, re
+        import gzip
+        import re
+
         fasta = ALS_DIR / "resources" / "SRP064478" / "index" / "hg38_cdna.fa.gz"
         tx2gene: dict[str, str] = {}
         with gzip.open(fasta, "rt") as fh:
@@ -341,8 +365,12 @@ def main() -> None:
                 if sym not in srp_syms_final:
                     srp_syms_final.append(sym)
 
-        X_srp_matched = np.column_stack(X_srp_gene) if X_srp_gene else np.empty((len(y_srp), 0))
-        X_train_matched = X_train[:, [matched_syms.index(s) for s in srp_syms_final if s in matched_syms]]
+        X_srp_matched = (
+            np.column_stack(X_srp_gene) if X_srp_gene else np.empty((len(y_srp), 0))
+        )
+        X_train_matched = X_train[
+            :, [matched_syms.index(s) for s in srp_syms_final if s in matched_syms]
+        ]
         final_syms = srp_syms_final
 
     print(f"  Final matched genes ({len(final_syms)}): {final_syms}")
@@ -375,7 +403,10 @@ def main() -> None:
     auc_zero = roc_auc_score(y_srp, scores_zero)
     rng = np.random.default_rng(RANDOM_STATE)
     auc_boot = _bootstrap_auc(y_srp, scores_zero, N_BOOTSTRAP, rng)
-    ci_lo, ci_hi = float(np.percentile(auc_boot, 2.5)), float(np.percentile(auc_boot, 97.5))
+    ci_lo, ci_hi = (
+        float(np.percentile(auc_boot, 2.5)),
+        float(np.percentile(auc_boot, 97.5)),
+    )
     print(f"  Zero-shot AUC = {auc_zero:.4f}  95%CI [{ci_lo:.4f}, {ci_hi:.4f}]")
 
     # ------------------------------------------------------------------
@@ -409,7 +440,7 @@ def main() -> None:
         "Dataset: SRP064478 (Virginia Commonwealth Univ., BennettLab)",
         "  Tissue: Postmortem cervical spinal cord",
         "  Platform: Illumina NextSeq 500, paired-end, total RNA-seq",
-        f"  Samples: ALS={int(y_srp.sum())}  Control={int((y_srp==0).sum())}",
+        f"  Samples: ALS={int(y_srp.sum())}  Control={int((y_srp == 0).sum())}",
         "  Publication: Ladd et al. 2017, Brain Research (PMID 28511992)",
         "  Quantification: Salmon 0.13.1, Ensembl GRCh38 release 111",
         "",

@@ -21,7 +21,7 @@ Critical gene set (primary, equal-weighted):
 
 Cohorts (blood excluded):
   GPL16791   n=636  raw log1p, Ensembl base ID
-  GSE76220   n=20   plain log1p, HGNC symbol
+  GSE76220   n=20   as-is (already log2-scale), HGNC symbol
   GSE122649  n=38   plain log1p, HGNC symbol
   SRP064478  n=15   plain log1p, Ensembl base ID
 
@@ -29,6 +29,7 @@ Outputs:
   panel_loo_zeroshot_statistics.txt
   panel_loo_zeroshot.png
 """
+
 from __future__ import annotations
 
 import gzip
@@ -45,7 +46,17 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import (  # noqa: E402
+    critical_panel_label,
+    critical_panel_size,
+    load_dataset,
+    zero_shot_scale,
+)
+
+# Panel size is derived, so every reader-facing label must be too.
+_K_CRIT = critical_panel_size()
+_CRIT_LABEL = critical_panel_label()
+
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -59,6 +70,7 @@ def _parse_drop_steps(text: str) -> dict[str, int]:
     step max+1 so it sorts to the top (most-critical) end of the panel.
     """
     import re
+
     drops: dict[str, int] = {}
     in_log = False
     final_gene: str | None = None
@@ -89,6 +101,8 @@ def _parse_drop_steps(text: str) -> dict[str, int]:
     if final_gene:
         drops[final_gene] = max(drops.values(), default=0) + 1
     return drops
+
+
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
 _GSE122649_DIR = ALS_DIR / "resources" / "GSE122649"
@@ -105,16 +119,26 @@ _ENSEMBLE_SEEDS = tuple(range(N_SEEDS))
 
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     "erythrocyte": (
-        "ENSG00000206172", "ENSG00000188536", "ENSG00000244734",
-        "ENSG00000158578", "ENSG00000170180", "ENSG00000133742",
-        "ENSG00000159111", "ENSG00000105610", "ENSG00000179364",
+        "ENSG00000206172",
+        "ENSG00000188536",
+        "ENSG00000244734",
+        "ENSG00000158578",
+        "ENSG00000170180",
+        "ENSG00000133742",
+        "ENSG00000159111",
+        "ENSG00000105610",
+        "ENSG00000179364",
         "ENSG00000223609",
     ),
     "platelet": (
-        "ENSG00000163736", "ENSG00000163737", "ENSG00000185245",
+        "ENSG00000163736",
+        "ENSG00000163737",
+        "ENSG00000185245",
     ),
     "endothelial": (
-        "ENSG00000261371", "ENSG00000179776", "ENSG00000110799",
+        "ENSG00000261371",
+        "ENSG00000179776",
+        "ENSG00000110799",
     ),
 }
 
@@ -128,14 +152,17 @@ _W = {k: 1.0 / len(_N_COHORT) for k in _N_COHORT}
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _ensemble_scores(
-    X_tr: np.ndarray, y_tr: np.ndarray,
+    X_tr: np.ndarray,
+    y_tr: np.ndarray,
     X_te: np.ndarray,
     params: dict,
     seeds: tuple[int, ...] = _ENSEMBLE_SEEDS,
 ) -> np.ndarray:
     """Train N_SEEDS LGBM models (varying random_state) and return averaged probabilities."""
-    from lightgbm import LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
+
     scores = np.zeros(len(X_te), dtype=np.float64)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -147,7 +174,9 @@ def _ensemble_scores(
 
 
 def _stratified_boot_indices(
-    y: np.ndarray, n_boot: int, rng: np.random.Generator,
+    y: np.ndarray,
+    n_boot: int,
+    rng: np.random.Generator,
 ) -> np.ndarray:
     """Return (n_boot, n) array of stratified bootstrap indices preserving class counts."""
     pos = np.where(y == 1)[0]
@@ -165,11 +194,14 @@ def _stratified_boot_indices(
 # Data loaders (identical to validation_panel_loo.py)
 # ---------------------------------------------------------------------------
 
+
 def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
     # CTD compartment regression is discovery-side only; cross-cohort transfer now
     # uses raw log1p for every cohort, so the memory-heavy CTD-residualised matrix
     # is no longer built. Returns (X_log, y, X_log, feat) for signature compatibility.
-    (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
+    )
     X_log = np.log1p(ds.X.values.astype(np.float32))
     y = ds.y.values.astype(int)
     feat = list(ds.X.columns)
@@ -177,11 +209,15 @@ def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]
 
 
 def _load_gpl16791_ctd(
-    X_train_log: np.ndarray, feat_train: list[str],
+    X_train_log: np.ndarray,
+    feat_train: list[str],
 ) -> tuple[np.ndarray, np.ndarray]:
     from sklearn.decomposition import PCA
     from sklearn.linear_model import LinearRegression
-    (ds16,) = load_dataset("GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources")
+
+    (ds16,) = load_dataset(
+        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
+    )
     X16_raw = ds16.X.values.astype(np.float32)
     y16 = ds16.y.values.astype(int)
     feat16 = list(ds16.X.columns)
@@ -222,13 +258,21 @@ def _load_gpl16791_raw(feat_train: list[str]) -> tuple[np.ndarray, np.ndarray]:
 
 def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR / "resources")
-    return np.log1p(ds.X.values.astype(np.float32)), list(ds.X.columns), ds.y.values.astype(int)
+    return (
+        # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+        # despite the 'RPKM' filename). A further log1p would null every value
+        # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+        # log-base and length-normalisation differences vs log1p(counts) training.
+        ds.X.values.astype(np.float32),
+        list(ds.X.columns),
+        ds.y.values.astype(int),
+    )
 
 
 def _parse_gse122649_soft() -> dict[str, str]:
-    import requests
-    r = requests.get(_GSE122649_SOFT_URL, timeout=60, stream=True)
-    content = gzip.decompress(r.content).decode("utf-8", errors="ignore")
+    from utils import geo_soft_text
+
+    content = geo_soft_text("GSE122649")
     meta: dict[str, str] = {}
     for s in re.split(r"\^SAMPLE", content)[1:]:
         acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
@@ -286,6 +330,7 @@ def _load_gse122649() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
     import pandas as pd
+
     meta = pd.read_csv(_SRP_META, sep="\t").set_index("SRR")
     quants: list[pd.Series] = []
     tx_ids: list[str] | None = None
@@ -331,14 +376,19 @@ def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
 # Core evaluation — seed-averaged ensemble scoring per cohort
 # ---------------------------------------------------------------------------
 
+
 def _panel_ensemble_scores(
     panel_idx: list[int],
-    Xtr25_ctd: np.ndarray, y_train: np.ndarray,
+    Xtr25_ctd: np.ndarray,
+    y_train: np.ndarray,
     X16_25_raw: np.ndarray,
     Xtr25_log: np.ndarray,
-    X76_25: np.ndarray, avail76: list[int],
-    X122_25: np.ndarray, avail122: list[int],
-    Xsrp_25: np.ndarray, avail_srp: list[int],
+    X76_25: np.ndarray,
+    avail76: list[int],
+    X122_25: np.ndarray,
+    avail122: list[int],
+    Xsrp_25: np.ndarray,
+    avail_srp: list[int],
     params: dict,
     n_te: dict[str, int],
 ) -> dict[str, np.ndarray]:
@@ -347,7 +397,6 @@ def _panel_ensemble_scores(
     Returns dict mapping cohort name → ensemble score vector (len = n_test).
     If <2 genes are available for a cohort, score = 0.5 vector.
     """
-    from sklearn.preprocessing import StandardScaler
 
     panel_set = set(panel_idx)
     out: dict[str, np.ndarray] = {}
@@ -356,24 +405,20 @@ def _panel_ensemble_scores(
     if len(panel_idx) >= 1:
         Xtr = Xtr25_log[:, panel_idx]
         Xte = X16_25_raw[:, panel_idx]
-        sc = StandardScaler().fit(Xtr)
-        out["GPL16791"] = _ensemble_scores(
-            sc.transform(Xtr), y_train, sc.transform(Xte), params
-        )
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GPL16791")
+        out["GPL16791"] = _ensemble_scores(Ztr, y_train, Zte, params)
     else:
         out["GPL16791"] = np.full(n_te["GPL16791"], 0.5, dtype=np.float32)
 
-    # GSE76220 — symbol, log1p
+    # GSE76220 — symbol, as-is (already log2-scale)
     avail76_set = set(avail76)
     cols76_tr = [i for i in panel_idx if i in avail76_set]
     cols76_te = [k for k, i in enumerate(avail76) if i in panel_set]
     if cols76_tr:
         Xtr = Xtr25_log[:, cols76_tr]
         Xte = X76_25[:, cols76_te]
-        sc = StandardScaler().fit(Xtr)
-        out["GSE76220"] = _ensemble_scores(
-            sc.transform(Xtr), y_train, sc.transform(Xte), params
-        )
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE76220")
+        out["GSE76220"] = _ensemble_scores(Ztr, y_train, Zte, params)
     else:
         out["GSE76220"] = np.full(n_te["GSE76220"], 0.5, dtype=np.float32)
 
@@ -384,10 +429,8 @@ def _panel_ensemble_scores(
     if cols122_tr:
         Xtr = Xtr25_log[:, cols122_tr]
         Xte = X122_25[:, cols122_te]
-        sc = StandardScaler().fit(Xtr)
-        out["GSE122649"] = _ensemble_scores(
-            sc.transform(Xtr), y_train, sc.transform(Xte), params
-        )
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE122649")
+        out["GSE122649"] = _ensemble_scores(Ztr, y_train, Zte, params)
     else:
         out["GSE122649"] = np.full(n_te["GSE122649"], 0.5, dtype=np.float32)
 
@@ -398,10 +441,8 @@ def _panel_ensemble_scores(
     if cols_srp_tr:
         Xtr = Xtr25_log[:, cols_srp_tr]
         Xte = Xsrp_25[:, cols_srp_te]
-        sc = StandardScaler().fit(Xtr)
-        out["SRP064478"] = _ensemble_scores(
-            sc.transform(Xtr), y_train, sc.transform(Xte), params
-        )
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "SRP064478")
+        out["SRP064478"] = _ensemble_scores(Ztr, y_train, Zte, params)
     else:
         out["SRP064478"] = np.full(n_te["SRP064478"], 0.5, dtype=np.float32)
 
@@ -409,7 +450,8 @@ def _panel_ensemble_scores(
 
 
 def _wmean_aucs(
-    cohort_aucs: dict[str, float], weights: dict[str, float],
+    cohort_aucs: dict[str, float],
+    weights: dict[str, float],
 ) -> float:
     return sum(weights[c] * cohort_aucs[c] for c in weights)
 
@@ -418,16 +460,21 @@ def _wmean_aucs(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import pandas as pd
     from sklearn.metrics import roc_auc_score
+
     warnings.filterwarnings("ignore", category=UserWarning)
 
     print("=" * 70)
-    print(f"Panel LOO zero-shot v2 — seed-averaged ({N_SEEDS} seeds) + paired bootstrap CI")
+    print(
+        f"Panel LOO zero-shot v2 — seed-averaged ({N_SEEDS} seeds) + paired bootstrap CI"
+    )
     print("Primary weights (equal): 0.25 per cohort")
     print("Sensitivity weights (sample-size): w_c = n_c / 709")
     print("=" * 70)
@@ -443,7 +490,9 @@ def main() -> None:
 
     # ---- Panel ----
     df_panel = pd.read_csv(_PANEL_CSV)
-    feat_col = next(c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower())
+    feat_col = next(
+        c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower()
+    )
     sym_col = next(c for c in df_panel.columns if "symbol" in c.lower())
     feat25: list[str] = df_panel[feat_col].tolist()
     sym25: list[str] = df_panel[sym_col].tolist()
@@ -452,7 +501,9 @@ def main() -> None:
     # ---- Load GPL24676 (once) ----
     print("\nLoading GPL24676 (CTD + log1p) ...")
     X_train_ctd, y_train, X_train_log, feat_train = _load_gpl24676_ctd()
-    feat_train_base_map: dict[str, int] = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
+    feat_train_base_map: dict[str, int] = {
+        f.split(".")[0]: j for j, f in enumerate(feat_train)
+    }
     panel_train_cols: list[int] = [feat_train_base_map[b] for b in feat25_bases]
     Xtr25_ctd = X_train_ctd[:, panel_train_cols].astype(np.float32)
     Xtr25_log = X_train_log[:, panel_train_cols].astype(np.float32)
@@ -467,37 +518,71 @@ def main() -> None:
     X76_log, vocab76, y76 = _load_gse76220()
     vocab76_map = {s: i for i, s in enumerate(vocab76)}
     avail76 = [i for i, s in enumerate(sym25) if s in vocab76_map]
-    X76_25 = (np.column_stack([X76_log[:, vocab76_map[sym25[i]]] for i in avail76])
-               .astype(np.float32)) if avail76 else np.empty((len(y76), 0), dtype=np.float32)
+    X76_25 = (
+        (
+            np.column_stack(
+                [X76_log[:, vocab76_map[sym25[i]]] for i in avail76]
+            ).astype(np.float32)
+        )
+        if avail76
+        else np.empty((len(y76), 0), dtype=np.float32)
+    )
 
     # ---- Load GSE122649 ----
     print("Loading GSE122649 ...")
     X122_log, vocab122, y122 = _load_gse122649()
     vocab122_map = {s: i for i, s in enumerate(vocab122)}
     avail122 = [i for i, s in enumerate(sym25) if s in vocab122_map]
-    X122_25 = (np.column_stack([X122_log[:, vocab122_map[sym25[i]]] for i in avail122])
-                .astype(np.float32)) if avail122 else np.empty((len(y122), 0), dtype=np.float32)
+    X122_25 = (
+        (
+            np.column_stack(
+                [X122_log[:, vocab122_map[sym25[i]]] for i in avail122]
+            ).astype(np.float32)
+        )
+        if avail122
+        else np.empty((len(y122), 0), dtype=np.float32)
+    )
 
     # ---- Load SRP064478 ----
     print("Loading SRP064478 ...")
     Xsrp_log, vocab_srp, y_srp = _load_srp064478()
     srp_vocab_map = {v: i for i, v in enumerate(vocab_srp)}
     avail_srp = [i for i, b in enumerate(feat25_bases) if b in srp_vocab_map]
-    Xsrp_25 = (np.column_stack([Xsrp_log[:, srp_vocab_map[feat25_bases[i]]] for i in avail_srp])
-                .astype(np.float32)) if avail_srp else np.empty((len(y_srp), 0), dtype=np.float32)
+    Xsrp_25 = (
+        (
+            np.column_stack(
+                [Xsrp_log[:, srp_vocab_map[feat25_bases[i]]] for i in avail_srp]
+            ).astype(np.float32)
+        )
+        if avail_srp
+        else np.empty((len(y_srp), 0), dtype=np.float32)
+    )
 
-    y_per_cohort = {"GPL16791": y16, "GSE76220": y76, "GSE122649": y122, "SRP064478": y_srp}
+    y_per_cohort = {
+        "GPL16791": y16,
+        "GSE76220": y76,
+        "GSE122649": y122,
+        "SRP064478": y_srp,
+    }
     n_per_cohort = {c: len(y_per_cohort[c]) for c in _N_COHORT}
-    avail_per_cohort = {"GPL16791": list(range(25)), "GSE76220": avail76,
-                        "GSE122649": avail122, "SRP064478": avail_srp}
+    avail_per_cohort = {
+        "GPL16791": list(range(25)),
+        "GSE76220": avail76,
+        "GSE122649": avail122,
+        "SRP064478": avail_srp,
+    }
 
     score_kwargs = dict(
-        Xtr25_ctd=Xtr25_ctd, y_train=y_train,
+        Xtr25_ctd=Xtr25_ctd,
+        y_train=y_train,
         X16_25_raw=X16_25_raw,
         Xtr25_log=Xtr25_log,
-        X76_25=X76_25, avail76=avail76,
-        X122_25=X122_25, avail122=avail122,
-        Xsrp_25=Xsrp_25, avail_srp=avail_srp,
+        X76_25=X76_25,
+        avail76=avail76,
+        X122_25=X122_25,
+        avail122=avail122,
+        Xsrp_25=Xsrp_25,
+        avail_srp=avail_srp,
         params=params,
         n_te=n_per_cohort,
     )
@@ -506,8 +591,9 @@ def main() -> None:
     print(f"\nComputing baseline ensemble scores ({N_SEEDS} seeds × 4 cohorts) ...")
     full_idx = list(range(25))
     baseline_scores = _panel_ensemble_scores(full_idx, **score_kwargs)
-    baseline_aucs = {c: float(roc_auc_score(y_per_cohort[c], baseline_scores[c]))
-                     for c in _N_COHORT}
+    baseline_aucs = {
+        c: float(roc_auc_score(y_per_cohort[c], baseline_scores[c])) for c in _N_COHORT
+    }
     baseline_wmean_eq = _wmean_aucs(baseline_aucs, _W)
     baseline_wmean_n = _wmean_aucs(baseline_aucs, _W_N)
     print(f"  Baseline W.mean (equal)  = {baseline_wmean_eq:.4f}")
@@ -537,17 +623,23 @@ def main() -> None:
         loo_scores[g] = scores_g
         avail_in_cohort[g] = {c: (g in avail_per_cohort[c]) for c in _N_COHORT}
         # Point estimates for log
-        aucs_g = {c: float(roc_auc_score(y_per_cohort[c], scores_g[c])) for c in _N_COHORT}
+        aucs_g = {
+            c: float(roc_auc_score(y_per_cohort[c], scores_g[c])) for c in _N_COHORT
+        }
         wmean_g_eq = _wmean_aucs(aucs_g, _W)
         d_zs_g_eq = wmean_g_eq - baseline_wmean_eq
-        print(f"  {sym25[g]:>20s}: W.mean(eq)={wmean_g_eq:.4f}  D_ZS(eq)={d_zs_g_eq:+.4f}  "
-              + "  ".join(f"{aucs_g[c]:.4f}" for c in _N_COHORT))
+        print(
+            f"  {sym25[g]:>20s}: W.mean(eq)={wmean_g_eq:.4f}  D_ZS(eq)={d_zs_g_eq:+.4f}  "
+            + "  ".join(f"{aucs_g[c]:.4f}" for c in _N_COHORT)
+        )
 
     # ---- Paired bootstrap on test indices (stratified) ----
     print(f"\nRunning paired bootstrap ({N_BOOTSTRAP} resamples) ...")
     rng = np.random.default_rng(RANDOM_STATE)
-    boot_idx = {c: _stratified_boot_indices(y_per_cohort[c], N_BOOTSTRAP, rng)
-                for c in _N_COHORT}
+    boot_idx = {
+        c: _stratified_boot_indices(y_per_cohort[c], N_BOOTSTRAP, rng)
+        for c in _N_COHORT
+    }
 
     # Per-bootstrap baseline cohort AUCs and W.mean
     base_aucs_b = {c: np.empty(N_BOOTSTRAP, dtype=np.float32) for c in _N_COHORT}
@@ -582,17 +674,34 @@ def main() -> None:
         d_zs_n_boot[g] = loo_wmean_n_b - base_wmean_n_b
 
     # ---- Per-gene point estimate (from non-bootstrap scores) and CI ----
-    point_aucs = {g: {c: float(roc_auc_score(y_per_cohort[c], loo_scores[g][c]))
-                       for c in _N_COHORT} for g in range(25)}
-    point_d_zs_eq = {g: _wmean_aucs(point_aucs[g], _W) - baseline_wmean_eq for g in range(25)}
-    point_d_zs_n = {g: _wmean_aucs(point_aucs[g], _W_N) - baseline_wmean_n for g in range(25)}
+    point_aucs = {
+        g: {
+            c: float(roc_auc_score(y_per_cohort[c], loo_scores[g][c]))
+            for c in _N_COHORT
+        }
+        for g in range(25)
+    }
+    point_d_zs_eq = {
+        g: _wmean_aucs(point_aucs[g], _W) - baseline_wmean_eq for g in range(25)
+    }
+    point_d_zs_n = {
+        g: _wmean_aucs(point_aucs[g], _W_N) - baseline_wmean_n for g in range(25)
+    }
 
-    ci_eq = {g: (float(np.percentile(d_zs_eq_boot[g], 2.5)),
-                  float(np.percentile(d_zs_eq_boot[g], 97.5)))
-              for g in range(25)}
-    ci_n = {g: (float(np.percentile(d_zs_n_boot[g], 2.5)),
-                 float(np.percentile(d_zs_n_boot[g], 97.5)))
-             for g in range(25)}
+    ci_eq = {
+        g: (
+            float(np.percentile(d_zs_eq_boot[g], 2.5)),
+            float(np.percentile(d_zs_eq_boot[g], 97.5)),
+        )
+        for g in range(25)
+    }
+    ci_n = {
+        g: (
+            float(np.percentile(d_zs_n_boot[g], 2.5)),
+            float(np.percentile(d_zs_n_boot[g], 97.5)),
+        )
+        for g in range(25)
+    }
 
     # Critical set: equal-weight CI upper bound < 0
     critical_eq = [g for g in range(25) if ci_eq[g][1] < 0]
@@ -604,28 +713,32 @@ def main() -> None:
     # ---- Results table sorted by point D_ZS (equal) ascending ----
     results = []
     for g in range(25):
-        results.append({
-            "g": g,
-            "gene": sym25[g],
-            "feat": feat25[g],
-            "D_ZS_eq": point_d_zs_eq[g],
-            "D_ZS_eq_lo": ci_eq[g][0],
-            "D_ZS_eq_hi": ci_eq[g][1],
-            "D_ZS_n": point_d_zs_n[g],
-            "D_ZS_n_lo": ci_n[g][0],
-            "D_ZS_n_hi": ci_n[g][1],
-            "critical_eq": g in critical_eq,
-            "critical_n": g in critical_n,
-            **{f"auc_{c}": point_aucs[g][c] for c in _N_COHORT},
-            **{f"auc_{c}_base": baseline_aucs[c] for c in _N_COHORT},
-            "avail_76": avail_in_cohort[g]["GSE76220"],
-            "avail_122": avail_in_cohort[g]["GSE122649"],
-            "avail_srp": avail_in_cohort[g]["SRP064478"],
-        })
+        results.append(
+            {
+                "g": g,
+                "gene": sym25[g],
+                "feat": feat25[g],
+                "D_ZS_eq": point_d_zs_eq[g],
+                "D_ZS_eq_lo": ci_eq[g][0],
+                "D_ZS_eq_hi": ci_eq[g][1],
+                "D_ZS_n": point_d_zs_n[g],
+                "D_ZS_n_lo": ci_n[g][0],
+                "D_ZS_n_hi": ci_n[g][1],
+                "critical_eq": g in critical_eq,
+                "critical_n": g in critical_n,
+                **{f"auc_{c}": point_aucs[g][c] for c in _N_COHORT},
+                **{f"auc_{c}_base": baseline_aucs[c] for c in _N_COHORT},
+                "avail_76": avail_in_cohort[g]["GSE76220"],
+                "avail_122": avail_in_cohort[g]["GSE122649"],
+                "avail_srp": avail_in_cohort[g]["SRP064478"],
+            }
+        )
     # Sort by greedy backward-elimination drop step DESCENDING — survivors
-    # (15-gene critical panel) at top, first-dropped at bottom. Sort secondary
+    # (critical panel) at top, first-dropped at bottom. Sort secondary
     # by D_ZS_eq ascending so within each block the most-critical comes first.
-    drop_steps = _parse_drop_steps(_ITER_STAT.read_text()) if _ITER_STAT.exists() else {}
+    drop_steps = (
+        _parse_drop_steps(_ITER_STAT.read_text()) if _ITER_STAT.exists() else {}
+    )
     results.sort(key=lambda r: (-drop_steps.get(r["gene"], 0), r["D_ZS_eq"]))
 
     # ---- Text output ----
@@ -638,15 +751,17 @@ def main() -> None:
         "        for 95% CI on per-gene D_ZS.",
         "",
         "Cohorts and weights:",
-        *[f"  {c:<12s} n={_N_COHORT[c]:>3d}  w_eq={_W[c]:.4f}  w_n={_W_N[c]:.4f}"
-          for c in _N_COHORT],
+        *[
+            f"  {c:<12s} n={_N_COHORT[c]:>3d}  w_eq={_W[c]:.4f}  w_n={_W_N[c]:.4f}"
+            for c in _N_COHORT
+        ],
         f"  Total N = {_TOTAL_N}",
         "",
         "Gene availability (matched in cohort vocabulary):",
         f"  GSE76220 = {len(avail76)}/25  GSE122649 = {len(avail122)}/25  "
         f"SRP064478 = {len(avail_srp)}/25  (GPL16791 = 25/25)",
         "",
-        f"Baseline W.mean AUC (all 25 genes):",
+        "Baseline W.mean AUC (all 25 genes):",
         f"  equal-weighted    : {baseline_wmean_eq:.4f}",
         f"  size-weighted     : {baseline_wmean_n:.4f}",
         *[f"  {c}: {baseline_aucs[c]:.4f}" for c in _N_COHORT],
@@ -675,56 +790,66 @@ def main() -> None:
         "  * = gene flagged critical under that weighting scheme.",
         "",
         f"Critical under equal weights  (n={len(critical_eq)}): "
-        + ", ".join(sym25[g] for g in critical_eq) if critical_eq else
-        "Critical under equal weights (n=0): (none)",
+        + ", ".join(sym25[g] for g in critical_eq)
+        if critical_eq
+        else "Critical under equal weights (n=0): (none)",
         f"Critical under sample-size weights (n={len(critical_n)}): "
-        + ", ".join(sym25[g] for g in critical_n) if critical_n else
-        "Critical under sample-size weights (n=0): (none)",
+        + ", ".join(sym25[g] for g in critical_n)
+        if critical_n
+        else "Critical under sample-size weights (n=0): (none)",
         f"Intersection (both schemes) (n={len(critical_intersect)}): "
-        + ", ".join(sym25[g] for g in critical_intersect) if critical_intersect else
-        "Intersection (both schemes) (n=0): (none)",
+        + ", ".join(sym25[g] for g in critical_intersect)
+        if critical_intersect
+        else "Intersection (both schemes) (n=0): (none)",
         f"Union (either scheme) (n={len(critical_union)}): "
-        + ", ".join(sym25[g] for g in critical_union) if critical_union else
-        "Union (either scheme) (n=0): (none)",
+        + ", ".join(sym25[g] for g in critical_union)
+        if critical_union
+        else "Union (either scheme) (n=0): (none)",
         "",
         "Per-cohort point AUC for each LOO panel (sorted by D_ZS_eq):",
-        f"{'Gene':>20s}  " + "  ".join(f"{'AUC_'+c:>12s}" for c in _N_COHORT),
+        f"{'Gene':>20s}  " + "  ".join(f"{'AUC_' + c:>12s}" for c in _N_COHORT),
         "-" * 80,
     ]
     for r in results:
         lines.append(
             f"{r['gene']:>20s}  "
-            + "  ".join(f"{r['auc_'+c]:>12.4f}" for c in _N_COHORT)
+            + "  ".join(f"{r['auc_' + c]:>12.4f}" for c in _N_COHORT)
         )
 
     stat_out = SCRIPT_DIR / "panel_loo_zeroshot_statistics.txt"
     stat_out.write_text("\n".join(lines) + "\n")
     print(f"\nSaved: {stat_out}")
-    print(f"\nCritical (equal weights, CI<0): n={len(critical_eq)}: "
-          + ", ".join(sym25[g] for g in critical_eq))
-    print(f"Critical (size weights, CI<0):  n={len(critical_n)}: "
-          + ", ".join(sym25[g] for g in critical_n))
+    print(
+        f"\nCritical (equal weights, CI<0): n={len(critical_eq)}: "
+        + ", ".join(sym25[g] for g in critical_eq)
+    )
+    print(
+        f"Critical (size weights, CI<0):  n={len(critical_n)}: "
+        + ", ".join(sym25[g] for g in critical_n)
+    )
 
     # ---- CSV of full per-gene table ----
     csv_rows = []
     for r in results:
-        csv_rows.append({
-            "gene": r["gene"],
-            "feature": r["feat"],
-            "D_ZS_equal": r["D_ZS_eq"],
-            "D_ZS_equal_ci_lo": r["D_ZS_eq_lo"],
-            "D_ZS_equal_ci_hi": r["D_ZS_eq_hi"],
-            "D_ZS_sizew": r["D_ZS_n"],
-            "D_ZS_sizew_ci_lo": r["D_ZS_n_lo"],
-            "D_ZS_sizew_ci_hi": r["D_ZS_n_hi"],
-            "critical_equal": r["critical_eq"],
-            "critical_sizew": r["critical_n"],
-            **{f"AUC_{c}_LOO": r[f"auc_{c}"] for c in _N_COHORT},
-            **{f"AUC_{c}_baseline": r[f"auc_{c}_base"] for c in _N_COHORT},
-            "avail_GSE76220": r["avail_76"],
-            "avail_GSE122649": r["avail_122"],
-            "avail_SRP064478": r["avail_srp"],
-        })
+        csv_rows.append(
+            {
+                "gene": r["gene"],
+                "feature": r["feat"],
+                "D_ZS_equal": r["D_ZS_eq"],
+                "D_ZS_equal_ci_lo": r["D_ZS_eq_lo"],
+                "D_ZS_equal_ci_hi": r["D_ZS_eq_hi"],
+                "D_ZS_sizew": r["D_ZS_n"],
+                "D_ZS_sizew_ci_lo": r["D_ZS_n_lo"],
+                "D_ZS_sizew_ci_hi": r["D_ZS_n_hi"],
+                "critical_equal": r["critical_eq"],
+                "critical_sizew": r["critical_n"],
+                **{f"AUC_{c}_LOO": r[f"auc_{c}"] for c in _N_COHORT},
+                **{f"AUC_{c}_baseline": r[f"auc_{c}_base"] for c in _N_COHORT},
+                "avail_GSE76220": r["avail_76"],
+                "avail_GSE122649": r["avail_122"],
+                "avail_SRP064478": r["avail_srp"],
+            }
+        )
     csv_out = SCRIPT_DIR / "panel_loo_zeroshot.csv"
     pd.DataFrame(csv_rows).to_csv(csv_out, index=False, float_format="%.5f")
     print(f"Saved: {csv_out}")
@@ -748,7 +873,7 @@ def main() -> None:
     n_critical_panel = 15
     sep_y = n_critical_panel - 0.5  # between rows 14 and 15 in 0-indexed y_pos
 
-    _C_RED   = "#C62828"  # strict CI<0 under this scheme
+    _C_RED = "#C62828"  # strict CI<0 under this scheme
     _C_AMBER = "#FBC02D"  # point D_ZS<0 but CI overlaps 0 (suggestive)
     _C_GREEN = "#388E3C"  # D_ZS>=0 (no evidence of criticality)
 
@@ -764,14 +889,26 @@ def main() -> None:
     colors = [_color_for(r, "D_ZS_eq", "critical_eq") for r in results]
     err_lo = [max(0.0, d - lo) for d, lo in zip(d_eq, d_eq_lo)]
     err_hi = [max(0.0, hi - d) for d, hi in zip(d_eq, d_eq_hi)]
-    ax.barh(y_pos, d_eq, color=colors, alpha=0.85, edgecolor="white",
-            xerr=[err_lo, err_hi], capsize=2,
-            error_kw=dict(ecolor="black", lw=0.7))
+    ax.barh(
+        y_pos,
+        d_eq,
+        color=colors,
+        alpha=0.85,
+        edgecolor="white",
+        xerr=[err_lo, err_hi],
+        capsize=2,
+        error_kw=dict(ecolor="black", lw=0.7),
+    )
     ax.set_yticks(y_pos)
     ax.set_yticklabels(genes, fontsize=8)
     ax.axvline(0, color="black", lw=0.9)
-    ax.axhline(sep_y, color="black", ls=":", lw=1.2,
-                label="Greedy-elim k=15 peak (15-crit panel above)")
+    ax.axhline(
+        sep_y,
+        color="black",
+        ls=":",
+        lw=1.2,
+        label=f"Greedy-elim k={_K_CRIT} peak ({_CRIT_LABEL} panel above)",
+    )
     ax.set_xlabel("D_ZS (W.mean AUC change from removing gene, 95% CI)")
     ax.set_title(
         f"Equal-weight LOO D_ZS — {N_SEEDS}-seed ensemble + paired bootstrap CI\n"
@@ -782,17 +919,31 @@ def main() -> None:
     ax.grid(axis="x", alpha=0.3)
     for i, r in enumerate(results):
         if r["critical_eq"]:
-            ax.text(d_eq_hi[i] + 0.001, y_pos[i], "*", va="center", fontsize=10,
-                    color=_C_RED, fontweight="bold")
+            ax.text(
+                d_eq_hi[i] + 0.001,
+                y_pos[i],
+                "*",
+                va="center",
+                fontsize=10,
+                color=_C_RED,
+                fontweight="bold",
+            )
 
     # Right panel: sample-size weighted D_ZS with CI (sensitivity)
     ax = axes[1]
     colors2 = [_color_for(r, "D_ZS_n", "critical_n") for r in results]
     err_lo2 = [max(0.0, d - lo) for d, lo in zip(d_n, d_n_lo)]
     err_hi2 = [max(0.0, hi - d) for d, hi in zip(d_n, d_n_hi)]
-    ax.barh(y_pos, d_n, color=colors2, alpha=0.85, edgecolor="white",
-            xerr=[err_lo2, err_hi2], capsize=2,
-            error_kw=dict(ecolor="black", lw=0.7))
+    ax.barh(
+        y_pos,
+        d_n,
+        color=colors2,
+        alpha=0.85,
+        edgecolor="white",
+        xerr=[err_lo2, err_hi2],
+        capsize=2,
+        error_kw=dict(ecolor="black", lw=0.7),
+    )
     ax.set_yticks(y_pos)
     ax.set_yticklabels(genes, fontsize=8)
     ax.axvline(0, color="black", lw=0.9)
@@ -807,28 +958,51 @@ def main() -> None:
     ax.grid(axis="x", alpha=0.3)
     for i, r in enumerate(results):
         if r["critical_n"]:
-            ax.text(d_n_hi[i] + 0.001, y_pos[i], "*", va="center", fontsize=10,
-                    color=_C_RED, fontweight="bold")
+            ax.text(
+                d_n_hi[i] + 0.001,
+                y_pos[i],
+                "*",
+                va="center",
+                fontsize=10,
+                color=_C_RED,
+                fontweight="bold",
+            )
 
     # Single shared legend below the two panels
     from matplotlib.patches import Patch
+
     legend_handles = [
-        Patch(facecolor=_C_RED,   edgecolor="white",
-              label="Strict critical: 95% CI of D_ZS < 0 (red bars marked *)"),
-        Patch(facecolor=_C_AMBER, edgecolor="white",
-              label="Suggestive: point D_ZS < 0 but 95% CI overlaps 0"),
-        Patch(facecolor=_C_GREEN, edgecolor="white",
-              label="No evidence of criticality: D_ZS ≥ 0"),
+        Patch(
+            facecolor=_C_RED,
+            edgecolor="white",
+            label="Strict critical: 95% CI of D_ZS < 0 (red bars marked *)",
+        ),
+        Patch(
+            facecolor=_C_AMBER,
+            edgecolor="white",
+            label="Suggestive: point D_ZS < 0 but 95% CI overlaps 0",
+        ),
+        Patch(
+            facecolor=_C_GREEN,
+            edgecolor="white",
+            label="No evidence of criticality: D_ZS ≥ 0",
+        ),
     ]
-    fig.legend(handles=legend_handles, loc="lower center", ncol=3,
-                bbox_to_anchor=(0.5, -0.02), fontsize=9, frameon=False)
+    fig.legend(
+        handles=legend_handles,
+        loc="lower center",
+        ncol=3,
+        bbox_to_anchor=(0.5, -0.02),
+        fontsize=9,
+        frameon=False,
+    )
 
     plt.suptitle(
         f"Per-gene cross-cohort LOO D_ZS — 25-gene panel ({N_SEEDS}-seed ensemble, "
         f"paired bootstrap B={N_BOOTSTRAP})\n"
         f"GPL24676 (n=874) training → 4 CNS validation cohorts (N={_TOTAL_N})  |  "
         f"Genes sorted by greedy backward-elimination drop step (survivors top, "
-        f"dropouts bottom); dotted line = 15-crit panel boundary",
+        f"dropouts bottom); dotted line = {_CRIT_LABEL} panel boundary",
         fontsize=10,
     )
     plt.tight_layout()

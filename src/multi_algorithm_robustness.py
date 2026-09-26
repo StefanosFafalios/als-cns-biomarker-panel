@@ -39,13 +39,14 @@ TOP_K = 25  # panel size and comparison rank cut-off
 
 def main() -> None:
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import pandas as pd
-    from lightgbm import LGBMClassifier
-    from sklearn.linear_model import LogisticRegressionCV
     from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegressionCV
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     print("=" * 65)
     print("Multi-Algorithm Robustness Check")
@@ -64,19 +65,22 @@ def main() -> None:
         next(c for c in panel_df.columns if "feature" in c.lower()),
     )
     panel_ids = set(panel_df[ensg_col].str.split(".").str[0].tolist())
-    panel_symbols = dict(zip(
-        panel_df[ensg_col].str.split(".").str[0],
-        panel_df.get("symbol", panel_df.get("gene_symbol", panel_df[ensg_col]))
-    ))
+    panel_symbols = dict(
+        zip(
+            panel_df[ensg_col].str.split(".").str[0],
+            panel_df.get("symbol", panel_df.get("gene_symbol", panel_df[ensg_col])),
+        )
+    )
 
     # ------------------------------------------------------------------
     # 2. Load training data
     # ------------------------------------------------------------------
     print("\n[2] Loading training data ...")
-    (ds,) = load_dataset("GSE153960", platform=PLATFORM,
-                         resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform=PLATFORM, resources_dir=ALS_DIR / "resources"
+    )
     y = ds.y.values
-    print(f"  n={len(y)}  ALS={y.sum()}  Ctrl={(y==0).sum()}")
+    print(f"  n={len(y)}  ALS={y.sum()}  Ctrl={(y == 0).sum()}")
 
     prefilter_names = _PREFILTER_NAMES.read_text().splitlines()
     X_full = np.load(_PREFILTER_X)
@@ -84,8 +88,9 @@ def main() -> None:
     name_to_idx = {n.split(".")[0]: i for i, n in enumerate(prefilter_names)}
     top500_base = [f.split(".")[0] for f in top500_features]
     col_idx = [name_to_idx[f] for f in top500_base if f in name_to_idx]
-    feature_names = [top500_base[i] for i, f in enumerate(top500_base)
-                     if f in name_to_idx]
+    feature_names = [
+        top500_base[i] for i, f in enumerate(top500_base) if f in name_to_idx
+    ]
     X = X_full[:, col_idx]
     print(f"  Top-500 features loaded: {X.shape}")
 
@@ -175,10 +180,17 @@ def main() -> None:
     panel_in_lr = len(panel_ids & lr_top25)
     panel_in_rf = len(panel_ids & rf_top25)
     panel_in_all3 = len(panel_ids & shap_top25 & lgbm_top25 & rf_top25)
-    panel_in_any2 = len(panel_ids & (
-        (shap_top25 & lgbm_top25) | (shap_top25 & lr_top25) | (shap_top25 & rf_top25) |
-        (lgbm_top25 & lr_top25) | (lgbm_top25 & rf_top25) | (lr_top25 & rf_top25)
-    ))
+    panel_in_any2 = len(
+        panel_ids
+        & (
+            (shap_top25 & lgbm_top25)
+            | (shap_top25 & lr_top25)
+            | (shap_top25 & rf_top25)
+            | (lgbm_top25 & lr_top25)
+            | (lgbm_top25 & rf_top25)
+            | (lr_top25 & rf_top25)
+        )
+    )
 
     # ------------------------------------------------------------------
     # 8. Rank convergence — per panel gene, rank in each method
@@ -200,14 +212,16 @@ def main() -> None:
         lgbm_r = _get_rank(ensg_base, lgbm_ids)
         lr_r = _get_rank(ensg_base, lr_ids)
         rf_r = _get_rank(ensg_base, rf_ids)
-        gene_ranks.append({
-            "symbol": sym,
-            "ensg": ensg_base,
-            "shap_rank": shap_r,
-            "lgbm_rank": lgbm_r,
-            "lr_rank": lr_r,
-            "rf_rank": rf_r,
-        })
+        gene_ranks.append(
+            {
+                "symbol": sym,
+                "ensg": ensg_base,
+                "shap_rank": shap_r,
+                "lgbm_rank": lgbm_r,
+                "lr_rank": lr_r,
+                "rf_rank": rf_r,
+            }
+        )
 
     gene_ranks.sort(key=lambda x: x["shap_rank"] or 9999)
 
@@ -216,8 +230,9 @@ def main() -> None:
     # ------------------------------------------------------------------
     print("\n[7] Plotting ...")
     fig, axes = plt.subplots(1, 3, figsize=(14, 5))
-    fig.suptitle("Multi-Algorithm Robustness: top-500 feature importance rankings",
-                 fontsize=11)
+    fig.suptitle(
+        "Multi-Algorithm Robustness: top-500 feature importance rankings", fontsize=11
+    )
 
     # Panel A: top-25 overlap heatmap (Jaccard)
     ax = axes[0]
@@ -235,8 +250,15 @@ def main() -> None:
     ax.set_yticklabels(methods, fontsize=9)
     for i in range(n):
         for j in range(n):
-            ax.text(j, i, f"{mat[i,j]:.2f}", ha="center", va="center",
-                    fontsize=9, color="black" if mat[i, j] < 0.6 else "white")
+            ax.text(
+                j,
+                i,
+                f"{mat[i, j]:.2f}",
+                ha="center",
+                va="center",
+                fontsize=9,
+                color="black" if mat[i, j] < 0.6 else "white",
+            )
     ax.set_title(f"Jaccard overlap (top-{TOP_K})", fontsize=10)
     fig.colorbar(im, ax=ax, fraction=0.046)
 
@@ -261,8 +283,7 @@ def main() -> None:
 
     rank_mat = np.array([shap_ranks, lgbm_ranks, lr_ranks, rf_ranks]).T  # 25 × 4
     rank_mat_capped = np.clip(rank_mat, 1, 100)
-    im2 = ax.imshow(rank_mat_capped.T, aspect="auto", cmap="RdYlGn_r",
-                    vmin=1, vmax=100)
+    im2 = ax.imshow(rank_mat_capped.T, aspect="auto", cmap="RdYlGn_r", vmin=1, vmax=100)
     ax.set_xticks(range(len(syms)))
     ax.set_xticklabels(syms, rotation=90, fontsize=7)
     ax.set_yticks(range(4))
@@ -282,8 +303,8 @@ def main() -> None:
     lines: list[str] = [
         "Multi-Algorithm Robustness Check",
         "=" * 60,
-        f"Feature space: top-500 SHAP-ranked features",
-        f"Methods compared: SHAP (primary), LightGBM-gain, LR-L1 (CV), RF",
+        "Feature space: top-500 SHAP-ranked features",
+        "Methods compared: SHAP (primary), LightGBM-gain, LR-L1 (CV), RF",
         f"Comparison cut-off: top-{TOP_K} features per method",
         "",
         "Pairwise Jaccard overlap (top-25):",
@@ -305,8 +326,10 @@ def main() -> None:
         "-" * 45,
     ]
     for g in gene_ranks:
+
         def _r(v):
             return str(v) if v else ">500"
+
         lines.append(
             f"  {g['symbol']:<12}  {_r(g['shap_rank']):>6}  "
             f"{_r(g['lgbm_rank']):>6}  {_r(g['lr_rank']):>6}  {_r(g['rf_rank']):>6}"

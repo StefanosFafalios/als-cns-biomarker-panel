@@ -34,7 +34,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset
+from utils import adjust_colsample, load_dataset
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -103,7 +103,7 @@ def _load_top500() -> tuple[np.ndarray, list[str], np.ndarray]:
 def _train(X: np.ndarray, y: np.ndarray) -> object:
     from lightgbm import LGBMClassifier
 
-    clf = LGBMClassifier(**LGBM_PARAMS)
+    clf = LGBMClassifier(**adjust_colsample(LGBM_PARAMS, X.shape[1]))
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
         clf.fit(X, y)
@@ -160,9 +160,16 @@ def _run_curve(
 
     for k in range(start_k, len(ranked_names) + 1):
         X_k = X[:, rank_cols[:k]]
+        # colsample_bytree is re-expressed at every k. Without this the curve
+        # does not compare like with like: the tuned fraction (0.0667, ~33
+        # features/tree on 500) floors to 1 feature/tree for every k <= 33, so
+        # effective model capacity varies non-monotonically along the curve
+        # (100% of features at k=1, 4% at k=25, 6.7% at k=500) and the elbow
+        # position is not interpretable.
+        params_k = adjust_colsample(LGBM_PARAMS, k)
         fold_aucs = []
         for tr, te in skf.split(X_k, y):
-            clf = LGBMClassifier(**LGBM_PARAMS)
+            clf = LGBMClassifier(**params_k)
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore")
                 clf.fit(X_k[tr], y[tr])
@@ -218,9 +225,10 @@ def _run_loo(
 
         mask = all_mask.copy()
         mask[name_to_col[feat]] = False
+        params_loo = adjust_colsample(LGBM_PARAMS, int(mask.sum()))
         fold_aucs = []
         for tr, te in skf.split(X[:, mask], y):
-            clf = LGBMClassifier(**LGBM_PARAMS)
+            clf = LGBMClassifier(**params_loo)
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore")
                 clf.fit(X[tr][:, mask], y[tr])
@@ -331,8 +339,9 @@ def _plot_curve_top50(
             linewidth=1.2,
             label=f"Core panel: k={K_STAR}, AUC={auc50[K_STAR - 1]:.4f}",
         )
-        ax.plot(K_STAR, auc50[K_STAR - 1], "o", color="seagreen", markersize=9,
-                zorder=5)
+        ax.plot(
+            K_STAR, auc50[K_STAR - 1], "o", color="seagreen", markersize=9, zorder=5
+        )
     ax.set_xticks(k50)
     ax.set_xticklabels(labels, rotation=90, fontsize=7)
     ax.set_ylabel("Mean AUC-ROC  (5-fold stratified CV, random_state=42)")
@@ -515,7 +524,7 @@ def main() -> None:
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
     fold_aucs = []
     for tr, te in skf.split(X, y_int):
-        clf = LGBMClassifier(**LGBM_PARAMS)
+        clf = LGBMClassifier(**adjust_colsample(LGBM_PARAMS, X.shape[1]))
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             clf.fit(X[tr], y_int[tr])

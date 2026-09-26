@@ -53,8 +53,21 @@ N_BOOTSTRAP = 2_000
 PLATFORM = "GPL24676"
 
 _PC_SYMS: set[str] = {
-    "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-    "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+    "MECOM",
+    "SERTAD1",
+    "FCN3",
+    "PROS1",
+    "ANGPT2",
+    "EMP1",
+    "TINAGL1",
+    "CKMT2",
+    "VWF",
+    "CLDN5",
+    "NR4A1",
+    "SOHLH2",
+    "HEXB",
+    "MCEE",
+    "SLC37A2",
 }
 
 
@@ -75,7 +88,11 @@ def _load_symbol_map() -> dict[str, str]:
         df = pd.read_csv(_ANNOT_TSV, sep="\t")
         ensg_col = next((c for c in df.columns if "ensg" in c.lower()), None)
         sym_col = next(
-            (c for c in df.columns if "symbol" in c.lower() or "gene_name" in c.lower()),
+            (
+                c
+                for c in df.columns
+                if "symbol" in c.lower() or "gene_name" in c.lower()
+            ),
             None,
         )
         if ensg_col is not None and sym_col is not None:
@@ -114,7 +131,9 @@ def _load_train(
     )
     panel_ensg = panel_df[ensg_col].tolist()
 
-    (ds,) = load_dataset("GSE153960", platform=PLATFORM, resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform=PLATFORM, resources_dir=ALS_DIR / "resources"
+    )
     X_log = np.log1p(ds.X.values.astype(np.float32))
     feat_map = {n: i for i, n in enumerate(ds.X.columns)}
 
@@ -300,15 +319,18 @@ def _plot(
         if p < 0.05:
             x = rb + 0.01 if rb >= 0 else rb - 0.01
             ax.text(
-                x, i, "*", va="center", fontsize=10,
+                x,
+                i,
+                "*",
+                va="center",
+                fontsize=10,
                 ha="left" if rb >= 0 else "right",
             )
     ax.set_yticks(y_pos)
     ax.set_yticklabels(gene_labels, fontsize=8)
     ax.set_xlabel("Rank-biserial r (FCX vs Cereb expression)")
     ax.set_title(
-        "Per-gene expression: FCX vs Cereb\n"
-        "(red = higher in FCX; * = MWU p < 0.05)",
+        "Per-gene expression: FCX vs Cereb\n(red = higher in FCX; * = MWU p < 0.05)",
         fontsize=9,
     )
     ax.grid(alpha=0.3, axis="x")
@@ -325,10 +347,9 @@ def _plot(
 
 
 def main() -> None:
-    import pandas as pd
-    from lightgbm import LGBMClassifier
-    from scipy.stats import mannwhitneyu, wilcoxon, false_discovery_control
+    from scipy.stats import false_discovery_control, mannwhitneyu, wilcoxon
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     print("=" * 65)
     print("GSE67196 Regional ALS Model Scoring")
@@ -338,7 +359,9 @@ def main() -> None:
     print("\n[1] Loading panel annotation and training data ...")
     sym_map = _load_symbol_map()
     X_train, y_train, _, symbols = _load_train(sym_map)
-    print(f"  Training: {X_train.shape}  ALS={int(y_train.sum())}  Ctrl={int((y_train==0).sum())}")
+    print(
+        f"  Training: {X_train.shape}  ALS={int(y_train.sum())}  Ctrl={int((y_train == 0).sum())}"
+    )
     print(f"  Panel genes used: {symbols}")
 
     # ------------------------------------------------------------------
@@ -412,9 +435,13 @@ def main() -> None:
     ci_lo, ci_hi = _bootstrap_ci(scores_fcx, scores_cereb, N_BOOTSTRAP, rng)
 
     print(f"  MWU: U={stat_mwu:.0f}  p={p_mwu:.4f}  r_b={rb_mwu:.4f}")
-    print(f"  Wilcoxon (paired n={len(paired_subjects)}): W={stat_wilcox:.0f}  p={p_wilcox:.4f}")
-    print(f"  Δmedian(FCX−Cereb) = {np.median(scores_fcx)-np.median(scores_cereb):.4f}  "
-          f"95%CI [{ci_lo:.4f}, {ci_hi:.4f}]")
+    print(
+        f"  Wilcoxon (paired n={len(paired_subjects)}): W={stat_wilcox:.0f}  p={p_wilcox:.4f}"
+    )
+    print(
+        f"  Δmedian(FCX−Cereb) = {np.median(scores_fcx) - np.median(scores_cereb):.4f}  "
+        f"95%CI [{ci_lo:.4f}, {ci_hi:.4f}]"
+    )
 
     # ------------------------------------------------------------------
     print("\n[6] Per-gene expression comparison (FCX vs Cereb) ...")
@@ -431,8 +458,7 @@ def main() -> None:
     _pvals_array = np.array([p for _, _, p in per_gene_rb])
     _qvals_array = false_discovery_control(_pvals_array, method="bh")
     per_gene_rbq: list[tuple[str, float, float, float]] = [
-        (sym, rb, p, float(q))
-        for (sym, rb, p), q in zip(per_gene_rb, _qvals_array)
+        (sym, rb, p, float(q)) for (sym, rb, p), q in zip(per_gene_rb, _qvals_array)
     ]
 
     # ------------------------------------------------------------------
@@ -460,7 +486,7 @@ def main() -> None:
         "  Phenotype: ALS Spectrum MND only (no non-neurological controls)",
         "",
         f"Model: LightGBM trained on GPL24676 (n=874; ALS={int(y_train.sum())}, "
-        f"Ctrl={int((y_train==0).sum())})",
+        f"Ctrl={int((y_train == 0).sum())})",
         f"Panel genes matched ({len(matched_syms)}): {', '.join(matched_syms)}",
         f"Missing genes ({len(missing)}): {', '.join(missing) if missing else 'none'}",
         "",
@@ -469,11 +495,11 @@ def main() -> None:
         "",
         "Score summary:",
         f"  Median FCX:   {np.median(scores_fcx):.4f}  "
-        f"(IQR [{np.percentile(scores_fcx,25):.4f}, {np.percentile(scores_fcx,75):.4f}])",
+        f"(IQR [{np.percentile(scores_fcx, 25):.4f}, {np.percentile(scores_fcx, 75):.4f}])",
         f"  Median Cereb: {np.median(scores_cereb):.4f}  "
-        f"(IQR [{np.percentile(scores_cereb,25):.4f}, {np.percentile(scores_cereb,75):.4f}])",
+        f"(IQR [{np.percentile(scores_cereb, 25):.4f}, {np.percentile(scores_cereb, 75):.4f}])",
         f"  Δmedian (FCX−Cereb): "
-        f"{np.median(scores_fcx)-np.median(scores_cereb):.4f}  "
+        f"{np.median(scores_fcx) - np.median(scores_cereb):.4f}  "
         f"95%CI [{ci_lo:.4f}, {ci_hi:.4f}]",
         "",
         "Statistical tests:",
@@ -515,7 +541,9 @@ def main() -> None:
         f"  {'Subject':<12}  {'Δ score':>10}",
         "-" * 28,
     ]
-    for s in sorted(paired_subjects, key=lambda x: -(sub_to_fcx_score[x] - sub_to_cereb_score[x])):
+    for s in sorted(
+        paired_subjects, key=lambda x: -(sub_to_fcx_score[x] - sub_to_cereb_score[x])
+    ):
         d = sub_to_fcx_score[s] - sub_to_cereb_score[s]
         lines.append(f"  {s:<12}  {d:+10.4f}")
 

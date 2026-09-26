@@ -44,10 +44,10 @@ _PREFILTER_X_NPY = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES_TXT = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
-AUC_THRESHOLD = 0.60   # defines "individually weak" pool
-SHORTLIST_K = 100      # pairs/triples/quads validated with LightGBM CV
-GREEDY_SEED = 30       # top pairs used as seeds for triple/quad extension
-SYNERGY_DELTA = 0.04   # min gain over best individual to flag as synergistic
+AUC_THRESHOLD = 0.60  # defines "individually weak" pool
+SHORTLIST_K = 100  # pairs/triples/quads validated with LightGBM CV
+GREEDY_SEED = 30  # top pairs used as seeds for triple/quad extension
+SYNERGY_DELTA = 0.04  # min gain over best individual to flag as synergistic
 CV_FOLDS = 5
 CV_RANDOM_STATE = 42
 TOP_DISPLAY = 20
@@ -101,7 +101,9 @@ def _resolve_symbols(features: list[str]) -> dict[str, str]:
                 q = h.get("query", "")
                 base_map[q] = h.get("symbol", q)
         except Exception as exc:
-            print(f"    [warn] MyGeneInfo batch {start}–{start+len(batch)} failed: {exc}")
+            print(
+                f"    [warn] MyGeneInfo batch {start}–{start + len(batch)} failed: {exc}"
+            )
             for b in batch:
                 base_map.setdefault(b, b)
         print(f"    Resolved {min(start + batch_size, len(bases))}/{len(bases)} ...")
@@ -141,9 +143,9 @@ def _lr_auc(X_sub: np.ndarray, y: np.ndarray) -> float:
 
 def _lgbm_auc(X_sub: np.ndarray, y: np.ndarray, params: dict) -> float:
     """LightGBM 5-fold CV AUC — final validation."""
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
     aucs = []
@@ -224,7 +226,7 @@ def _validate_top(
     k: int,
 ) -> list[dict]:
     """Run LightGBM CV on the top-SHORTLIST_K candidates and return results."""
-    top = candidates[: SHORTLIST_K]
+    top = candidates[:SHORTLIST_K]
     print(f"    Validating top {len(top)} candidates with LightGBM CV ...")
     results = []
     for rank, (lr_a, lr_syn, cols) in enumerate(top, 1):
@@ -269,16 +271,28 @@ def _plot(results: list[dict], k: int, label: str) -> None:
     fig, ax = plt.subplots(figsize=(11, max(0.55 * n, 5)))
     y_pos = list(range(n - 1, -1, -1))
 
-    ax.barh(y_pos, best_indivs[::-1], color="#bbbbbb", edgecolor="none",
-            label="Best individual AUC")
     ax.barh(
-        y_pos, synergies[::-1], left=best_indivs[::-1],
+        y_pos,
+        best_indivs[::-1],
+        color="#bbbbbb",
+        edgecolor="none",
+        label="Best individual AUC",
+    )
+    ax.barh(
+        y_pos,
+        synergies[::-1],
+        left=best_indivs[::-1],
         color=["#2ca02c" if s >= SYNERGY_DELTA else "#ff7f0e" for s in synergies[::-1]],
         edgecolor="none",
         label=f"Synergy gain (Δ ≥ {SYNERGY_DELTA}: green, else orange)",
     )
-    ax.axvline(AUC_THRESHOLD, color="red", linestyle="--", linewidth=0.9,
-               label=f"Individual AUC threshold ({AUC_THRESHOLD})")
+    ax.axvline(
+        AUC_THRESHOLD,
+        color="red",
+        linestyle="--",
+        linewidth=0.9,
+        label=f"Individual AUC threshold ({AUC_THRESHOLD})",
+    )
     ax.set_yticks(y_pos)
     ax.set_yticklabels(
         [f"{r['genes']}  [Δ={r['synergy_score']:+.3f}]" for r in top[::-1]],
@@ -340,7 +354,7 @@ def main() -> None:
         f"  Pool: {len(pool)} features with univariate AUC < {AUC_THRESHOLD}  "
         f"(range {indiv_aucs[pool].min():.3f}–{indiv_aucs[pool].max():.3f})"
     )
-    print(f"  Top-5 pool members by AUC:")
+    print("  Top-5 pool members by AUC:")
     sorted_pool = sorted(pool, key=lambda i: indiv_aucs[i], reverse=True)
     for i in sorted_pool[:5]:
         print(f"    {symbols[i]:<22} AUC={indiv_aucs[i]:.4f}")
@@ -350,7 +364,9 @@ def main() -> None:
     # ------------------------------------------------------------------
     print("\n--- PAIRS ---")
     pair_candidates = _screen_pairs(X, y_int, pool, indiv_aucs)
-    pair_results = _validate_top(X, y_int, pair_candidates, indiv_aucs, symbols, params, k=2)
+    pair_results = _validate_top(
+        X, y_int, pair_candidates, indiv_aucs, symbols, params, k=2
+    )
     pd.DataFrame(pair_results).to_csv(SCRIPT_DIR / "synergy500_pairs.csv", index=False)
     synergistic_pairs = [r for r in pair_results if r["synergy_score"] >= SYNERGY_DELTA]
     print(
@@ -374,8 +390,12 @@ def main() -> None:
     triple_results = _validate_top(
         X, y_int, triple_candidates, indiv_aucs, symbols, params, k=3
     )
-    pd.DataFrame(triple_results).to_csv(SCRIPT_DIR / "synergy500_triples.csv", index=False)
-    synergistic_triples = [r for r in triple_results if r["synergy_score"] >= SYNERGY_DELTA]
+    pd.DataFrame(triple_results).to_csv(
+        SCRIPT_DIR / "synergy500_triples.csv", index=False
+    )
+    synergistic_triples = [
+        r for r in triple_results if r["synergy_score"] >= SYNERGY_DELTA
+    ]
     print(
         f"  {len(synergistic_triples)}/{len(triple_results)} validated triples "
         f"with synergy Δ ≥ {SYNERGY_DELTA}"

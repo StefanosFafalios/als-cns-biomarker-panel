@@ -6,13 +6,13 @@ genes. Computes CNS specificity scores and validates the per-tissue biological
 story (CKMT2 motor-cortex depletion, SERTAD1 CNS expression, CLDN5/VWF
 endothelial specificity, etc.).
 """
+
 from __future__ import annotations
 
 import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
 import requests
@@ -23,33 +23,66 @@ GTEX_API = "https://gtexportal.org/api/v2"
 DATASET = "gtex_v8"
 
 _PROTEIN_CODING = [
-    "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1",
-    "TINAGL1", "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2",
-    "HEXB", "MCEE", "SLC37A2",
+    "MECOM",
+    "SERTAD1",
+    "FCN3",
+    "PROS1",
+    "ANGPT2",
+    "EMP1",
+    "TINAGL1",
+    "CKMT2",
+    "VWF",
+    "CLDN5",
+    "NR4A1",
+    "SOHLH2",
+    "HEXB",
+    "MCEE",
+    "SLC37A2",
 ]
 
 _DIRECTION: dict[str, str] = {
-    "MECOM": "down", "SERTAD1": "up", "FCN3": "up", "PROS1": "up",
-    "ANGPT2": "down", "EMP1": "up", "TINAGL1": "down", "CKMT2": "down",
-    "VWF": "down", "CLDN5": "down", "NR4A1": "down", "SOHLH2": "up",
-    "HEXB": "up", "MCEE": "up", "SLC37A2": "up",
+    "MECOM": "down",
+    "SERTAD1": "up",
+    "FCN3": "up",
+    "PROS1": "up",
+    "ANGPT2": "down",
+    "EMP1": "up",
+    "TINAGL1": "down",
+    "CKMT2": "down",
+    "VWF": "down",
+    "CLDN5": "down",
+    "NR4A1": "down",
+    "SOHLH2": "up",
+    "HEXB": "up",
+    "MCEE": "up",
+    "SLC37A2": "up",
 }
 
 # Canonical CNS tissues in GTEx v8 (tissueSiteDetailId)
 _CNS_TISSUES = {
-    "Brain_Cortex", "Brain_Frontal_Cortex_BA9", "Brain_Anterior_cingulate_cortex_BA24",
-    "Brain_Spinal_cord_cervical_c-1", "Brain_Amygdala", "Brain_Caudate_basal_ganglia",
-    "Brain_Cerebellum", "Brain_Cerebellar_Hemisphere", "Brain_Hippocampus",
-    "Brain_Hypothalamus", "Brain_Nucleus_accumbens_basal_ganglia",
-    "Brain_Putamen_basal_ganglia", "Brain_Substantia_nigra", "Brain_Putamen_basal_ganglia",
+    "Brain_Cortex",
+    "Brain_Frontal_Cortex_BA9",
+    "Brain_Anterior_cingulate_cortex_BA24",
+    "Brain_Spinal_cord_cervical_c-1",
+    "Brain_Amygdala",
+    "Brain_Caudate_basal_ganglia",
+    "Brain_Cerebellum",
+    "Brain_Cerebellar_Hemisphere",
+    "Brain_Hippocampus",
+    "Brain_Hypothalamus",
+    "Brain_Nucleus_accumbens_basal_ganglia",
+    "Brain_Putamen_basal_ganglia",
+    "Brain_Substantia_nigra",
+    "Brain_Putamen_basal_ganglia",
 }
 
 
 def _get_gencode_id(symbol: str) -> str | None:
     """Look up GTEx v26 gencodeId for a gene symbol."""
     try:
-        r = requests.get(f"{GTEX_API}/reference/gene",
-                         params={"geneId": symbol}, timeout=15)
+        r = requests.get(
+            f"{GTEX_API}/reference/gene", params={"geneId": symbol}, timeout=15
+        )
         r.raise_for_status()
         data = r.json().get("data", [])
         if data:
@@ -73,7 +106,7 @@ def _get_median_expression(gencode_id: str) -> list[dict]:
         except Exception:
             if attempt == 2:
                 return []
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
     return []
 
 
@@ -122,12 +155,17 @@ def main() -> None:
     # Build expression matrix: tissues × genes
     all_tissues = sorted({t for d in all_records.values() for t in d})
     expr_df = pd.DataFrame(
-        {gene: [all_records.get(gene, {}).get(t, np.nan) for t in all_tissues]
-         for gene in _PROTEIN_CODING if gene in all_records},
+        {
+            gene: [all_records.get(gene, {}).get(t, np.nan) for t in all_tissues]
+            for gene in _PROTEIN_CODING
+            if gene in all_records
+        },
         index=all_tissues,
     )
     spec_df = (
-        pd.DataFrame({"Gene": list(specs.keys()), "CNS_specificity": list(specs.values())})
+        pd.DataFrame(
+            {"Gene": list(specs.keys()), "CNS_specificity": list(specs.values())}
+        )
         .sort_values("CNS_specificity", ascending=False)
         .reset_index(drop=True)
     )
@@ -138,7 +176,9 @@ def main() -> None:
 
     _plot(expr_df, spec_df, all_records)
     _write_statistics(expr_df, spec_df, all_records, gencode_ids)
-    print("\nDone. Outputs: gtex_tissue_specificity.png  gtex_tissue_specificity_statistics.txt")
+    print(
+        "\nDone. Outputs: gtex_tissue_specificity.png  gtex_tissue_specificity_statistics.txt"
+    )
 
 
 def _plot(
@@ -163,17 +203,28 @@ def _plot(
     # Panel B — expression heatmap (log1p TPM, top CNS tissues + selected body tissues)
     ax = axes[1]
     highlight_tissues = [
-        t for t in expr_df.index if "Brain" in t or "Spinal" in t
-        or t in {"Liver", "Kidney_Cortex", "Heart_Left_Ventricle",
-                 "Lung", "Artery_Tibial", "Blood", "Muscle_Skeletal"}
+        t
+        for t in expr_df.index
+        if "Brain" in t
+        or "Spinal" in t
+        or t
+        in {
+            "Liver",
+            "Kidney_Cortex",
+            "Heart_Left_Ventricle",
+            "Lung",
+            "Artery_Tibial",
+            "Blood",
+            "Muscle_Skeletal",
+        }
     ]
     sub = np.log1p(expr_df.loc[highlight_tissues].fillna(0))
-    im = ax.imshow(sub.T, aspect="auto", cmap="YlOrRd",
-                   vmin=0, vmax=sub.max().max())
+    im = ax.imshow(sub.T, aspect="auto", cmap="YlOrRd", vmin=0, vmax=sub.max().max())
     ax.set_xticks(range(len(highlight_tissues)))
     ax.set_xticklabels(
         [t.replace("Brain_", "").replace("_", " ")[:20] for t in highlight_tissues],
-        rotation=90, fontsize=9,
+        rotation=90,
+        fontsize=9,
     )
     ax.set_yticks(range(len(sub.columns)))
     ax.set_yticklabels(sub.columns, fontsize=8)
@@ -186,12 +237,19 @@ def _plot(
     brain_tissues = sorted([t for t in expr_df.index if "Brain" in t or "Spinal" in t])
     for i, gene in enumerate(p for p in priority if p in expr_df.columns):
         vals_gene = [all_records.get(gene, {}).get(t, np.nan) for t in brain_tissues]
-        ax.plot(range(len(brain_tissues)), vals_gene,
-                marker="o", markersize=4, linewidth=1.5, label=gene)
+        ax.plot(
+            range(len(brain_tissues)),
+            vals_gene,
+            marker="o",
+            markersize=4,
+            linewidth=1.5,
+            label=gene,
+        )
     ax.set_xticks(range(len(brain_tissues)))
     ax.set_xticklabels(
         [t.replace("Brain_", "").replace("_", " ")[:15] for t in brain_tissues],
-        rotation=90, fontsize=9,
+        rotation=90,
+        fontsize=9,
     )
     ax.set_yscale("log")
     ax.set_ylabel("Median TPM (GTEx v8, log scale)")
@@ -201,7 +259,9 @@ def _plot(
     ax.set_axisbelow(True)
 
     plt.tight_layout()
-    plt.savefig(SCRIPT_DIR / "gtex_tissue_specificity.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        SCRIPT_DIR / "gtex_tissue_specificity.png", dpi=150, bbox_inches="tight"
+    )
     plt.close()
 
 

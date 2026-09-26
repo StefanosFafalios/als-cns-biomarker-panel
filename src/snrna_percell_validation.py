@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import glob
 import re
+import sys
 import warnings
 from pathlib import Path
 
@@ -36,6 +37,10 @@ import numpy as np
 import scipy.sparse as sp
 
 SCRIPT_DIR = Path(__file__).parent
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+
+from utils import critical_panel_symbols
+
 _H5_DIR = SCRIPT_DIR.parent / "resources" / "GSE219280" / "suppl"
 MIN_COUNTS = 500  # per-nucleus QC floor
 
@@ -48,19 +53,18 @@ _MARKERS = {
     "OPC": ["PDGFRA", "CSPG4", "OLIG1", "OLIG2"],
     "endothelial": ["CLDN5", "FLT1", "PECAM1", "VWF"],
 }
+# Bulk sign-reversal candidates. SERTAD1 is kept even though the non-inferiority
+# stopping rule dropped it from the critical panel: its per-nucleus detectability
+# is what motivated the reversal question in the first place.
 _TEST = ["FCN3", "SERTAD1"]
+
+# Panel genes to localise: the canonical protein-coding critical panel, minus the
+# ones already carried by _MARKERS (CLDN5) or _TEST (FCN3), which would otherwise
+# be scored twice.
 _PANEL = [
-    "SLC37A2",
-    "HEXB",
-    "PROS1",
-    "EMP1",
-    "ANGPT2",
-    "TINAGL1",
-    "MCEE",
-    "CKMT2",
-    "NR4A1",
-    "SOHLH2",
-    "MECOM",
+    g
+    for g in critical_panel_symbols(protein_coding_only=True)
+    if g not in set(sum(_MARKERS.values(), [])) and g not in _TEST
 ]
 _ALL_GENES = sorted(set(sum(_MARKERS.values(), []) + _TEST + _PANEL))
 

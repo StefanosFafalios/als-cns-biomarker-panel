@@ -650,7 +650,9 @@ def _plot_iter_performance(iter_log: list[dict]) -> None:
         if is_clean:
             label_text = "✓ clean"
         else:
-            label_text = f"▲ {flagged_syms}" if flagged_syms else "▲ artifact(s) removed"
+            label_text = (
+                f"▲ {flagged_syms}" if flagged_syms else "▲ artifact(s) removed"
+            )
         ax1.annotate(
             label_text,
             xy=(int(r["iteration"]), auc),

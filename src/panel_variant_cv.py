@@ -36,32 +36,31 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
-
 import matplotlib  # noqa: E402
+from utils import load_dataset, panel25_cv_auc, zero_shot_scale  # noqa: E402
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 import requests  # noqa: E402
-from lightgbm import LGBMClassifier  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
 from sklearn.model_selection import StratifiedKFold  # noqa: E402
-from sklearn.preprocessing import StandardScaler  # noqa: E402
+from utils import PanelLGBMClassifier as LGBMClassifier  # noqa: E402
 
-SCRIPT_DIR   = Path(__file__).parent
-ALS_DIR_RES  = ALS_DIR / "resources"
+SCRIPT_DIR = Path(__file__).parent
+ALS_DIR_RES = ALS_DIR / "resources"
 
-_PREFILTER_X     = SCRIPT_DIR / "lgbm_prefilter_X.npy"
+_PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
-_PANEL_CSV       = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH     = SCRIPT_DIR / "lgbm_top500_best_params.json"
-_REPL_CSV        = SCRIPT_DIR / "gene_replacement_results.csv"
-_AUDIT_CSV       = SCRIPT_DIR / "shap500_artifact_audit.csv"
+_PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
+_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
+_REPL_CSV = SCRIPT_DIR / "gene_replacement_results.csv"
+_AUDIT_CSV = SCRIPT_DIR / "shap500_artifact_audit.csv"
 
 RANDOM_STATE = 42
-N_FOLDS      = 5
-FAST_N_EST   = 100
-PANEL_CV_AUC = 0.9621  # reference AUC for full 25-gene panel (full model, 5-fold CV)
+N_FOLDS = 5
+FAST_N_EST = 100
+PANEL_CV_AUC = panel25_cv_auc()  # reference AUC for the full 25-gene panel
 
 _GSE122649_RAW_TAR = ALS_DIR_RES / "GSE122649" / "GSE122649_RAW.tar"
 _SOFT_URL_122649 = (
@@ -90,16 +89,16 @@ def _build_replacement_lookup(
         audit.loc[audit["classification"] == "confirmed_artifact", "ensg_base"]
     )
     repl["candidate_base"] = repl["candidate_ensg"].str.split(".").str[0]
-    clean = repl[
-        repl["is_replacement"] & ~repl["candidate_base"].isin(artifact_bases)
-    ]
+    clean = repl[repl["is_replacement"] & ~repl["candidate_base"].isin(artifact_bases)]
     lookup: dict[str, list[tuple[float, str]]] = {}
     for sym, grp in clean.groupby("panel_symbol"):
         grp_s = grp.sort_values("replacement_auc", ascending=False)
-        lookup[str(sym)] = list(zip(
-            grp_s["replacement_auc"].tolist(),
-            grp_s["candidate_base"].tolist(),
-        ))
+        lookup[str(sym)] = list(
+            zip(
+                grp_s["replacement_auc"].tolist(),
+                grp_s["candidate_base"].tolist(),
+            )
+        )
     return lookup
 
 
@@ -121,7 +120,7 @@ def _build_gene_info(
             sym = str(row.get("symbol", "") or "").strip()
             btype = str(row.get("type_of_gene", "") or "").strip()
             info[base] = {
-                "symbol":  sym if sym != "nan" else "",
+                "symbol": sym if sym != "nan" else "",
                 "biotype": btype if btype != "nan" else "",
             }
 
@@ -146,7 +145,7 @@ def _build_gene_info(
                     qid = item.get("query", "")
                     if qid:
                         info[qid] = {
-                            "symbol":  item.get("symbol", ""),
+                            "symbol": item.get("symbol", ""),
                             "biotype": item.get("type_of_gene", ""),
                         }
             except Exception as exc:
@@ -199,11 +198,15 @@ def _load_train_raw() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
 
 
 def _load_gse76220() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
-    """GSE76220 log1p RPKM → (X, sym_to_col, y)."""
+    """GSE76220 log2-RPKM as-is → (X, sym_to_col, y). No log1p: already log-scale."""
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR_RES)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=RuntimeWarning)
-        X = np.log1p(ds.X.values.astype(np.float32))
+        # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+        # despite the 'RPKM' filename). A further log1p would null every value
+        # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+        # log-base and length-normalisation differences vs log1p(counts) training.
+        X = ds.X.values.astype(np.float32)
     sym_to_col = {s: i for i, s in enumerate(ds.X.columns)}
     return X, sym_to_col, ds.y.values.astype(int)
 
@@ -224,8 +227,9 @@ def _download_if_needed(url: str, dest: Path) -> None:
 def _load_gse122649() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
     """GSE122649 log1p raw counts → (X, sym_to_col, y)."""
     _download_if_needed(_RAW_URL_122649, _GSE122649_RAW_TAR)
-    r = requests.get(_SOFT_URL_122649, timeout=60, stream=True)
-    content = gzip.decompress(r.content).decode("utf-8", errors="ignore")
+    from utils import geo_soft_text
+
+    content = geo_soft_text("GSE122649")
     samples = re.split(r"\^SAMPLE", content)[1:]
     gsm_to_diag: dict[str, str] = {}
     for s in samples:
@@ -255,7 +259,7 @@ def _load_gse122649() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
                 if len(parts) < 2:
                     continue
                 try:
-                    rows.append((parts[0].strip('"\''), float(parts[1])))
+                    rows.append((parts[0].strip("\"'"), float(parts[1])))
                 except ValueError:
                     continue
             if not rows:
@@ -313,13 +317,15 @@ def _zeroshot_auc(
     tr_cols: list[int],
     te_cols: list[int],
     params: dict,
+    cohort: str,
 ) -> float:
     """Zero-shot: train on GPL24676, predict on external cohort."""
     X_tr = X_train_log[:, tr_cols].astype(np.float32)
     X_te = X_test_log[:, te_cols].astype(np.float32)
-    scaler = StandardScaler()
-    X_tr_sc = scaler.fit_transform(X_tr)
-    X_te_sc = scaler.transform(X_te)
+    # zero_shot_scale: same-scale cohorts use the training scaler; log-scale
+    # cohorts (GSE76220) are standardised within themselves. Fitting the train
+    # scaler on log2-RPKM pins AUC to 0.5 silently.
+    X_tr_sc, X_te_sc = zero_shot_scale(X_tr, X_te, cohort)
     clf = LGBMClassifier(**{**params, "verbose": -1})
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -377,7 +383,6 @@ def _build_variants(
     for idx, row in panel_df.iterrows():
         sym = str(row["symbol"])
         feat = str(row["feature"])
-        orig_base = feat.split(".")[0]
 
         if sym not in replacement_lookup:
             continue
@@ -417,23 +422,25 @@ def _build_variants(
                     cohort_has[cname] = False  # original gene kept in this slot
                 cohort_te[cname] = te_cols
 
-            variants.append({
-                "panel_symbol":    sym,
-                "repl_ensg":       repl_base,
-                "repl_symbol":     repl_sym,
-                "repl_biotype":    repl_bio,
-                "repl_auc_train":  repl_auc,
-                "kind":            kind,
-                "pre_cols":        pre_cols,
-                "train_cols":      train_cols,
-                "cohort_te":       cohort_te,
-                "cohort_has":      cohort_has,
-            })
+            variants.append(
+                {
+                    "panel_symbol": sym,
+                    "repl_ensg": repl_base,
+                    "repl_symbol": repl_sym,
+                    "repl_biotype": repl_bio,
+                    "repl_auc_train": repl_auc,
+                    "kind": kind,
+                    "pre_cols": pre_cols,
+                    "train_cols": train_cols,
+                    "cohort_te": cohort_te,
+                    "cohort_has": cohort_has,
+                }
+            )
 
     return variants, {
-        "pre_cols":   panel_pre_cols,
+        "pre_cols": panel_pre_cols,
         "train_cols": panel_train_cols,
-        "cohort_te":  panel_cohort_te,
+        "cohort_te": panel_cohort_te,
         "cohort_has": panel_cohort_has,
     }
 
@@ -447,19 +454,25 @@ def _make_figure(results_df: pd.DataFrame) -> None:
     """Horizontal grouped bar chart: CV AUC for best_clean and best_coding variants."""
     baseline = PANEL_CV_AUC
 
-    best_clean = results_df[results_df["kind"] == "best_clean"].set_index("panel_symbol")
-    best_coding = results_df[results_df["kind"] == "best_coding"].set_index("panel_symbol")
+    best_clean = results_df[results_df["kind"] == "best_clean"].set_index(
+        "panel_symbol"
+    )
+    best_coding = results_df[results_df["kind"] == "best_coding"].set_index(
+        "panel_symbol"
+    )
 
     genes = results_df["panel_symbol"].unique().tolist()
 
     fig, axes = plt.subplots(1, 2, figsize=(18, 10), sharey=False)
 
     for ax, df_sub, title, colour in [
-        (axes[0], best_clean,  "Best clean replacement (any biotype)", "#4A90D9"),
-        (axes[1], best_coding, "Best protein-coding replacement",       "#E05C5C"),
+        (axes[0], best_clean, "Best clean replacement (any biotype)", "#4A90D9"),
+        (axes[1], best_coding, "Best protein-coding replacement", "#E05C5C"),
     ]:
-        rows = [(g, df_sub.loc[g, "cv_auc"] if g in df_sub.index else float("nan"))
-                for g in genes]
+        rows = [
+            (g, df_sub.loc[g, "cv_auc"] if g in df_sub.index else float("nan"))
+            for g in genes
+        ]
         rows_valid = [(g, a) for g, a in rows if not np.isnan(a)]
         rows_sorted = sorted(rows_valid, key=lambda x: x[1])
 
@@ -467,11 +480,15 @@ def _make_figure(results_df: pd.DataFrame) -> None:
         aucs = [r[1] for r in rows_sorted]
         y_pos = np.arange(len(syms))
         deltas = [a - baseline for a in aucs]
-        bar_colours = ["#d62728" if d < -0.005 else "#2ca02c" if d > 0.005 else colour
-                       for d in deltas]
+        bar_colours = [
+            "#d62728" if d < -0.005 else "#2ca02c" if d > 0.005 else colour
+            for d in deltas
+        ]
 
         ax.barh(y_pos, aucs, color=bar_colours, alpha=0.8)
-        ax.axvline(baseline, color="black", lw=1.5, ls="--", label=f"Baseline {baseline:.4f}")
+        ax.axvline(
+            baseline, color="black", lw=1.5, ls="--", label=f"Baseline {baseline:.4f}"
+        )
         ax.set_yticks(y_pos)
         ax.set_yticklabels(syms, fontsize=7.5)
         ax.set_xlabel("5-fold CV AUC (fast model)", fontsize=9)
@@ -482,8 +499,9 @@ def _make_figure(results_df: pd.DataFrame) -> None:
 
         # Annotate with Δ AUC
         for i, (a, d) in enumerate(zip(aucs, deltas)):
-            ax.text(a + 0.001, i, f"{d:+.4f}", va="center", fontsize=6.5,
-                    color="#333333")
+            ax.text(
+                a + 0.001, i, f"{d:+.4f}", va="center", fontsize=6.5, color="#333333"
+            )
 
     fig.suptitle(
         "Panel variant CV AUC: single-gene swap with best non-artifact replacement\n"
@@ -511,7 +529,7 @@ def _write_stats(
         "Panel Variant CV and Zero-Shot Comparison",
         "=" * 80,
         f"Fast model: n_estimators={FAST_N_EST}, 5-fold stratified CV, random_state={RANDOM_STATE}",
-        f"Artifact-free pool: 41 confirmed artifacts excluded.",
+        "Artifact-free pool: 41 confirmed artifacts excluded.",
         "",
         "BASELINE (original 25-gene panel)",
         "-" * 80,
@@ -525,7 +543,7 @@ def _write_stats(
     ]
 
     for kind, kind_label in [
-        ("best_clean",  "BEST CLEAN REPLACEMENT (any biotype, highest AUC)"),
+        ("best_clean", "BEST CLEAN REPLACEMENT (any biotype, highest AUC)"),
         ("best_coding", "BEST PROTEIN-CODING REPLACEMENT"),
     ]:
         sub = results_df[results_df["kind"] == kind].sort_values("cv_delta")
@@ -545,8 +563,11 @@ def _write_stats(
                 f"{r['panel_symbol']:<22} {repl_label:<18} {bio:<16}"
                 f"  {r['repl_auc_train']:>8.4f}  {cv:>8}  {delta:>7}"
             )
-            for cname in [c for c in r.index if c.startswith("zs_") and
-                          not c.endswith("_repl_in_cohort")]:
+            for cname in [
+                c
+                for c in r.index
+                if c.startswith("zs_") and not c.endswith("_repl_in_cohort")
+            ]:
                 cohort = cname[3:]
                 auc = r[cname]
                 in_cohort = r.get(f"{cname}_repl_in_cohort", False)
@@ -602,15 +623,21 @@ def main() -> None:
     print("\n[1] Building clean replacement lookup ...")
     replacement_lookup = _build_replacement_lookup(_REPL_CSV, _AUDIT_CSV)
     n_entries = sum(len(v) for v in replacement_lookup.values())
-    print(f"  {n_entries} clean replacement candidate entries across {len(replacement_lookup)} panel genes")
+    print(
+        f"  {n_entries} clean replacement candidate entries across {len(replacement_lookup)} panel genes"
+    )
 
     # Collect all unique candidate bases for gene info lookup
     all_bases: set[str] = {
         base for cands in replacement_lookup.values() for _, base in cands
     }
-    print(f"\n[2] Resolving gene info for {len(all_bases)} unique replacement candidates ...")
+    print(
+        f"\n[2] Resolving gene info for {len(all_bases)} unique replacement candidates ..."
+    )
     gene_info = _build_gene_info(_AUDIT_CSV, all_bases)
-    n_coding = sum(1 for v in gene_info.values() if v.get("biotype") == "protein-coding")
+    n_coding = sum(
+        1 for v in gene_info.values() if v.get("biotype") == "protein-coding"
+    )
     n_sym = sum(1 for v in gene_info.values() if v.get("symbol"))
     print(f"  {n_sym}/{len(gene_info)} have HGNC symbol, {n_coding} protein-coding")
 
@@ -622,7 +649,7 @@ def main() -> None:
     # Load GPL24676 log1p for zero-shot training
     print("\n[4] Loading GPL24676 log1p for zero-shot training ...")
     X_tr_log, tr_base_to_col, y_tr = _load_train_raw()
-    print(f"  n={len(y_tr)}  ALS={int(y_tr.sum())}  Ctrl={int((y_tr==0).sum())}")
+    print(f"  n={len(y_tr)}  ALS={int(y_tr.sum())}  Ctrl={int((y_tr == 0).sum())}")
 
     # Load external cohorts
     print("\n[5] Loading GSE76220 ...")
@@ -634,41 +661,53 @@ def main() -> None:
     print(f"  n={len(y_122649)}")
 
     cohort_data = {
-        "GSE76220":  (X_76220,  sym_76220,  y_76220),
+        "GSE76220": (X_76220, sym_76220, y_76220),
         "GSE122649": (X_122649, sym_122649, y_122649),
     }
     cohort_sym_to_cols = {
-        "GSE76220":  sym_76220,
+        "GSE76220": sym_76220,
         "GSE122649": sym_122649,
     }
 
     # Build variant list
     print("\n[7] Building variant panel list ...")
     variants, baseline_info = _build_variants(
-        panel_df, replacement_lookup, gene_info,
-        pre_base_to_col, tr_base_to_col, cohort_sym_to_cols,
+        panel_df,
+        replacement_lookup,
+        gene_info,
+        pre_base_to_col,
+        tr_base_to_col,
+        cohort_sym_to_cols,
     )
     print(f"  {len(variants)} variants to evaluate")
 
     # Evaluate baseline
     print("\n[8] Evaluating baseline (original 25-gene panel) ...")
     baseline_pre_cols = baseline_info["pre_cols"]
-    baseline_cv_auc, baseline_cv_std = _fast_cv_auc(X_pre, y_pre, baseline_pre_cols, fast_params)
-    print(f"  Baseline fast-model CV AUC: {baseline_cv_auc:.4f} ± {baseline_cv_std:.4f}")
+    baseline_cv_auc, baseline_cv_std = _fast_cv_auc(
+        X_pre, y_pre, baseline_pre_cols, fast_params
+    )
+    print(
+        f"  Baseline fast-model CV AUC: {baseline_cv_auc:.4f} ± {baseline_cv_std:.4f}"
+    )
 
     baseline_zs: dict[str, float] = {}
     for cname, (X_te, sym_map, y_te) in cohort_data.items():
         # Use whatever cohort columns are available (skip slots with -1)
-        tr_cols = [c for c in baseline_info["train_cols"] if c >= 0]
         te_cols_raw = baseline_info["cohort_te"][cname]
         # Match: only use slots where BOTH train and test have valid columns
-        paired = [(tc, ec) for tc, ec in zip(baseline_info["train_cols"], te_cols_raw)
-                  if tc >= 0 and ec >= 0]
+        paired = [
+            (tc, ec)
+            for tc, ec in zip(baseline_info["train_cols"], te_cols_raw)
+            if tc >= 0 and ec >= 0
+        ]
         if len(paired) < 5:
             baseline_zs[cname] = float("nan")
             continue
         tr_c, te_c = zip(*paired)
-        auc = _zeroshot_auc(X_tr_log, y_tr, X_te, y_te, list(tr_c), list(te_c), zs_params)
+        auc = _zeroshot_auc(
+            X_tr_log, y_tr, X_te, y_te, list(tr_c), list(te_c), zs_params, cname
+        )
         baseline_zs[cname] = auc
         print(f"  Baseline zero-shot {cname}: {auc:.4f}")
 
@@ -678,32 +717,41 @@ def main() -> None:
     for i, v in enumerate(variants):
         sym = v["panel_symbol"]
         kind = v["kind"]
-        print(f"  [{i+1:3d}/{len(variants)}] {sym} ({kind}) → {v['repl_symbol'] or v['repl_ensg']}", end="  ", flush=True)
+        print(
+            f"  [{i + 1:3d}/{len(variants)}] {sym} ({kind}) → {v['repl_symbol'] or v['repl_ensg']}",
+            end="  ",
+            flush=True,
+        )
 
         cv_auc, cv_std = _fast_cv_auc(X_pre, y_pre, v["pre_cols"], fast_params)
         print(f"CV={cv_auc:.4f}", end="", flush=True)
 
         rec: dict = {
-            "panel_symbol":   sym,
-            "repl_ensg":      v["repl_ensg"],
-            "repl_symbol":    v["repl_symbol"],
-            "repl_biotype":   v["repl_biotype"],
+            "panel_symbol": sym,
+            "repl_ensg": v["repl_ensg"],
+            "repl_symbol": v["repl_symbol"],
+            "repl_biotype": v["repl_biotype"],
             "repl_auc_train": v["repl_auc_train"],
-            "kind":           kind,
-            "cv_auc":         cv_auc,
-            "cv_std":         cv_std,
-            "cv_delta":       cv_auc - baseline_cv_auc,
+            "kind": kind,
+            "cv_auc": cv_auc,
+            "cv_std": cv_std,
+            "cv_delta": cv_auc - baseline_cv_auc,
         }
 
         for cname, (X_te, sym_map, y_te) in cohort_data.items():
-            paired = [(tc, ec) for tc, ec in zip(v["train_cols"], v["cohort_te"][cname])
-                      if tc >= 0 and ec >= 0]
+            paired = [
+                (tc, ec)
+                for tc, ec in zip(v["train_cols"], v["cohort_te"][cname])
+                if tc >= 0 and ec >= 0
+            ]
             if len(paired) < 5:
                 rec[f"zs_{cname}"] = float("nan")
                 rec[f"zs_{cname}_repl_in_cohort"] = False
                 continue
             tr_c, te_c = zip(*paired)
-            zs_auc = _zeroshot_auc(X_tr_log, y_tr, X_te, y_te, list(tr_c), list(te_c), zs_params)
+            zs_auc = _zeroshot_auc(
+                X_tr_log, y_tr, X_te, y_te, list(tr_c), list(te_c), zs_params, cname
+            )
             rec[f"zs_{cname}"] = zs_auc
             rec[f"zs_{cname}_repl_in_cohort"] = v["cohort_has"].get(cname, False)
             marker = "*" if v["cohort_has"].get(cname, False) else "~"

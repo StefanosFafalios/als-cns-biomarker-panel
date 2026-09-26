@@ -3,7 +3,7 @@ across CNS validation cohorts.
 
 Cohorts (blood excluded):
   GPL16791   n=636  w=0.25  raw log1p, Ensembl base ID
-  GSE76220   n=20   w=0.25  plain log1p, HGNC symbol
+  GSE76220   n=20   w=0.25  as-is (already log2-scale), HGNC symbol
   GSE122649  n=38   w=0.25  plain log1p, HGNC symbol
   SRP064478  n=15   w=0.25  plain log1p, Ensembl base ID
 
@@ -19,6 +19,7 @@ Outputs:
   iterative_panel_elimination_statistics.txt
   iterative_panel_elimination.png
 """
+
 from __future__ import annotations
 
 import gzip
@@ -35,10 +36,12 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import adjust_colsample, load_dataset, zero_shot_scale  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
+_PROGRESS_LOG = SCRIPT_DIR / "iterative_panel_elimination_progress.log"
+_CKPT = SCRIPT_DIR / "iterative_panel_elimination_ckpt.json"
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
 _GSE122649_DIR = ALS_DIR / "resources" / "GSE122649"
@@ -53,16 +56,26 @@ N_BOOTSTRAP = 2_000
 
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     "erythrocyte": (
-        "ENSG00000206172", "ENSG00000188536", "ENSG00000244734",
-        "ENSG00000158578", "ENSG00000170180", "ENSG00000133742",
-        "ENSG00000159111", "ENSG00000105610", "ENSG00000179364",
+        "ENSG00000206172",
+        "ENSG00000188536",
+        "ENSG00000244734",
+        "ENSG00000158578",
+        "ENSG00000170180",
+        "ENSG00000133742",
+        "ENSG00000159111",
+        "ENSG00000105610",
+        "ENSG00000179364",
         "ENSG00000223609",
     ),
     "platelet": (
-        "ENSG00000163736", "ENSG00000163737", "ENSG00000185245",
+        "ENSG00000163736",
+        "ENSG00000163737",
+        "ENSG00000185245",
     ),
     "endothelial": (
-        "ENSG00000261371", "ENSG00000179776", "ENSG00000110799",
+        "ENSG00000261371",
+        "ENSG00000179776",
+        "ENSG00000110799",
     ),
 }
 
@@ -73,17 +86,150 @@ _W = {k: 1.0 / len(_N_COHORT) for k in _N_COHORT}
 
 
 # ---------------------------------------------------------------------------
+# Progress logging
+# ---------------------------------------------------------------------------
+# Greedy backward elimination evaluates sum(25..2) = 324 candidate panels, each
+# a zero-shot fit across 4 cohorts. Under the corrected colsample_bytree every
+# fit is materially more expensive than before (all panel genes per tree rather
+# than one), so the run is long and needs observable progress. stdout alone is
+# not enough: `conda run` buffers it unless --no-capture-output is passed, which
+# is why earlier run logs stayed empty. This writes a separate line-flushed file
+# that is readable while the job is in flight regardless of how it was launched.
+
+_PROGRESS_STATE: dict[str, object] = {"done": 0, "total": 0, "t0": 0.0, "session": 0}
+
+
+def _progress_init(total_evals: int, done: int = 0, resumed: bool = False) -> None:
+    """Set up progress accounting; append rather than truncate when resuming.
+
+    Args:
+        total_evals: Total candidate evaluations expected for a full run.
+        done: Evaluations already completed (non-zero when resuming).
+        resumed: If ``True``, append to the existing progress file instead of
+            starting a new one, so a multi-day run keeps one continuous record.
+    """
+    import time
+
+    _PROGRESS_STATE["done"] = done
+    _PROGRESS_STATE["total"] = total_evals
+    _PROGRESS_STATE["t0"] = time.time()
+    _PROGRESS_STATE["session"] = 0
+    header = (
+        f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] "
+        f"{'RESUME' if resumed else 'START'} "
+        f"total_candidate_evaluations={total_evals} already_done={done}\n"
+    )
+    if resumed and _PROGRESS_LOG.exists():
+        with open(_PROGRESS_LOG, "a") as fh:
+            fh.write(header)
+            fh.flush()
+    else:
+        _PROGRESS_LOG.write_text(header)
+
+
+# ---------------------------------------------------------------------------
+# Resumable checkpointing
+# ---------------------------------------------------------------------------
+# The greedy search is sum(2..25) = 324 candidate evaluations, each fitting four
+# LightGBM models. Under the corrected colsample_bytree every fit searches all
+# panel features rather than one, so a full run is a multi-day job. State is
+# therefore checkpointed after EVERY candidate evaluation: an interruption loses
+# at most one evaluation, and the run picks up mid-step exactly where it stopped.
+#
+# Writes are atomic (temp file + replace) so a kill during a write cannot leave
+# a truncated checkpoint behind.
+
+
+def _save_ckpt(
+    active: list[int],
+    current_wmean: float,
+    step: int,
+    history: list[dict],
+    partial: dict[int, dict],
+    done: int,
+) -> None:
+    """Atomically persist greedy state, including partial within-step results."""
+    payload = {
+        "active": [int(i) for i in active],
+        "current_wmean": float(current_wmean),
+        "step": int(step),
+        "history": history,
+        "partial": {str(k): v for k, v in partial.items()},
+        "done": int(done),
+    }
+    tmp = _CKPT.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload))
+    tmp.replace(_CKPT)
+
+
+def _load_ckpt() -> dict | None:
+    """Return the saved greedy state, or ``None`` if there is no valid checkpoint."""
+    if not _CKPT.exists():
+        return None
+    try:
+        d = json.loads(_CKPT.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        print(f"  [warn] unreadable checkpoint ({exc}); starting fresh", flush=True)
+        return None
+    d["partial"] = {int(k): v for k, v in d.get("partial", {}).items()}
+    d["active"] = [int(i) for i in d["active"]]
+    return d
+
+
+def _progress(msg: str, tick: bool = False) -> None:
+    """Append a timestamped progress line, with ETA once ticking has started.
+
+    Args:
+        msg: Message to record.
+        tick: If ``True``, count this call as one completed candidate
+            evaluation and append percentage complete plus an ETA.
+    """
+    import time
+
+    now = time.time()
+    line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}"
+    if tick:
+        _PROGRESS_STATE["done"] = int(_PROGRESS_STATE["done"]) + 1
+        _PROGRESS_STATE["session"] = int(_PROGRESS_STATE.get("session", 0)) + 1
+        done = int(_PROGRESS_STATE["done"])
+        total = int(_PROGRESS_STATE["total"]) or 1
+        elapsed = now - float(_PROGRESS_STATE["t0"])
+        # Rate must come from evaluations completed *this session*: on resume,
+        # `done` includes prior work while `elapsed` does not, which would
+        # otherwise make the ETA far too optimistic.
+        rate = elapsed / max(int(_PROGRESS_STATE["session"]), 1)
+        eta_s = rate * (total - done)
+        line += (
+            f"  [{done}/{total} = {100.0 * done / total:5.1f}%]"
+            f"  elapsed={elapsed / 60:.1f}m"
+            f"  eta={eta_s / 60:.1f}m"
+        )
+    with open(_PROGRESS_LOG, "a") as fh:
+        fh.write(line + "\n")
+        fh.flush()
+    print(line, flush=True)
+
+
+# ---------------------------------------------------------------------------
 # Fast helpers
 # ---------------------------------------------------------------------------
 
+
 def _zero_shot_fast(
-    X_tr: np.ndarray, y_tr: np.ndarray,
-    X_te: np.ndarray, y_te: np.ndarray,
+    X_tr: np.ndarray,
+    y_tr: np.ndarray,
+    X_te: np.ndarray,
+    y_te: np.ndarray,
     params: dict,
 ) -> float:
     """Train LightGBM on X_tr, score X_te, return AUC (no bootstrap)."""
     from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
+
+    # Re-express colsample_bytree for the current panel size: the tuned value
+    # encodes ~33 features/tree on 500 and would floor to 1 on a small panel,
+    # which would make every elimination step an interaction-free fit.
+    params = adjust_colsample(params, X_tr.shape[1])
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         clf = LGBMClassifier(**params).fit(X_tr, y_tr)
@@ -97,6 +243,7 @@ def _bootstrap_auc(
     seed: int = RANDOM_STATE,
 ) -> tuple[float, float]:
     from sklearn.metrics import roc_auc_score
+
     rng = np.random.default_rng(seed)
     aucs = []
     for _ in range(n):
@@ -116,13 +263,20 @@ def _bootstrap_auc(
 
 
 def _zero_shot_ci(
-    X_tr: np.ndarray, y_tr: np.ndarray,
-    X_te: np.ndarray, y_te: np.ndarray,
+    X_tr: np.ndarray,
+    y_tr: np.ndarray,
+    X_te: np.ndarray,
+    y_te: np.ndarray,
     params: dict,
 ) -> tuple[float, float, float]:
     """Zero-shot AUC with 95% bootstrap CI."""
     from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
+
+    # Re-express colsample_bytree for the current panel size: the tuned value
+    # encodes ~33 features/tree on 500 and would floor to 1 on a small panel,
+    # which would make every elimination step an interaction-free fit.
+    params = adjust_colsample(params, X_tr.shape[1])
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         clf = LGBMClassifier(**params).fit(X_tr, y_tr)
@@ -136,6 +290,7 @@ def _zero_shot_ci(
 # Data loaders
 # ---------------------------------------------------------------------------
 
+
 def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
     """Load GPL24676 with log1p + CTD compartment regression.
 
@@ -148,7 +303,9 @@ def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]
     # CTD compartment regression is discovery-side only; cross-cohort transfer now
     # uses raw log1p for every cohort, so the memory-heavy CTD-residualised matrix
     # is no longer built. Returns (X_log, y, X_log, feat) for signature compatibility.
-    (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
+    )
     X_log = np.log1p(ds.X.values.astype(np.float32))
     y = ds.y.values.astype(int)
     feat = list(ds.X.columns)
@@ -168,7 +325,9 @@ def _load_gpl16791_ctd(
     from sklearn.decomposition import PCA
     from sklearn.linear_model import LinearRegression
 
-    (ds16,) = load_dataset("GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources")
+    (ds16,) = load_dataset(
+        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
+    )
     X16_raw = ds16.X.values.astype(np.float32)
     y16 = ds16.y.values.astype(int)
     feat16 = list(ds16.X.columns)
@@ -194,14 +353,18 @@ def _load_gpl16791_ctd(
 
 def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR / "resources")
-    X_log = np.log1p(ds.X.values.astype(np.float32))
+    # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+    # despite the 'RPKM' filename). A further log1p would null every value
+    # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+    # log-base and length-normalisation differences vs log1p(counts) training.
+    X_log = ds.X.values.astype(np.float32)
     return X_log, list(ds.X.columns), ds.y.values.astype(int)
 
 
 def _parse_gse122649_soft() -> dict[str, str]:
-    import requests
-    r = requests.get(_GSE122649_SOFT_URL, timeout=60, stream=True)
-    content = gzip.decompress(r.content).decode("utf-8", errors="ignore")
+    from utils import geo_soft_text
+
+    content = geo_soft_text("GSE122649")
     meta: dict[str, str] = {}
     for s in re.split(r"\^SAMPLE", content)[1:]:
         acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
@@ -309,6 +472,7 @@ def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
 # Weighted mean AUC for a panel subset
 # ---------------------------------------------------------------------------
 
+
 def _wmean_auc(
     panel_idx: list[int],
     # GPL16791 (raw log1p) pre-extracted 25-column matrices
@@ -338,7 +502,6 @@ def _wmean_auc(
     avail*: sorted list of panel gene indices available in that cohort;
             X*_25[:, k] = test log1p for panel gene avail*[k].
     """
-    from sklearn.preprocessing import StandardScaler
 
     panel_set = set(panel_idx)
     wmean = 0.0
@@ -347,20 +510,20 @@ def _wmean_auc(
     # ---- GPL16791 (all 25 genes available, raw log1p) ----
     Xtr = Xtr25_ctd[:, panel_idx]
     Xte = X16_25_ctd[:, panel_idx]
-    sc = StandardScaler().fit(Xtr)
-    auc16 = _zero_shot_fast(sc.transform(Xtr), y_train, sc.transform(Xte), y16, params)
+    Ztr, Zte = zero_shot_scale(Xtr, Xte, "GPL16791")
+    auc16 = _zero_shot_fast(Ztr, y_train, Zte, y16, params)
     wmean += _W["GPL16791"] * auc16
     cohort_aucs["GPL16791"] = auc16
 
-    # ---- GSE76220 (symbol-matched, log1p) ----
+    # ---- GSE76220 (symbol-matched, as-is log2 scale) ----
     avail76_set = set(avail76)
     cols76_tr = [i for i in panel_idx if i in avail76_set]
     cols76_te = [k for k, i in enumerate(avail76) if i in panel_set]
     if cols76_tr:
         Xtr = Xtr25_log[:, cols76_tr]
         Xte = X76_25[:, cols76_te]
-        sc = StandardScaler().fit(Xtr)
-        auc76 = _zero_shot_fast(sc.transform(Xtr), y_train, sc.transform(Xte), y76, params)
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE76220")
+        auc76 = _zero_shot_fast(Ztr, y_train, Zte, y76, params)
     else:
         auc76 = 0.5
     wmean += _W["GSE76220"] * auc76
@@ -373,8 +536,8 @@ def _wmean_auc(
     if cols122_tr:
         Xtr = Xtr25_log[:, cols122_tr]
         Xte = X122_25[:, cols122_te]
-        sc = StandardScaler().fit(Xtr)
-        auc122 = _zero_shot_fast(sc.transform(Xtr), y_train, sc.transform(Xte), y122, params)
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE122649")
+        auc122 = _zero_shot_fast(Ztr, y_train, Zte, y122, params)
     else:
         auc122 = 0.5
     wmean += _W["GSE122649"] * auc122
@@ -387,8 +550,8 @@ def _wmean_auc(
     if cols_srp_tr:
         Xtr = Xtr25_log[:, cols_srp_tr]
         Xte = Xsrp_25[:, cols_srp_te]
-        sc = StandardScaler().fit(Xtr)
-        auc_srp = _zero_shot_fast(sc.transform(Xtr), y_train, sc.transform(Xte), y_srp, params)
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "SRP064478")
+        auc_srp = _zero_shot_fast(Ztr, y_train, Zte, y_srp, params)
     else:
         auc_srp = 0.5
     wmean += _W["SRP064478"] * auc_srp
@@ -401,18 +564,24 @@ def _wmean_auc(
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     import matplotlib
+
     matplotlib.use("Agg")
+    import warnings as _w
+
     import matplotlib.pyplot as plt
     import pandas as pd
-    import warnings as _w
+
     _w.filterwarnings("ignore", category=UserWarning)
 
     print("=" * 70)
     print("Iterative Panel Elimination — greedy backward, weighted zero-shot AUC")
-    print(f"Weights: GPL16791={_W['GPL16791']:.3f}  GSE76220={_W['GSE76220']:.3f}  "
-          f"GSE122649={_W['GSE122649']:.3f}  SRP064478={_W['SRP064478']:.3f}")
+    print(
+        f"Weights: GPL16791={_W['GPL16791']:.3f}  GSE76220={_W['GSE76220']:.3f}  "
+        f"GSE122649={_W['GSE122649']:.3f}  SRP064478={_W['SRP064478']:.3f}"
+    )
     print("=" * 70)
 
     params_raw = json.loads(_PARAMS_PATH.read_text())
@@ -422,7 +591,9 @@ def main() -> None:
     # Load panel
     # -----------------------------------------------------------------------
     df_panel = pd.read_csv(_PANEL_CSV)
-    feat_col = next(c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower())
+    feat_col = next(
+        c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower()
+    )
     sym_col = next(c for c in df_panel.columns if "symbol" in c.lower())
     feat25: list[str] = df_panel[feat_col].tolist()
     sym25: list[str] = df_panel[sym_col].tolist()
@@ -434,7 +605,9 @@ def main() -> None:
     # -----------------------------------------------------------------------
     print("\nLoading GPL24676 (CTD + log1p) ...")
     X_train_ctd, y_train, X_train_log, feat_train = _load_gpl24676_ctd()
-    feat_train_base_map: dict[str, int] = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
+    feat_train_base_map: dict[str, int] = {
+        f.split(".")[0]: j for j, f in enumerate(feat_train)
+    }
 
     # Pre-extract 25-column matrices. Cross-cohort transfer now uses raw log1p for
     # ALL cohorts (CTD is discovery-side only); the GPL16791 arm below is fed raw
@@ -454,7 +627,7 @@ def main() -> None:
     X16_log_full = np.log1p(ds16.X.values.astype(np.float32))
     y16 = ds16.y.values.astype(int)
     X16_25_ctd: np.ndarray = X16_log_full[:, panel_train_cols].astype(np.float32)
-    print(f"  GPL16791: n={len(y16)}, ALS={y16.sum()}, Ctrl={(y16==0).sum()}")
+    print(f"  GPL16791: n={len(y16)}, ALS={y16.sum()}, Ctrl={(y16 == 0).sum()}")
 
     # -----------------------------------------------------------------------
     # Load GSE76220 (symbol)
@@ -469,8 +642,10 @@ def main() -> None:
         ).astype(np.float32)
     else:
         X76_25 = np.empty((len(y76), 0), dtype=np.float32)
-    print(f"  GSE76220: n={len(y76)}, {len(avail76)}/25 panel genes matched "
-          f"({[sym25[i] for i in avail76]})")
+    print(
+        f"  GSE76220: n={len(y76)}, {len(avail76)}/25 panel genes matched "
+        f"({[sym25[i] for i in avail76]})"
+    )
 
     # -----------------------------------------------------------------------
     # Load GSE122649 (symbol)
@@ -485,8 +660,10 @@ def main() -> None:
         ).astype(np.float32)
     else:
         X122_25 = np.empty((len(y122), 0), dtype=np.float32)
-    print(f"  GSE122649: n={len(y122)}, {len(avail122)}/25 panel genes matched "
-          f"({[sym25[i] for i in avail122]})")
+    print(
+        f"  GSE122649: n={len(y122)}, {len(avail122)}/25 panel genes matched "
+        f"({[sym25[i] for i in avail122]})"
+    )
 
     # -----------------------------------------------------------------------
     # Load SRP064478 (Ensembl base ID)
@@ -501,19 +678,29 @@ def main() -> None:
         ).astype(np.float32)
     else:
         Xsrp_25 = np.empty((len(y_srp), 0), dtype=np.float32)
-    print(f"  SRP064478: n={len(y_srp)}, {len(avail_srp)}/25 panel genes matched "
-          f"({[sym25[i] for i in avail_srp]})")
+    print(
+        f"  SRP064478: n={len(y_srp)}, {len(avail_srp)}/25 panel genes matched "
+        f"({[sym25[i] for i in avail_srp]})"
+    )
 
     # -----------------------------------------------------------------------
     # Shared kwargs for _wmean_auc
     # -----------------------------------------------------------------------
     _shared = dict(
-        Xtr25_ctd=Xtr25_ctd, y_train=y_train,
-        X16_25_ctd=X16_25_ctd, y16=y16,
+        Xtr25_ctd=Xtr25_ctd,
+        y_train=y_train,
+        X16_25_ctd=X16_25_ctd,
+        y16=y16,
         Xtr25_log=Xtr25_log,
-        X76_25=X76_25, y76=y76, avail76=avail76,
-        X122_25=X122_25, y122=y122, avail122=avail122,
-        Xsrp_25=Xsrp_25, y_srp=y_srp, avail_srp=avail_srp,
+        X76_25=X76_25,
+        y76=y76,
+        avail76=avail76,
+        X122_25=X122_25,
+        y122=y122,
+        avail122=avail122,
+        Xsrp_25=Xsrp_25,
+        y_srp=y_srp,
+        avail_srp=avail_srp,
         params=params,
     )
 
@@ -533,22 +720,54 @@ def main() -> None:
     history: list[dict] = []  # one entry per dropped gene
 
     # Record the starting point
-    history.append({
-        "step": 0,
-        "panel_size": 25,
-        "dropped": None,
-        "D_ZS": None,
-        "wmean": baseline_wmean,
-        "cohort": dict(baseline_cohort),
-    })
+    history.append(
+        {
+            "step": 0,
+            "panel_size": 25,
+            "dropped": None,
+            "D_ZS": None,
+            "wmean": baseline_wmean,
+            "cohort": dict(baseline_cohort),
+        }
+    )
 
     current_wmean = baseline_wmean
     step = 0
 
+    # Greedy drops one gene per step, so total work is sum(k) for k = len(active)
+    # down to 2 candidate evaluations.
+    _n0 = len(active)
+    _total_evals = sum(range(2, _n0 + 1))
+
+    # ---- resume from checkpoint if one exists ----
+    partial: dict[int, dict] = {}
+    _ck = _load_ckpt()
+    if _ck is not None:
+        active = _ck["active"]
+        current_wmean = _ck["current_wmean"]
+        step = _ck["step"]
+        history = _ck["history"]
+        partial = _ck["partial"]
+        _progress_init(_total_evals, done=_ck.get("done", 0), resumed=True)
+        _progress(
+            f"RESUMED at step {step}: panel k={len(active)}, "
+            f"W.mean={current_wmean:.4f}, "
+            f"{len(partial)} candidate(s) already evaluated in this step"
+        )
+    else:
+        _progress_init(_total_evals)
+        _progress(f"baseline W.mean={baseline_wmean:.4f} over {_n0} genes")
+
     while len(active) > 1:
-        step += 1
+        # On resume mid-step, `step` and `partial` are already set for the step
+        # in progress, so only advance when starting a genuinely new step.
+        if not partial:
+            step += 1
         n_remaining = len(active)
-        print(f"\nStep {step}: evaluating {n_remaining} candidates for elimination ...")
+        _progress(
+            f"Step {step}: evaluating {n_remaining} candidates (panel k={n_remaining})"
+            + (f" [{len(partial)} cached]" if partial else "")
+        )
 
         best_d = -np.inf
         best_g = -1
@@ -556,35 +775,71 @@ def main() -> None:
         best_cohort: dict[str, float] = {}
 
         for g in active:
-            trial = [i for i in active if i != g]
-            wmean_trial, cohort_trial = _wmean_auc(trial, **_shared)
+            if g in partial:
+                # already evaluated before the interruption
+                wmean_trial = partial[g]["wmean"]
+                cohort_trial = partial[g]["cohort"]
+            else:
+                trial = [i for i in active if i != g]
+                wmean_trial, cohort_trial = _wmean_auc(trial, **_shared)
+                partial[g] = {"wmean": wmean_trial, "cohort": dict(cohort_trial)}
+                _progress(
+                    f"    drop {sym25[g]:>14s}: trial W.mean={wmean_trial:.4f}  "
+                    f"D_ZS={wmean_trial - current_wmean:+.4f}",
+                    tick=True,
+                )
+                # Checkpoint after EVERY evaluation: losing one fit is acceptable,
+                # losing a whole step is not.
+                _save_ckpt(
+                    active,
+                    current_wmean,
+                    step,
+                    history,
+                    partial,
+                    int(_PROGRESS_STATE["done"]),
+                )
             d = wmean_trial - current_wmean  # positive = improvement from dropping g
-            print(f"    drop {sym25[g]:>14s}: trial W.mean={wmean_trial:.4f}  "
-                  f"D_ZS={d:+.4f}")
             if d > best_d:
                 best_d = d
                 best_g = g
                 best_wmean = wmean_trial
                 best_cohort = cohort_trial
 
-        print(f"  Best candidate: {sym25[best_g]}  D_ZS={best_d:+.4f}")
+        _progress(
+            f"  Step {step} DONE -> drop {sym25[best_g]}  D_ZS={best_d:+.4f}  "
+            f"new W.mean={best_wmean:.4f}  panel k={len(active) - 1}"
+        )
 
         if best_d <= 0.0:
-            print(f"  D_ZS ≤ 0 (critical threshold crossed at k={len(active)})")
+            _progress(f"  D_ZS <= 0 (critical threshold crossed at k={len(active)})")
 
         # Drop the best candidate (always continue to exhaustion)
         active.remove(best_g)
         current_wmean = best_wmean
-        history.append({
-            "step": step,
-            "panel_size": len(active),
-            "dropped": sym25[best_g],
-            "D_ZS": best_d,
-            "wmean": current_wmean,
-            "cohort": dict(best_cohort),
-        })
-        print(f"  Dropped: {sym25[best_g]}  → panel now {len(active)} genes  "
-              f"W.mean={current_wmean:.4f}")
+        history.append(
+            {
+                "step": step,
+                "panel_size": len(active),
+                "dropped": sym25[best_g],
+                "D_ZS": best_d,
+                "wmean": current_wmean,
+                "cohort": dict(best_cohort),
+            }
+        )
+        # Step complete: clear within-step results and checkpoint the new panel.
+        partial = {}
+        _save_ckpt(
+            active,
+            current_wmean,
+            step,
+            history,
+            partial,
+            int(_PROGRESS_STATE["done"]),
+        )
+        print(
+            f"  Dropped: {sym25[best_g]}  → panel now {len(active)} genes  "
+            f"W.mean={current_wmean:.4f}"
+        )
         for cname, auc in best_cohort.items():
             print(f"    {cname}: {auc:.4f}")
 
@@ -593,7 +848,7 @@ def main() -> None:
     # -----------------------------------------------------------------------
     final_genes = [sym25[i] for i in active]
     final_feats = [feat25[i] for i in active]
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"Final minimal panel: {len(active)} genes")
     print(f"  Symbols: {', '.join(final_genes)}")
     print(f"  ENSGs:   {', '.join([feat25[i] for i in active])}")
@@ -601,7 +856,6 @@ def main() -> None:
 
     # Full evaluation with CI for final panel
     print("\nComputing per-cohort zero-shot AUC with 95% CI for final panel ...")
-    from sklearn.preprocessing import StandardScaler
 
     final_results: dict[str, tuple[float, float, float]] = {}
     panel_set = set(active)
@@ -609,8 +863,8 @@ def main() -> None:
     # GPL16791
     Xtr = Xtr25_ctd[:, active]
     Xte = X16_25_ctd[:, active]
-    sc = StandardScaler().fit(Xtr)
-    auc16, lo16, hi16 = _zero_shot_ci(sc.transform(Xtr), y_train, sc.transform(Xte), y16, params)
+    Ztr, Zte = zero_shot_scale(Xtr, Xte, "GPL16791")
+    auc16, lo16, hi16 = _zero_shot_ci(Ztr, y_train, Zte, y16, params)
     final_results["GPL16791"] = (auc16, lo16, hi16)
 
     # GSE76220
@@ -619,8 +873,8 @@ def main() -> None:
     if cols76_tr:
         Xtr = Xtr25_log[:, cols76_tr]
         Xte = X76_25[:, cols76_te]
-        sc = StandardScaler().fit(Xtr)
-        auc76, lo76, hi76 = _zero_shot_ci(sc.transform(Xtr), y_train, sc.transform(Xte), y76, params)
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE76220")
+        auc76, lo76, hi76 = _zero_shot_ci(Ztr, y_train, Zte, y76, params)
     else:
         auc76, lo76, hi76 = 0.5, 0.5, 0.5
     final_results["GSE76220"] = (auc76, lo76, hi76)
@@ -631,8 +885,8 @@ def main() -> None:
     if cols122_tr:
         Xtr = Xtr25_log[:, cols122_tr]
         Xte = X122_25[:, cols122_te]
-        sc = StandardScaler().fit(Xtr)
-        auc122, lo122, hi122 = _zero_shot_ci(sc.transform(Xtr), y_train, sc.transform(Xte), y122, params)
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE122649")
+        auc122, lo122, hi122 = _zero_shot_ci(Ztr, y_train, Zte, y122, params)
     else:
         auc122, lo122, hi122 = 0.5, 0.5, 0.5
     final_results["GSE122649"] = (auc122, lo122, hi122)
@@ -643,8 +897,8 @@ def main() -> None:
     if cols_srp_tr:
         Xtr = Xtr25_log[:, cols_srp_tr]
         Xte = Xsrp_25[:, cols_srp_te]
-        sc = StandardScaler().fit(Xtr)
-        auc_srp, lo_srp, hi_srp = _zero_shot_ci(sc.transform(Xtr), y_train, sc.transform(Xte), y_srp, params)
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "SRP064478")
+        auc_srp, lo_srp, hi_srp = _zero_shot_ci(Ztr, y_train, Zte, y_srp, params)
     else:
         auc_srp, lo_srp, hi_srp = 0.5, 0.5, 0.5
     final_results["SRP064478"] = (auc_srp, lo_srp, hi_srp)
@@ -664,7 +918,7 @@ def main() -> None:
         f"  Total N   = {_TOTAL_N}",
         "",
         "Panel gene availability per cohort:",
-        f"  GPL16791  : 25/25 (Ensembl base ID, all panel genes)",
+        "  GPL16791  : 25/25 (Ensembl base ID, all panel genes)",
         f"  GSE76220  : {len(avail76)}/25 symbol-matched: {[sym25[i] for i in avail76]}",
         f"  GSE122649 : {len(avail122)}/25 symbol-matched: {[sym25[i] for i in avail122]}",
         f"  SRP064478 : {len(avail_srp)}/25 Ensembl-matched: {[sym25[i] for i in avail_srp]}",
@@ -679,7 +933,9 @@ def main() -> None:
         "-" * 100,
     ]
     for h in history[1:]:  # skip step 0 (baseline)
-        cohort_str = "  ".join(f"{h['cohort'].get(k, float('nan')):>10.4f}" for k in _N_COHORT)
+        cohort_str = "  ".join(
+            f"{h['cohort'].get(k, float('nan')):>10.4f}" for k in _N_COHORT
+        )
         lines.append(
             f"  {h['step']:>4}  {h['dropped']:>14}  {h['D_ZS']:>+8.4f}  "
             f"{h['panel_size']:>10}  {h['wmean']:>8.4f}  {cohort_str}"
@@ -724,7 +980,13 @@ def main() -> None:
     # Left: W.mean AUC vs panel size
     ax = axes[0]
     ax.plot(panel_sizes, wmeans, "o-", color="#1565C0", lw=2, ms=6)
-    ax.axvline(len(active), color="red", ls="--", lw=1.2, label=f"Final panel (k={len(active)})")
+    ax.axvline(
+        len(active),
+        color="red",
+        ls="--",
+        lw=1.2,
+        label=f"Final panel (k={len(active)})",
+    )
     ax.set_xlabel("Panel size (k genes)")
     ax.set_ylabel("Weighted mean zero-shot AUC")
     ax.set_title("Panel size vs. weighted zero-shot AUC")
@@ -736,7 +998,7 @@ def main() -> None:
     # Right: D_ZS per dropped gene (in order of elimination)
     ax = axes[1]
     colors_bar = ["#388E3C" if d > 0 else "#C62828" for d in d_values]
-    bars = ax.barh(range(len(dropped_names)), d_values, color=colors_bar, alpha=0.85)
+    ax.barh(range(len(dropped_names)), d_values, color=colors_bar, alpha=0.85)
     ax.set_yticks(range(len(dropped_names)))
     ax.set_yticklabels(dropped_names, fontsize=8)
     ax.axvline(0, color="black", lw=0.8)

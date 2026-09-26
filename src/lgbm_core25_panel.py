@@ -35,7 +35,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset
+from utils import adjust_colsample, load_dataset
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -118,7 +118,7 @@ def _cv_baseline(X: np.ndarray, y: np.ndarray) -> float:
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
     fold_aucs = []
     for tr, te in skf.split(X, y):
-        clf = LGBMClassifier(**LGBM_PARAMS)
+        clf = LGBMClassifier(**adjust_colsample(LGBM_PARAMS, X.shape[1]))
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
             clf.fit(X[tr], y[tr])
@@ -163,9 +163,10 @@ def _run_loo(
 
         mask = all_mask.copy()
         mask[rank_i - 1] = False
+        params_loo = adjust_colsample(LGBM_PARAMS, int(mask.sum()))
         fold_aucs = []
         for tr, te in skf.split(X[:, mask], y):
-            clf = LGBMClassifier(**LGBM_PARAMS)
+            clf = LGBMClassifier(**params_loo)
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore")
                 clf.fit(X[tr][:, mask], y[tr])
@@ -199,16 +200,29 @@ def _run_loo(
 
 
 _PROTEIN_CODING_PANEL = {
-    "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1", "TINAGL1",
-    "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2", "HEXB", "MCEE", "SLC37A2",
+    "MECOM",
+    "SERTAD1",
+    "FCN3",
+    "PROS1",
+    "ANGPT2",
+    "EMP1",
+    "TINAGL1",
+    "CKMT2",
+    "VWF",
+    "CLDN5",
+    "NR4A1",
+    "SOHLH2",
+    "HEXB",
+    "MCEE",
+    "SLC37A2",
 }
-_CLR_PC = "#d62728"   # red — protein-coding transferable panel
-_CLR_NC = "#aec7e8"   # light blue — non-coding elements
+_CLR_PC = "#d62728"  # red — protein-coding transferable panel
+_CLR_NC = "#aec7e8"  # light blue — non-coding elements
 
 
 def _plot_curve(feature_names: list[str], sym_map: dict[str, str]) -> None:
-    import matplotlib.pyplot as plt
     import matplotlib.lines as mlines
+    import matplotlib.pyplot as plt
     import pandas as pd
 
     df = pd.read_csv(_CURVE_SRC).head(PANEL_SIZE)
@@ -224,9 +238,13 @@ def _plot_curve(feature_names: list[str], sym_map: dict[str, str]) -> None:
     ax.plot(k, auc, color="#7fb3d3", linewidth=2, zorder=1)
     for ki, auci, pc in zip(k, auc, is_pc):
         ax.scatter(
-            ki, auci,
+            ki,
+            auci,
             color=_CLR_PC if pc else _CLR_NC,
-            s=55, zorder=2, edgecolors="white", linewidths=0.5,
+            s=55,
+            zorder=2,
+            edgecolors="white",
+            linewidths=0.5,
         )
 
     ax.axvline(
@@ -253,15 +271,29 @@ def _plot_curve(feature_names: list[str], sym_map: dict[str, str]) -> None:
     )
 
     legend_pc = mlines.Line2D(
-        [], [], color=_CLR_PC, marker="o", linestyle="None", markersize=7,
+        [],
+        [],
+        color=_CLR_PC,
+        marker="o",
+        linestyle="None",
+        markersize=7,
         label="Protein-coding (transferable panel, n=15)",
     )
     legend_nc = mlines.Line2D(
-        [], [], color=_CLR_NC, marker="o", linestyle="None", markersize=7,
+        [],
+        [],
+        color=_CLR_NC,
+        marker="o",
+        linestyle="None",
+        markersize=7,
         label="Non-coding element (n=10)",
     )
     legend_peak = mlines.Line2D(
-        [], [], color="crimson", linestyle="--", linewidth=1.2,
+        [],
+        [],
+        color="crimson",
+        linestyle="--",
+        linewidth=1.2,
         label=f"Peak: k={best_k}, AUC={best_auc:.4f}",
     )
     ax.legend(handles=[legend_pc, legend_nc, legend_peak], fontsize=9)

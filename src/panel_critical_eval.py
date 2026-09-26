@@ -1,23 +1,17 @@
-"""Zero-shot evaluation of the 15-gene critical panel on 4 CNS cohorts (equal weights).
+"""Zero-shot evaluation of the critical panel on 4 CNS cohorts (equal weights).
 
-Critical panel = greedy backward elimination peak (W.mean AUC = 0.9029 at k=15)
-under equal cohort weighting (0.25 per cohort). Source: iterative_panel_elimination.py.
-This replaces the prior one-pass-LOO 16-gene definition, which the v2 bootstrap-CI
-analysis (panel_loo_zeroshot.py) showed was inflated by combinatorial redundancy
-(e.g. EMP1: largest individual negative D_ZS but redundant in a 16-gene context).
+Critical panel = greedy backward elimination (iterative_panel_elimination.py) stopped
+by the non-inferiority rule (greedy_significance_stop.py), under equal cohort weighting
+(0.25 per cohort).
 
-Members (15):
-  12 protein-coding: FCN3, PROS1, ANGPT2, TINAGL1, CKMT2, CLDN5, NR4A1, SOHLH2,
-                     HEXB, MCEE, SLC37A2, SERTAD1
-  2 pseudogenes:     HERC2P8, SMG1P5
-  1 snoRNA:          SNORD97
-
-Panel indices in the 25-gene ordered panel:
-  [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
+Membership is read from the canonical panel definition (panel_critical.csv, via
+utils.critical_panel_features) — never hardcoded here. The indices into the
+25-gene ordered panel are derived from it at run time and printed to the output.
 
 Outputs:
   panel_critical_eval_statistics.txt
 """
+
 from __future__ import annotations
 
 import gzip
@@ -34,7 +28,11 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import (  # noqa: E402
+    critical_panel_features,
+    load_dataset,
+    zero_shot_scale,
+)
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -50,22 +48,28 @@ _GSE122649_SOFT_URL = (
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 
-# 15-gene critical panel (greedy backward elimination peak, equal weights, W.mean=0.9029)
-# Indices into the 25-gene ordered panel (lgbm_core25_panel.csv).
-_CRITICAL_IDX = [1, 2, 3, 5, 6, 7, 10, 11, 12, 15, 16, 18, 20, 23, 24]
-
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     "erythrocyte": (
-        "ENSG00000206172", "ENSG00000188536", "ENSG00000244734",
-        "ENSG00000158578", "ENSG00000170180", "ENSG00000133742",
-        "ENSG00000159111", "ENSG00000105610", "ENSG00000179364",
+        "ENSG00000206172",
+        "ENSG00000188536",
+        "ENSG00000244734",
+        "ENSG00000158578",
+        "ENSG00000170180",
+        "ENSG00000133742",
+        "ENSG00000159111",
+        "ENSG00000105610",
+        "ENSG00000179364",
         "ENSG00000223609",
     ),
     "platelet": (
-        "ENSG00000163736", "ENSG00000163737", "ENSG00000185245",
+        "ENSG00000163736",
+        "ENSG00000163737",
+        "ENSG00000185245",
     ),
     "endothelial": (
-        "ENSG00000261371", "ENSG00000179776", "ENSG00000110799",
+        "ENSG00000261371",
+        "ENSG00000179776",
+        "ENSG00000110799",
     ),
 }
 
@@ -79,11 +83,15 @@ _W = {k: 1.0 / len(_N_COHORT) for k in _N_COHORT}
 # Helpers (identical to panel_loo_zeroshot.py)
 # ---------------------------------------------------------------------------
 
+
 def _bootstrap_auc(
-    y: np.ndarray, scores: np.ndarray,
-    n: int = N_BOOTSTRAP, seed: int = RANDOM_STATE,
+    y: np.ndarray,
+    scores: np.ndarray,
+    n: int = N_BOOTSTRAP,
+    seed: int = RANDOM_STATE,
 ) -> tuple[float, float]:
     from sklearn.metrics import roc_auc_score
+
     rng = np.random.default_rng(seed)
     aucs = []
     for _ in range(n):
@@ -96,12 +104,15 @@ def _bootstrap_auc(
 
 
 def _zero_shot_ci(
-    X_tr: np.ndarray, y_tr: np.ndarray,
-    X_te: np.ndarray, y_te: np.ndarray,
+    X_tr: np.ndarray,
+    y_tr: np.ndarray,
+    X_te: np.ndarray,
+    y_te: np.ndarray,
     params: dict,
 ) -> tuple[float, float, float]:
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
+    from utils import PanelLGBMClassifier as LGBMClassifier
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         clf = LGBMClassifier(**params).fit(X_tr, y_tr)
@@ -115,10 +126,13 @@ def _zero_shot_ci(
 # Data loaders (identical to panel_loo_zeroshot.py)
 # ---------------------------------------------------------------------------
 
+
 def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
     # CTD compartment regression is discovery-side only; cross-cohort transfer now
     # uses raw log1p for every cohort, so the CTD-residualised matrix is not built.
-    (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources")
+    (ds,) = load_dataset(
+        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
+    )
     X_log = np.log1p(ds.X.values.astype(np.float32))
     y = ds.y.values.astype(int)
     feat = list(ds.X.columns)
@@ -126,11 +140,15 @@ def _load_gpl24676_ctd() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]
 
 
 def _load_gpl16791_ctd(
-    X_train_log: np.ndarray, feat_train: list[str],
+    X_train_log: np.ndarray,
+    feat_train: list[str],
 ) -> tuple[np.ndarray, np.ndarray]:
     from sklearn.decomposition import PCA
     from sklearn.linear_model import LinearRegression
-    (ds16,) = load_dataset("GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources")
+
+    (ds16,) = load_dataset(
+        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
+    )
     X16_raw = ds16.X.values.astype(np.float32)
     y16 = ds16.y.values.astype(int)
     feat16 = list(ds16.X.columns)
@@ -155,13 +173,21 @@ def _load_gpl16791_ctd(
 
 def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
     (ds,) = load_dataset("GSE76220", resources_dir=ALS_DIR / "resources")
-    return np.log1p(ds.X.values.astype(np.float32)), list(ds.X.columns), ds.y.values.astype(int)
+    return (
+        # GSE76220 is ALREADY log-scale (log2 RPKM: range -6.2..10.6, 63% negative
+        # despite the 'RPKM' filename). A further log1p would null every value
+        # <= -1 (77% of panel genes). Per-gene z-scoring downstream absorbs the
+        # log-base and length-normalisation differences vs log1p(counts) training.
+        ds.X.values.astype(np.float32),
+        list(ds.X.columns),
+        ds.y.values.astype(int),
+    )
 
 
 def _parse_gse122649_soft() -> dict[str, str]:
-    import requests
-    r = requests.get(_GSE122649_SOFT_URL, timeout=60, stream=True)
-    content = gzip.decompress(r.content).decode("utf-8", errors="ignore")
+    from utils import geo_soft_text
+
+    content = geo_soft_text("GSE122649")
     meta: dict[str, str] = {}
     for s in re.split(r"\^SAMPLE", content)[1:]:
         acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
@@ -219,6 +245,7 @@ def _load_gse122649() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
     import pandas as pd
+
     meta = pd.read_csv(_SRP_META, sep="\t").set_index("SRR")
     quants: list[pd.Series] = []
     tx_ids: list[str] | None = None
@@ -264,13 +291,15 @@ def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     import pandas as pd
+
     warnings.filterwarnings("ignore", category=UserWarning)
 
     print("=" * 70)
-    print("15-gene critical panel — zero-shot AUC with 95% CI (equal cohort weights)")
-    print("Greedy backward elimination peak (W.mean = 0.9029 at k=15)")
+    print("Critical panel — zero-shot AUC with 95% CI (equal cohort weights)")
+    print("Membership: panel_critical.csv (greedy + non-inferiority stopping rule)")
     print("Weights: GPL16791=0.250  GSE76220=0.250  GSE122649=0.250  SRP064478=0.250")
     print("=" * 70)
 
@@ -279,27 +308,40 @@ def main() -> None:
 
     # ---- Panel ----
     df_panel = pd.read_csv(_PANEL_CSV)
-    feat_col = next(c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower())
+    feat_col = next(
+        c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower()
+    )
     sym_col = next(c for c in df_panel.columns if "symbol" in c.lower())
     feat25: list[str] = df_panel[feat_col].tolist()
     sym25: list[str] = df_panel[sym_col].tolist()
     feat25_bases: list[str] = [f.split(".")[0] for f in feat25]
 
+    # Indices of the canonical critical panel within the 25-gene ordered panel.
+    # Derived, not hardcoded: panel_critical.csv is the single source of truth.
+    _crit_bases = {f.split(".")[0] for f in critical_panel_features()}
+    _CRITICAL_IDX = [i for i, b in enumerate(feat25_bases) if b in _crit_bases]
+    if len(_CRITICAL_IDX) != len(_crit_bases):
+        missing = _crit_bases - {feat25_bases[i] for i in _CRITICAL_IDX}
+        raise SystemExit(f"critical panel members absent from 25-gene panel: {missing}")
+
     panel_syms = [sym25[i] for i in _CRITICAL_IDX]
-    panel_bases = [feat25_bases[i] for i in _CRITICAL_IDX]
-    print(f"\n15-gene critical panel: {', '.join(panel_syms)}\n")
+    print(f"\n{len(panel_syms)}-gene critical panel: {', '.join(panel_syms)}\n")
 
     # ---- Load GPL24676 (raw log1p; CTD is discovery-side only) ----
     print("Loading GPL24676 (raw log1p) ...")
     X_train_ctd, y_train, X_train_log, feat_train = _load_gpl24676_ctd()
-    feat_train_base_map: dict[str, int] = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
+    feat_train_base_map: dict[str, int] = {
+        f.split(".")[0]: j for j, f in enumerate(feat_train)
+    }
     panel_train_cols: list[int] = [feat_train_base_map[b] for b in feat25_bases]
     Xtr25_ctd = X_train_log[:, panel_train_cols].astype(np.float32)
     Xtr25_log = X_train_log[:, panel_train_cols].astype(np.float32)
 
     # ---- Load GPL16791 (raw log1p — uniform with other zero-shot cohorts) ----
     print("Loading GPL16791 (raw log1p; CTD is discovery-side only) ...")
-    (ds16,) = load_dataset("GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources")
+    (ds16,) = load_dataset(
+        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
+    )
     assert list(ds16.X.columns) == feat_train
     X16_log_full = np.log1p(ds16.X.values.astype(np.float32))
     y16 = ds16.y.values.astype(int)
@@ -310,37 +352,56 @@ def main() -> None:
     X76_log, vocab76, y76 = _load_gse76220()
     vocab76_map = {s: i for i, s in enumerate(vocab76)}
     avail76 = [i for i, s in enumerate(sym25) if s in vocab76_map]
-    X76_25 = (np.column_stack([X76_log[:, vocab76_map[sym25[i]]] for i in avail76])
-               .astype(np.float32)) if avail76 else np.empty((len(y76), 0), dtype=np.float32)
+    X76_25 = (
+        (
+            np.column_stack(
+                [X76_log[:, vocab76_map[sym25[i]]] for i in avail76]
+            ).astype(np.float32)
+        )
+        if avail76
+        else np.empty((len(y76), 0), dtype=np.float32)
+    )
 
     # ---- Load GSE122649 ----
     print("Loading GSE122649 ...")
     X122_log, vocab122, y122 = _load_gse122649()
     vocab122_map = {s: i for i, s in enumerate(vocab122)}
     avail122 = [i for i, s in enumerate(sym25) if s in vocab122_map]
-    X122_25 = (np.column_stack([X122_log[:, vocab122_map[sym25[i]]] for i in avail122])
-                .astype(np.float32)) if avail122 else np.empty((len(y122), 0), dtype=np.float32)
+    X122_25 = (
+        (
+            np.column_stack(
+                [X122_log[:, vocab122_map[sym25[i]]] for i in avail122]
+            ).astype(np.float32)
+        )
+        if avail122
+        else np.empty((len(y122), 0), dtype=np.float32)
+    )
 
     # ---- Load SRP064478 ----
     print("Loading SRP064478 ...")
     Xsrp_log, vocab_srp, y_srp = _load_srp064478()
     srp_vocab_map = {v: i for i, v in enumerate(vocab_srp)}
     avail_srp = [i for i, b in enumerate(feat25_bases) if b in srp_vocab_map]
-    Xsrp_25 = (np.column_stack([Xsrp_log[:, srp_vocab_map[feat25_bases[i]]] for i in avail_srp])
-                .astype(np.float32)) if avail_srp else np.empty((len(y_srp), 0), dtype=np.float32)
+    Xsrp_25 = (
+        (
+            np.column_stack(
+                [Xsrp_log[:, srp_vocab_map[feat25_bases[i]]] for i in avail_srp]
+            ).astype(np.float32)
+        )
+        if avail_srp
+        else np.empty((len(y_srp), 0), dtype=np.float32)
+    )
 
-    # ---- Evaluate 15-gene panel ----
-    from sklearn.preprocessing import StandardScaler
-
+    # ---- Evaluate critical panel ----
     panel_set = set(_CRITICAL_IDX)
-    print("\nEvaluating 15-gene critical panel with 95% CI ...\n")
+    print(f"\nEvaluating {len(_CRITICAL_IDX)}-gene critical panel with 95% CI ...\n")
     results: dict[str, tuple[float, float, float]] = {}
 
     # GPL16791 — raw log1p, all 15 available
     Xtr = Xtr25_ctd[:, _CRITICAL_IDX]
     Xte = X16_25_ctd[:, _CRITICAL_IDX]
-    sc = StandardScaler().fit(Xtr)
-    auc16, lo16, hi16 = _zero_shot_ci(sc.transform(Xtr), y_train, sc.transform(Xte), y16, params)
+    Ztr, Zte = zero_shot_scale(Xtr, Xte, "GPL16791")
+    auc16, lo16, hi16 = _zero_shot_ci(Ztr, y_train, Zte, y16, params)
     results["GPL16791"] = (auc16, lo16, hi16)
     n_gpl16791 = len(_CRITICAL_IDX)
 
@@ -352,10 +413,8 @@ def main() -> None:
     if cols76_tr:
         Xtr = Xtr25_log[:, cols76_tr]
         Xte = X76_25[:, cols76_te]
-        sc = StandardScaler().fit(Xtr)
-        auc76, lo76, hi76 = _zero_shot_ci(
-            sc.transform(Xtr), y_train, sc.transform(Xte), y76, params
-        )
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE76220")
+        auc76, lo76, hi76 = _zero_shot_ci(Ztr, y_train, Zte, y76, params)
         results["GSE76220"] = (auc76, lo76, hi76)
 
     # GSE122649 — symbol, log1p
@@ -366,10 +425,8 @@ def main() -> None:
     if cols122_tr:
         Xtr = Xtr25_log[:, cols122_tr]
         Xte = X122_25[:, cols122_te]
-        sc = StandardScaler().fit(Xtr)
-        auc122, lo122, hi122 = _zero_shot_ci(
-            sc.transform(Xtr), y_train, sc.transform(Xte), y122, params
-        )
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE122649")
+        auc122, lo122, hi122 = _zero_shot_ci(Ztr, y_train, Zte, y122, params)
         results["GSE122649"] = (auc122, lo122, hi122)
 
     # SRP064478 — Ensembl base ID, log1p
@@ -380,10 +437,8 @@ def main() -> None:
     if cols_srp_tr:
         Xtr = Xtr25_log[:, cols_srp_tr]
         Xte = Xsrp_25[:, cols_srp_te]
-        sc = StandardScaler().fit(Xtr)
-        auc_srp, lo_srp, hi_srp = _zero_shot_ci(
-            sc.transform(Xtr), y_train, sc.transform(Xte), y_srp, params
-        )
+        Ztr, Zte = zero_shot_scale(Xtr, Xte, "SRP064478")
+        auc_srp, lo_srp, hi_srp = _zero_shot_ci(Ztr, y_train, Zte, y_srp, params)
         results["SRP064478"] = (auc_srp, lo_srp, hi_srp)
 
     # Weighted mean
@@ -399,35 +454,30 @@ def main() -> None:
     # ---- Print results ----
     header = (
         f"\n{'Cohort':>12s}  {'N':>5s}  {'Genes':>6s}  "
-        f"{'AUC':>7s}  {'95% CI':>16s}\n"
-        + "-" * 58
+        f"{'AUC':>7s}  {'95% CI':>16s}\n" + "-" * 58
     )
     print(header)
     for k in _N_COHORT:
         if k not in results:
             continue
         auc, lo, hi = results[k]
-        print(f"  {k:>12s}  {_N_COHORT[k]:>5d}  {gene_counts[k]:>6d}  "
-              f"{auc:>7.4f}  [{lo:.3f}, {hi:.3f}]")
+        print(
+            f"  {k:>12s}  {_N_COHORT[k]:>5d}  {gene_counts[k]:>6d}  "
+            f"{auc:>7.4f}  [{lo:.3f}, {hi:.3f}]"
+        )
     print(f"\n  Weighted mean AUC = {wmean:.4f}")
 
     # ---- Save statistics ----
     lines = [
-        "15-gene critical panel — zero-shot AUC with 95% CI (equal cohort weights)",
+        f"{len(_CRITICAL_IDX)}-gene critical panel — zero-shot AUC with 95% CI "
+        "(equal cohort weights)",
         "=" * 70,
         "",
-        "Source: greedy backward elimination peak (iterative_panel_elimination.py),",
-        "  W.mean AUC = 0.9029 at k=15 (peak of the elimination trajectory).",
-        "  Supersedes the prior one-pass-LOO 16-gene definition: the v2 bootstrap-CI",
-        "  analysis (panel_loo_zeroshot.py) showed individual-LOO D_ZS values inflated",
-        "  by combinatorial redundancy (e.g. EMP1 had the largest individual",
-        "  negative D_ZS but is dropped at greedy step 10 with positive D_ZS).",
+        "Source: greedy backward elimination, stopped by the non-inferiority rule",
+        "  (greedy_significance_stop.py). Membership is read from panel_critical.csv",
+        "  via utils.critical_panel_features() — this script never hardcodes it.",
         "",
-        "Panel members:",
-        "  Protein-coding (12): FCN3, PROS1, ANGPT2, TINAGL1, CKMT2, CLDN5,",
-        "                       NR4A1, SOHLH2, HEXB, MCEE, SLC37A2, SERTAD1",
-        "  Pseudogenes (2):     HERC2P8, SMG1P5",
-        "  snoRNA (1):          SNORD97",
+        "Panel members: " + ", ".join(panel_syms),
         "",
         "Panel indices in 25-gene panel: " + str(_CRITICAL_IDX),
         "",
@@ -437,11 +487,19 @@ def main() -> None:
         "",
         "Gene availability:",
         f"  GPL16791  = {n_gpl16791}/{len(_CRITICAL_IDX)}  (Ensembl base ID, all critical genes present)",
-        f"  GSE76220  = {n_gse76220}/{len(_CRITICAL_IDX)}  (HGNC symbol; pseudogenes + snoRNA absent)",
-        f"  GSE122649 = {n_gse122649}/{len(_CRITICAL_IDX)}  (HGNC symbol; pseudogenes + snoRNA absent)",
+        # Do not assert WHICH members are missing: GSE76220 in fact carries
+        # SNORD97 but not MECOM (its annotation uses the legacy alias EVI1),
+        # which is the opposite of the "non-coding absent" story this line used
+        # to tell. The counts are computed; the explanation was not.
+        f"  GSE76220  = {n_gse76220}/{len(_CRITICAL_IDX)}  (matched by HGNC symbol)",
+        f"  GSE122649 = {n_gse122649}/{len(_CRITICAL_IDX)}  (matched by HGNC symbol)",
         f"  SRP064478 = {n_srp}/{len(_CRITICAL_IDX)}  (Ensembl base ID; pseudogenes present)",
         "",
         "Results (zero-shot, N_bootstrap=2000):",
+        "Estimator: SINGLE LightGBM model, matching the greedy trajectory, which",
+        "refits at every panel size. combined_validation_roc.py seeds an ensemble",
+        "and reproduces these AUCs exactly: with colsample_bytree=1 and no row",
+        "subsampling the trees do not depend on the seed, so the two agree.",
         "",
         f"{'Cohort':>12s}  {'N':>5s}  {'Genes':>6s}  {'AUC':>7s}  {'95% CI':>16s}",
         "-" * 58,

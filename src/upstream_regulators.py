@@ -45,7 +45,7 @@ SCRIPT_DIR = pathlib.Path(__file__).parent
 sys.path.insert(0, str(pathlib.Path(__file__).parents[2]))
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import critical_panel_directions, load_dataset  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
@@ -68,16 +68,13 @@ AUC_ACTIVATOR_THRESH = 0.60
 AUC_REPRESSOR_THRESH = 0.40
 SPEARMAN_THRESH = 0.30
 
-# 12 protein-coding members of the 15-gene greedy-tail critical panel
-# (greedy backward elimination peak at k=15, W.mean = 0.9029; equal cohort weights)
-# Excludes EMP1: largest individual negative D_ZS in one-pass LOO but redundant
-# in a 16-gene context (greedy elimination drops at step 10 with positive D_ZS).
-_UP_GENES = [
-    "FCN3", "PROS1", "SOHLH2", "HEXB", "MCEE", "SLC37A2", "SERTAD1",
-]
-_DOWN_GENES = [
-    "ANGPT2", "TINAGL1", "CKMT2", "CLDN5", "NR4A1",
-]
+# Protein-coding members of the canonical critical panel (panel_critical.csv),
+# split by direction of effect. Both membership and direction are derived, never
+# hardcoded: membership from the greedy + non-inferiority stopping rule, direction
+# from the discovery-cohort differential expression (gene_profiling_summary.csv).
+_DIRECTIONS = critical_panel_directions(protein_coding_only=True)
+_UP_GENES = [g for g, d in _DIRECTIONS.items() if d == "up"]
+_DOWN_GENES = [g for g, d in _DIRECTIONS.items() if d == "down"]
 
 
 # ---------------------------------------------------------------------------

@@ -51,7 +51,6 @@ sys.path.insert(0, str(ALS_DIR))
 
 from calibration_analysis import _expected_calibration_error
 from external_validation_gpl16791 import (
-    _ctd_residualise,
     _extract_panel,
     _load_platform,
 )
@@ -170,7 +169,7 @@ def combat(data: np.ndarray, batch: np.ndarray) -> np.ndarray:
 
 
 def _fit_lgbm(X_tr: np.ndarray, y_train: np.ndarray):
-    from lightgbm import LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0

@@ -39,7 +39,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import _load_suppl_expression, _parse_series_matrix
+from utils import _load_suppl_expression, _parse_series_matrix, panel25_cv_auc
 
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
@@ -50,7 +50,7 @@ _MATRIX_PATH = (
     RESOURCES_DIR / "GSE153960" / "matrix" / "GSE153960-GPL24676_series_matrix.txt.gz"
 )
 
-TRAIN_CV_AUC = 0.9621  # 5-fold CV from lgbm_core25_panel.py (step 2d)
+TRAIN_CV_AUC = panel25_cv_auc()  # derived; see utils.panel25_cv_auc
 N_BOOTSTRAP = 2_000
 RANDOM_STATE = 42
 
@@ -67,12 +67,11 @@ _CTRL_RE = "^Non-Neurological Control"
 
 
 def _load_all_samples() -> tuple[
-    np.ndarray,       # X_log  (n_all, n_genes)  log1p RSEM
-    list[str],        # feature_names
+    np.ndarray,  # X_log  (n_all, n_genes)  log1p RSEM
+    list[str],  # feature_names
     dict[str, list[int]],  # group_idx: group_name → list of row indices
 ]:
     """Parse GPL24676 series matrix and load expression for ALL samples."""
-    import pandas as pd
 
     print(f"  Parsing series matrix: {_MATRIX_PATH.name} ...")
     meta_df, _ = _parse_series_matrix(_MATRIX_PATH)
@@ -89,16 +88,16 @@ def _load_all_samples() -> tuple[
 
     group_col = meta_df["group"].fillna("").astype(str)
 
-    als_mask   = group_col.str.match(_ALS_RE,     na=False)
+    als_mask = group_col.str.match(_ALS_RE, na=False)
     alsftd_mask = group_col.str.match(_ALS_FTD_RE, na=False)
-    ftld_mask  = group_col.str.match(_FTLD_RE,    na=False) & ~alsftd_mask
-    ctrl_mask  = group_col.str.match(_CTRL_RE,    na=False)
+    ftld_mask = group_col.str.match(_FTLD_RE, na=False) & ~alsftd_mask
+    ctrl_mask = group_col.str.match(_CTRL_RE, na=False)
 
     counts = {
-        "ALS (pure)":  als_mask.sum(),
-        "ALS-FTD":     alsftd_mask.sum(),
-        "FTLD/PSP":    ftld_mask.sum(),
-        "Control":     ctrl_mask.sum(),
+        "ALS (pure)": als_mask.sum(),
+        "ALS-FTD": alsftd_mask.sum(),
+        "FTLD/PSP": ftld_mask.sum(),
+        "Control": ctrl_mask.sum(),
         "Other/excluded": (~als_mask & ~alsftd_mask & ~ftld_mask & ~ctrl_mask).sum(),
     }
     for grp, n in counts.items():
@@ -112,9 +111,9 @@ def _load_all_samples() -> tuple[
 
     group_idx: dict[str, list[int]] = {
         "ALS (pure)": [i for i, m in enumerate(als_mask) if m],
-        "ALS-FTD":    [i for i, m in enumerate(alsftd_mask) if m],
-        "FTLD/PSP":   [i for i, m in enumerate(ftld_mask) if m],
-        "Control":    [i for i, m in enumerate(ctrl_mask) if m],
+        "ALS-FTD": [i for i, m in enumerate(alsftd_mask) if m],
+        "FTLD/PSP": [i for i, m in enumerate(ftld_mask) if m],
+        "Control": [i for i, m in enumerate(ctrl_mask) if m],
     }
 
     return X_log, list(expr_df.index), group_idx
@@ -180,8 +179,9 @@ def _plot(
     order = ["Control", "FTLD/PSP", "ALS-FTD", "ALS (pure)"]
     colours = ["#4878d0", "#ee854a", "#d65f5f", "#6acc65"]
     data = [group_scores[g] for g in order]
-    parts = ax.violinplot(data, positions=range(len(order)), showmedians=True,
-                          showextrema=True)
+    parts = ax.violinplot(
+        data, positions=range(len(order)), showmedians=True, showextrema=True
+    )
     for i, (pc, col) in enumerate(zip(parts["bodies"], colours)):
         pc.set_facecolor(col)
         pc.set_alpha(0.7)
@@ -210,13 +210,23 @@ def _plot(
     fpr_ftld, tpr_ftld, _ = roc_curve(y_ftld, scores_ftld)
 
     ax2.fill_between(_FPR_GRID, tpr_lo_ftld, tpr_hi_ftld, alpha=0.2, color="#ee854a")
-    ax2.plot(fpr_ftld, tpr_ftld, lw=2, color="#ee854a",
-             label=f"ALS vs FTLD/PSP  AUC={auc_als_vs_ftld:.4f}\n"
-                   f"95% CI [{ci_lo_ftld:.4f}, {ci_hi_ftld:.4f}]")
+    ax2.plot(
+        fpr_ftld,
+        tpr_ftld,
+        lw=2,
+        color="#ee854a",
+        label=f"ALS vs FTLD/PSP  AUC={auc_als_vs_ftld:.4f}\n"
+        f"95% CI [{ci_lo_ftld:.4f}, {ci_hi_ftld:.4f}]",
+    )
     ax2.fill_between(_FPR_GRID, tpr_lo_cv, tpr_hi_cv, alpha=0.2, color="#4878d0")
-    ax2.plot(fpr_cv, tpr_cv, lw=2, color="#4878d0",
-             label=f"ALS vs Control   AUC={auc_cv:.4f}  (5-fold CV)\n"
-                   f"95% CI [{ci_lo_cv:.4f}, {ci_hi_cv:.4f}]")
+    ax2.plot(
+        fpr_cv,
+        tpr_cv,
+        lw=2,
+        color="#4878d0",
+        label=f"ALS vs Control   AUC={auc_cv:.4f}  (5-fold CV)\n"
+        f"95% CI [{ci_lo_cv:.4f}, {ci_hi_cv:.4f}]",
+    )
     ax2.plot([0, 1], [0, 1], "k--", lw=0.8)
     ax2.set_xlabel("False Positive Rate")
     ax2.set_ylabel("True Positive Rate")
@@ -245,10 +255,10 @@ def main() -> None:
 
     import matplotlib
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from scipy.stats import mannwhitneyu
     from sklearn.metrics import roc_auc_score
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     matplotlib.use("Agg")
 
@@ -280,15 +290,15 @@ def main() -> None:
     X_panel = X_log[:, panel_cols]  # (n_all, n_panel)
 
     # Training mask: ALS (pure + ALS-FTD) vs Control
-    tr_als_idx  = group_idx["ALS (pure)"] + group_idx["ALS-FTD"]
+    tr_als_idx = group_idx["ALS (pure)"] + group_idx["ALS-FTD"]
     tr_ctrl_idx = group_idx["Control"]
     tr_idx = tr_als_idx + tr_ctrl_idx
-    y_train = np.array(
-        [1] * len(tr_als_idx) + [0] * len(tr_ctrl_idx), dtype=int
-    )
+    y_train = np.array([1] * len(tr_als_idx) + [0] * len(tr_ctrl_idx), dtype=int)
 
-    print(f"\nTraining set: n={len(tr_idx)}  "
-          f"ALS={len(tr_als_idx)}  Ctrl={len(tr_ctrl_idx)}")
+    print(
+        f"\nTraining set: n={len(tr_idx)}  "
+        f"ALS={len(tr_als_idx)}  Ctrl={len(tr_ctrl_idx)}"
+    )
 
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
@@ -296,8 +306,8 @@ def main() -> None:
     # 5-fold CV: OOF scores for training groups AND fold-averaged scores for FTLD/PSP.
     # Both groups are scored by the same 5 fold models (none of which ever saw FTLD/PSP),
     # eliminating the asymmetry between in-sample ALS and zero-shot FTLD/PSP.
-    from sklearn.model_selection import StratifiedKFold
     from sklearn.metrics import roc_curve as _roc_curve
+    from sklearn.model_selection import StratifiedKFold
 
     print("\nRunning 5-fold CV ...")
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
@@ -323,9 +333,9 @@ def main() -> None:
     n_als_pure = len(group_idx["ALS (pure)"])
     honest_scores: dict[str, np.ndarray] = {
         "ALS (pure)": oof_scores[:n_als_pure],
-        "ALS-FTD":    oof_scores[n_als_pure:len(tr_als_idx)],
-        "Control":    oof_scores[len(tr_als_idx):],
-        "FTLD/PSP":   ftld_cv_scores,
+        "ALS-FTD": oof_scores[n_als_pure : len(tr_als_idx)],
+        "Control": oof_scores[len(tr_als_idx) :],
+        "FTLD/PSP": ftld_cv_scores,
     }
     print("\nHonest (OOF / fold-averaged CV) score distributions:")
     for g, sc in honest_scores.items():
@@ -334,14 +344,18 @@ def main() -> None:
     rng = np.random.default_rng(RANDOM_STATE)
 
     # AUC: ALS (pure, OOF) vs FTLD/PSP (zero-shot) — fully honest
-    y_als_ftld = np.concatenate([
-        np.ones(n_als_pure, dtype=int),
-        np.zeros(len(group_idx["FTLD/PSP"]), dtype=int),
-    ])
-    scores_als_ftld = np.concatenate([
-        honest_scores["ALS (pure)"],
-        honest_scores["FTLD/PSP"],
-    ])
+    y_als_ftld = np.concatenate(
+        [
+            np.ones(n_als_pure, dtype=int),
+            np.zeros(len(group_idx["FTLD/PSP"]), dtype=int),
+        ]
+    )
+    scores_als_ftld = np.concatenate(
+        [
+            honest_scores["ALS (pure)"],
+            honest_scores["FTLD/PSP"],
+        ]
+    )
     auc_als_vs_ftld = float(roc_auc_score(y_als_ftld, scores_als_ftld))
     print(f"\nAUC (ALS pure OOF vs FTLD/PSP zero-shot): {auc_als_vs_ftld:.4f}")
     boot_ftld, tpr_lo_ftld, tpr_hi_ftld = _bootstrap_roc(
@@ -354,11 +368,15 @@ def main() -> None:
     # AUC: ALS vs Control (OOF) — reference curve
     auc_als_vs_ctrl = float(roc_auc_score(y_train, oof_scores))
     fpr_cv, tpr_cv, _ = _roc_curve(y_train, oof_scores)
-    boot_cv, tpr_lo_cv, tpr_hi_cv = _bootstrap_roc(y_train, oof_scores, N_BOOTSTRAP, rng)
+    boot_cv, tpr_lo_cv, tpr_hi_cv = _bootstrap_roc(
+        y_train, oof_scores, N_BOOTSTRAP, rng
+    )
     ci_lo_cv = float(np.percentile(boot_cv, 2.5))
     ci_hi_cv = float(np.percentile(boot_cv, 97.5))
-    print(f"AUC (ALS vs Control, OOF):         {auc_als_vs_ctrl:.4f}  "
-          f"95% CI [{ci_lo_cv:.4f}, {ci_hi_cv:.4f}]")
+    print(
+        f"AUC (ALS vs Control, OOF):         {auc_als_vs_ctrl:.4f}  "
+        f"95% CI [{ci_lo_cv:.4f}, {ci_hi_cv:.4f}]"
+    )
 
     # Mann-Whitney U tests (using honest OOF/zero-shot scores)
     mw_ftld_vs_als, p_ftld_als = mannwhitneyu(
@@ -377,9 +395,20 @@ def main() -> None:
     print("\nGenerating plot ...")
     _plot(
         honest_scores,
-        y_als_ftld, scores_als_ftld,
-        auc_als_vs_ftld, ci_lo, ci_hi, tpr_lo_ftld, tpr_hi_ftld,
-        fpr_cv, tpr_cv, auc_als_vs_ctrl, ci_lo_cv, ci_hi_cv, tpr_lo_cv, tpr_hi_cv,
+        y_als_ftld,
+        scores_als_ftld,
+        auc_als_vs_ftld,
+        ci_lo,
+        ci_hi,
+        tpr_lo_ftld,
+        tpr_hi_ftld,
+        fpr_cv,
+        tpr_cv,
+        auc_als_vs_ctrl,
+        ci_lo_cv,
+        ci_hi_cv,
+        tpr_lo_cv,
+        tpr_hi_cv,
     )
 
     # Statistics file
@@ -397,8 +426,8 @@ def main() -> None:
     for g, sc in honest_scores.items():
         lines.append(
             f"  {g:<30} n={len(sc):3d}  median={np.median(sc):.4f}"
-            f"  mean={np.mean(sc):.4f}  IQR=[{np.percentile(sc,25):.4f},"
-            f"{np.percentile(sc,75):.4f}]"
+            f"  mean={np.mean(sc):.4f}  IQR=[{np.percentile(sc, 25):.4f},"
+            f"{np.percentile(sc, 75):.4f}]"
         )
     lines += [
         "",

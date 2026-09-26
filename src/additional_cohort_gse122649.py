@@ -121,8 +121,9 @@ def _parse_soft() -> dict[str, str]:
     import re
 
     print("  Parsing sample metadata ...")
-    r = requests.get(_SOFT_URL, timeout=60, stream=True)
-    content = gzip.decompress(r.content).decode("utf-8", errors="ignore")
+    from utils import geo_soft_text
+
+    content = geo_soft_text("GSE122649")
     samples = re.split(r"\^SAMPLE", content)[1:]
     meta: dict[str, str] = {}
     for s in samples:
@@ -248,10 +249,10 @@ def _bootstrap_auc(
 
 
 def _zeroshot(X_tr_sc, y_tr, X_te_sc, y_te, params):
-    import lightgbm as lgb
     from sklearn.metrics import roc_auc_score
+    from utils import PanelLGBMClassifier
 
-    m = lgb.LGBMClassifier(**params)
+    m = PanelLGBMClassifier(**params)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         m.fit(X_tr_sc, y_tr)
@@ -264,11 +265,11 @@ def _zeroshot(X_tr_sc, y_tr, X_te_sc, y_te, params):
 def main() -> None:
     import json
 
-    import lightgbm as lgb
     import matplotlib.pyplot as plt
     import pandas as pd
     from sklearn.metrics import roc_auc_score, roc_curve
     from sklearn.preprocessing import StandardScaler
+    from utils import PanelLGBMClassifier
 
     print("=" * 65)
     print("Additional Cohort Validation — GSE122649")
@@ -407,7 +408,7 @@ def main() -> None:
         sc = StandardScaler()
         X_lo_sc = sc.fit_transform(X_lo)
         X_va_sc = sc.transform(X_va)
-        m = lgb.LGBMClassifier(**loo_params)
+        m = PanelLGBMClassifier(**loo_params)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             m.fit(X_lo_sc, y_lo := y_test[lo_idx])
