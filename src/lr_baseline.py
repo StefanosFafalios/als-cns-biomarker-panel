@@ -104,8 +104,12 @@ def main() -> None:
         lr_cv[va] = lr.predict_proba(sc.transform(X_tr[va]))[:, 1]
 
     # Refit both on full train, predict on GPL16791
-    lgbm_full = _fit_lgbm(X_tr, y_train)
-    lgbm_te_scores = lgbm_full.predict_proba(X_te)[:, 1]
+    from utils import zero_shot_scale
+
+    # the manuscript's zero-shot model: training-set scaler applied to the test cohort
+    z_tr, z_te = zero_shot_scale(X_tr, X_te, "GPL16791")
+    lgbm_full = _fit_lgbm(z_tr, y_train)
+    lgbm_te_scores = lgbm_full.predict_proba(z_te)[:, 1]
     lr_full, scaler = _fit_lr(X_tr, y_train)
     lr_te_scores = lr_full.predict_proba(scaler.transform(X_te))[:, 1]
 

@@ -8,13 +8,14 @@ Strategy
 --------
 1. Load raw RSEM counts for GPL24676 (n=874) and GPL16791 (n=636).
 2. Apply log1p to both.
-3. Fit the CTD compartment PC regression on GPL24676 only.
-4. Apply the fitted regression to residualise both platforms.
-5. Extract the 25 core panel features from both residualised matrices.
-6. Train LightGBM (top-500 best params, colsample_bytree=1.0) on all 874
+3. Extract the 25 core panel features (raw log1p: CTD compartment regression
+   is discovery-side only).
+4. Standardise with the training-set scaler (``utils.zero_shot_scale``), as the
+   Figure-validations estimator in ``panel_critical_eval.py`` does.
+5. Train LightGBM (top-500 best params, colsample_bytree=1.0) on all 874
    GPL24676 samples.
-7. Zero-shot predict on all 636 GPL16791 samples.
-8. Report AUC, bootstrap 95 % CI, confusion matrix at Youden threshold,
+6. Zero-shot predict on all 636 GPL16791 samples.
+7. Report AUC, bootstrap 95 % CI, confusion matrix at Youden threshold,
    and per-tissue AUC breakdown.
 
 Outputs
@@ -34,7 +35,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset, panel25_cv_auc
+from utils import load_dataset, panel25_cv_auc, zero_shot_scale
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -308,9 +309,15 @@ def main() -> None:
     X_tr = _extract_panel(X_train_log, feat_train, panel_features)
     X_te = _extract_panel(X_test_log, feat_test, panel_features)
     print(f"  Train: {X_tr.shape}  Test: {X_te.shape}")
+    # The same estimator as panel_critical_eval.py (Figure validations and the
+    # headline tables): training-set scaler, all 25 features in every tree. The
+    # unscaled fit this script used before gave 0.8227 against their 0.8241; trees
+    # are only nearly invariant to the rescaling (histogram binning).
+    X_tr, X_te = zero_shot_scale(X_tr, X_te, "GPL16791")
 
-    params = json.loads(_PARAMS_PATH.read_text())
-    params["colsample_bytree"] = 1.0  # all 25 features in every tree
+    params = dict(
+        json.loads(_PARAMS_PATH.read_text()), colsample_bytree=1.0, n_jobs=-1, verbose=-1
+    )
 
     print("\nTraining on GPL24676 (all 874 samples) ...")
     clf = LGBMClassifier(**params)
@@ -374,7 +381,7 @@ def main() -> None:
         f"Training set  : GSE153960 GPL24676  n={len(y_train)}  ALS={y_train.sum()}  Ctrl={(y_train == 0).sum()}",
         f"Test set      : GSE153960 GPL16791  n={len(y_test)}  ALS={y_test.sum()}  Ctrl={(y_test == 0).sum()}",
         f"Panel         : {len(panel_features)} genes",
-        "Preprocessing : log1p → CTD compartment regression (erythrocyte/platelet/endothelial PC1)",
+        "Preprocessing : log1p, training-set standardisation (CTD is discovery-side only)",
         "",
         f"Train 5-fold CV AUC        : {TRAIN_CV_AUC:.4f}",
         f"Test AUC (zero-shot)       : {test_auc:.4f}",

@@ -11,6 +11,7 @@ output(s) to that same directory.
 
 | Label | File | Producing script | Section |
 |---|---|---|---|
+| fig:transfer_random | `random_panel_null_cohorts.png` | `random_panel_null_cohorts.py` (step 30a; needs 30) | Results: credentialing the panel's genes by transfer |
 | fig:iter_perf | `lgbm_iter_performance.png` | `lgbm_iter_plots.py` | §3.1 |
 | fig:core25_curve | `lgbm_top500_final_curve_top50.png` | `lgbm_top500_final_analysis.py` | §3.1 |
 | fig:core25_loo | `lgbm_core25_loo.png` | `lgbm_core25_panel.py` | §3.1 |
@@ -64,7 +65,6 @@ output(s) to that same directory.
 | fig:sub_roc | `substitution_roc_all.png` | `replaceability_figures.py` | S1.7 (moved from main) |
 | fig:combat | `combat_batch_correction.png` | `combat_batch_correction.py` | S (ComBat batch correction) |
 | fig:bretigea | `deconv_reference_bretigea.png` | `deconv_reference_bretigea.py` | S (robustness: composition) |
-| fig:random_null | `random_panel_null.png` | `random_panel_null.py` | S (robustness: transfer specificity) |
 | fig:snrna | `snrna_percell_validation.png` | `snrna_percell_validation.py` (GSE219280 snRNA; #1) | S (robustness: single-nucleus) |
 | fig:snrna2 | `snrna_validation_gse212630.png` | `snrna_validation_gse212630.py` (GSE212630 non-C9 snRNA; #2 generalisation) | S (robustness: single-nucleus) |
 | fig:top1axis | `top1_axis_check.png` | `top1_axis_check.py` (Zhou 2026 DNA-repair + cryptic-exon sets; expression deciles) | S (shared-mechanism appraisal) |
@@ -145,3 +145,14 @@ validation_panel_loo.py               # Legacy panel LOO (superseded by panel_lo
 cross_cohort_panel_loo.py             # Legacy cross-cohort LOO (superseded by iterative_panel_elimination.py)
 colsample_sensitivity.py              # colsample_bytree transfer sensitivity; internal check, not cited
 ```
+
+## Tables added in the 2026-09-28 revision
+
+| Label | Artefact | Producing script | Section |
+|---|---|---|---|
+| tab:transfer_random | `random_panel_null_cohorts_statistics.txt` | `random_panel_null_cohorts.py` (30a) | Results |
+| tab:random_null | `random_panel_null_cohorts_statistics{,_lgbm_core25_panel_annotated}.txt` | `panel_annotation.py` (30), `random_panel_null_cohorts.py` (30a) | S random gene-set baseline |
+| tab:nested_cv | `nested_panel_cv_statistics.txt`, `nested_cv_decomposition_statistics.txt` | `nested_panel_cv.py` (30b), `nested_cv_decomposition.py` (30c) | S nested CV |
+| tab:iamb_alpha | `ses_markov_blanket_statistics.txt`, `iamb_alpha_grid.txt` | `ses_markov_blanket.py` (30d), `iamb_alpha_grid.py` (30e); need the coffeeBreak library, not in the public repo | S IAMB |
+| tab:coffeebreak_panel | `coffeebreak_panel_statistics.txt`, `random_panel_null_cohorts_statistics_coffeebreak_panel.txt` | `coffeebreak_panel_loo.py` (39, gated); needs coffeeBreak and its search output, not in the public repo | S coffeeBreak |
+| (C9 paragraph) | `nygc_clinical_association_statistics.txt` | `nygc_clinical_association.py` (38, gated) | Results: ALS subtype |

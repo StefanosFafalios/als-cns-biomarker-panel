@@ -251,8 +251,12 @@ def main() -> None:
     # ---- (A) baseline: no correction --------------------------------------
     X_tr_p = _extract_panel(X_tr_res, feat_train, panel_features)
     X_te_p = _extract_panel(X_te_res, feat_test, panel_features)
-    clf = _fit_lgbm(X_tr_p, y_train)
-    s_none = clf.predict_proba(X_te_p)[:, 1]
+    from utils import zero_shot_scale
+
+    # the manuscript's zero-shot model: training-set scaler applied to the test cohort
+    z_tr, z_te = zero_shot_scale(X_tr_p, X_te_p, "GPL16791")
+    clf = _fit_lgbm(z_tr, y_train)
+    s_none = clf.predict_proba(z_te)[:, 1]
 
     # ---- (B) per-platform z-standardisation -------------------------------
     X_tr_z, X_te_z = _zstandardise_per_platform(X_tr_p, X_te_p)
@@ -285,8 +289,9 @@ def main() -> None:
     p_cols = [col500_to_idx[f] for f in panel_features if f in col500_to_idx]
     X_tr_c = corrected[: len(y_train)][:, p_cols]
     X_te_c = corrected[len(y_train) :][:, p_cols]
-    clf_c = _fit_lgbm(X_tr_c, y_train)
-    s_combat = clf_c.predict_proba(X_te_c)[:, 1]
+    zc_tr, zc_te = zero_shot_scale(X_tr_c, X_te_c, "GPL16791")
+    clf_c = _fit_lgbm(zc_tr, y_train)
+    s_combat = clf_c.predict_proba(zc_te)[:, 1]
 
     # ---- metrics ----------------------------------------------------------
     rng = np.random.default_rng(RANDOM_STATE)

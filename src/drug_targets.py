@@ -1,5 +1,5 @@
 # ruff: noqa: E402
-"""Drug target annotation for the core 25-gene ALS panel.
+"""Drug target annotation for the protein-coding members of the critical ALS panel.
 
 Queries two databases for each protein-coding panel gene:
 
@@ -39,6 +39,8 @@ import pandas as pd
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
+from utils import critical_panel_directions, load_critical_panel
+
 SCRIPT_DIR = Path(__file__).parent
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -50,123 +52,33 @@ _OT_URL = "https://api.platform.opentargets.org/api/v4/graphql"
 _REQUEST_DELAY = 1.0  # seconds between API calls
 
 # ---------------------------------------------------------------------------
-# Panel gene metadata (protein-coding only, from findings.md annotation)
-# Ensembl IDs are base IDs (no version suffix)
+# Panel gene metadata: the protein-coding members of the critical panel
 # ---------------------------------------------------------------------------
 
-# TODO(panel-refresh): this is the protein-coding subset of the *25-gene* panel,
-# not the critical panel, so it was left as-is by the panel_critical.csv migration.
-# The critical panel has changed (PROS1 and SERTAD1 out; EMP1 and MECOM in).
-# Decide whether this table should be narrowed to the critical panel; if so, drop the
-# PROS1/SERTAD1 (and VWF) entries and refresh every loo_delta / shap_rank value from
-# panel_critical.csv — do not hand-edit them.
-_PROTEIN_CODING_GENES: list[dict[str, str]] = [
-    {
-        "symbol": "MECOM",
-        "ensg": "ENSG00000085276",
-        "direction": "down_in_ALS",
-        "loo_delta": "+0.0011",
-        "shap_rank": "1",
-    },
-    {
-        "symbol": "SERTAD1",
-        "ensg": "ENSG00000197019",
-        "direction": "up_in_ALS",
-        "loo_delta": "+0.0038",
-        "shap_rank": "4",
-    },
-    {
-        "symbol": "FCN3",
-        "ensg": "ENSG00000142748",
-        "direction": "up_in_ALS",
-        "loo_delta": "+0.0020",
-        "shap_rank": "6",
-    },
-    {
-        "symbol": "PROS1",
-        "ensg": "ENSG00000184500",
-        "direction": "up_in_ALS",
-        "loo_delta": "+0.0004",
-        "shap_rank": "7",
-    },
-    {
-        "symbol": "ANGPT2",
-        "ensg": "ENSG00000091879",
-        "direction": "down_in_ALS",
-        "loo_delta": "+0.0012",
-        "shap_rank": "8",
-    },
-    {
-        "symbol": "EMP1",
-        "ensg": "ENSG00000134531",
-        "direction": "up_in_ALS",
-        "loo_delta": "+0.0020",
-        "shap_rank": "10",
-    },
-    {
-        "symbol": "TINAGL1",
-        "ensg": "ENSG00000142910",
-        "direction": "down_in_ALS",
-        "loo_delta": "+0.0013",
-        "shap_rank": "12",
-    },
-    {
-        "symbol": "CKMT2",
-        "ensg": "ENSG00000131730",
-        "direction": "down_in_ALS",
-        "loo_delta": "+0.0010",
-        "shap_rank": "13",
-    },
-    {
-        "symbol": "VWF",
-        "ensg": "ENSG00000110799",
-        "direction": "down_in_ALS",
-        "loo_delta": "+0.0009",
-        "shap_rank": "15",
-    },
-    {
-        "symbol": "CLDN5",
-        "ensg": "ENSG00000184113",
-        "direction": "down_in_ALS",
-        "loo_delta": "+0.0009",
-        "shap_rank": "16",
-    },
-    {
-        "symbol": "NR4A1",
-        "ensg": "ENSG00000123358",
-        "direction": "down_in_ALS",
-        "loo_delta": "+0.0005",
-        "shap_rank": "17",
-    },
-    {
-        "symbol": "SOHLH2",
-        "ensg": "ENSG00000120669",
-        "direction": "up_in_ALS",
-        "loo_delta": "-0.0018",
-        "shap_rank": "19",
-    },
-    {
-        "symbol": "HEXB",
-        "ensg": "ENSG00000049860",
-        "direction": "up_in_ALS",
-        "loo_delta": "+0.0002",
-        "shap_rank": "21",
-    },
-    {
-        "symbol": "MCEE",
-        "ensg": "ENSG00000124370",
-        "direction": "up_in_ALS",
-        "loo_delta": "+0.0008",
-        "shap_rank": "24",
-    },
-    {
-        "symbol": "SLC37A2",
-        "ensg": "ENSG00000134955",
-        "direction": "up_in_ALS",
-        "loo_delta": "+0.0012",
-        "shap_rank": "25",
-    },
-]
+
+def _panel_genes() -> list[dict[str, str]]:
+    """Return the protein-coding critical-panel members with their panel metrics.
+
+    Generated rather than hand-kept. The hand-kept table listed the 25-gene panel
+    and drifted from the critical panel (PROS1/SERTAD1 dropped, EMP1/MECOM in).
+    ``loo_delta`` and ``shap_rank`` are the 25-gene panel's within-panel LOO and
+    SHAP rank, as before. Ensembl IDs are base IDs (no version suffix).
+    """
+    core = pd.read_csv(_PANEL_CSV).set_index("feature")
+    directions = critical_panel_directions(protein_coding_only=True)
+    return [
+        {
+            "symbol": row.symbol,
+            "ensg": row.feature.split(".")[0],
+            "direction": f"{directions[row.symbol]}_in_ALS",
+            "loo_delta": f"{core.loc[row.feature, 'loo_delta_auc']:+.4f}",
+            "shap_rank": str(int(core.loc[row.feature, 'rank'])),
+        }
+        for row in load_critical_panel(protein_coding_only=True).itertuples()
+    ]
+
+
+_PROTEIN_CODING_GENES: list[dict[str, str]] = _panel_genes()
 
 
 # ---------------------------------------------------------------------------
@@ -183,15 +95,13 @@ _PROTEIN_CODING_GENES: list[dict[str, str]] = [
 #   → cannot be explained by composition alone → per-cell dysregulation likely
 # ---------------------------------------------------------------------------
 
-# TODO(panel-refresh): keyed by the 25-gene panel's protein-coding members, kept in
-# sync with _PROTEIN_CODING_GENES above. If that table is narrowed to the new critical
-# panel (PROS1/SERTAD1 out, EMP1/MECOM in), the dominant_ct / rho / ct_als_dir values
-# must be re-derived from cell_type_deconvolution.py rather than edited by hand.
+# Values transcribed from cell_type_deconvolution.py for the 25-gene panel's
+# protein-coding members, of which the critical panel is a subset. The 2026-09-27 rerun
+# of that script reproduced its outputs byte for byte, so they stand. Re-derive them
+# from that script (do not hand-edit) if the deconvolution changes.
 _DECONV: dict[str, dict] = {
     "MECOM": {"dominant_ct": "Endothelial", "rho": 0.929, "ct_als_dir": "down"},
-    "SERTAD1": {"dominant_ct": "Endothelial", "rho": 0.809, "ct_als_dir": "down"},
     "FCN3": {"dominant_ct": "Endothelial", "rho": 0.650, "ct_als_dir": "down"},
-    "PROS1": {"dominant_ct": "Microglia", "rho": 0.849, "ct_als_dir": "up"},
     "ANGPT2": {"dominant_ct": "Endothelial", "rho": 0.670, "ct_als_dir": "down"},
     "EMP1": {"dominant_ct": "Microglia", "rho": 0.771, "ct_als_dir": "up"},
     "TINAGL1": {"dominant_ct": "Endothelial", "rho": 0.932, "ct_als_dir": "down"},
@@ -349,7 +259,7 @@ def _parse_tractability(tractability: list[dict]) -> str:
 
 def main() -> None:
     print("=" * 60)
-    print("Drug target annotation — core 25-gene ALS panel")
+    print("Drug target annotation — critical ALS panel (protein-coding members)")
     print("=" * 60)
 
     symbols = [g["symbol"] for g in _PROTEIN_CODING_GENES]
@@ -474,7 +384,7 @@ def main() -> None:
     )
 
     lines: list[str] = [
-        "Drug Target Annotation — Core 25-gene ALS Panel",
+        "Drug Target Annotation — Critical ALS Panel (protein-coding members)",
         "=" * 70,
         f"Protein-coding genes queried: {len(symbols)}",
         "Sources: DGIdb v5 GraphQL + OpenTargets Platform GraphQL",

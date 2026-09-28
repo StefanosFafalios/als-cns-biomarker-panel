@@ -260,7 +260,17 @@ run_step "29_adaptive_panel"          adaptive_panel_validation.py          "30s
 # =============================================================================
 run_step "11b_deconv_bretigea"        deconv_reference_bretigea.py          "~5m (needs bretigea_markers.csv + step 11)"
 run_step "11c_incremental_composition" incremental_over_composition.py       "~8m (imports estimator from 11b)"
-run_step "30_random_panel_null"       random_panel_null.py                  "~15m (B=1000 x2 nulls; GPL24676->GPL16791)"
+# Transfer against random gene sets (main-text Figure/Table, S random-null section).
+# 30 writes the annotated 17-gene panel (MyGeneInfo); 30a scores the 25-gene panel and
+# the annotated 17 against 1,000 random gene sets per test set with the manuscript's
+# zero-shot model (GPL16791 all and donor-disjoint, GSE76220, GSE122649, SRP064478).
+run_step "30_panel_annotation"        panel_annotation.py                   "<1m (MyGeneInfo; writes lgbm_core25_panel_annotated.csv)"
+run_step "30a_random_panel_null"      random_panel_null_cohorts.py          "~20m (25 + annotated 17; needs 22 for SRP064478)"
+# Nested donor-grouped CV of the discovery procedure and its decomposition by step
+# (S nested-CV section, Limitation 2). Within-cohort model of the main text.
+run_step "30b_nested_panel_cv"        nested_panel_cv.py                    "~8m (15 outer folds)"
+run_step "30c_nested_cv_decomp"       nested_cv_decomposition.py            "~13m"
+# IAMB Markov blanket (S IAMB section). Needs the coffeeBreak library (IAMBSelector).
 run_step "07ac_genetic_support"       genetic_support_opentargets.py        "~3m (OpenTargets ALS genetic_association)"
 # The two single-nucleus steps need .h5 matrices that download_geo_data.sh does
 # NOT fetch (they are per-GSM supplementary files, ~5.6 GB combined). They are
@@ -302,6 +312,21 @@ run_step "35_cross_disease_spec"      cross_disease_specificity.py          "~40
 run_step "36_cross_disease_covar"     cross_disease_covariates.py           "41s (PMI/RIN/age confounding check; depends on 35)"
 run_step "37_explainability_figs"     explainability_figures.py             "<1m (covariate/cross-disease/deconv explainability panels; needs 35, 36, 11a)"
 
+# C9orf72 / onset / duration association (main-text C9 paragraph). Needs the NYGC
+# consortium donor table (Zenodo 20025792, NYGC_Flagship_ST_1_3_Metadata.xlsx).
+if [[ -f "$PROJ_ROOT/resources/NYGC_zenodo_20025792/NYGC_Flagship_ST_1_3_Metadata.xlsx" ]]; then
+    run_step "38_nygc_clinical"       nygc_clinical_association.py          "<1m (needs the Zenodo ST1 table)"
+else
+    echo "[38_nygc_clinical] SKIPPED — Zenodo 20025792 ST1 table not in resources/NYGC_zenodo_20025792/"
+fi
+# coffeeBreak-derived panel and its random gene-set baseline (S coffeeBreak section).
+# Needs the coffeeBreak search output (coffeebreak_equiv_run/deployment_mask.csv), which
+# is not reproduced here (see README: the coffeeBreak searches ship their outputs).
+if [[ -f "$SCRIPT_DIR/coffeebreak_equiv_run/deployment_mask.csv" ]]; then
+    :  # keeps this branch valid where the public-repo sync drops the coffeeBreak step
+else
+    echo "[39_coffeebreak_panel] SKIPPED — coffeebreak_equiv_run/deployment_mask.csv not present"
+fi
 # =============================================================================
 # Final check. Not an analysis: it reports any output that is older than the
 # panel_critical.csv it transitively depends on, which is how three separate

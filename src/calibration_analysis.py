@@ -142,9 +142,12 @@ def _zeroshot_and_cv(X_tr, X_te, y_train):
         (train_cv_scores, test_scores) probability arrays.
     """
     from sklearn.model_selection import StratifiedKFold
+    from utils import zero_shot_scale
 
-    clf_full = _fit_lgbm(X_tr, y_train)
-    test_scores = clf_full.predict_proba(X_te)[:, 1]
+    # the manuscript's zero-shot model: training-set scaler applied to the test cohort
+    z_tr, z_te = zero_shot_scale(X_tr, X_te, "GPL16791")
+    clf_full = _fit_lgbm(z_tr, y_train)
+    test_scores = clf_full.predict_proba(z_te)[:, 1]
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     train_cv_scores = np.zeros(len(y_train))
