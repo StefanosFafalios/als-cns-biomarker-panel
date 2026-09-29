@@ -22,7 +22,7 @@ reproduce/
 conda env create -f reproduce/environment_als.yml
 conda activate als-cns-panel
 
-# 2. Download GEO data (~2 GB)
+# 2. Download GEO and ArrayExpress data (~3 GB)
 bash reproduce/download_geo_data.sh
 
 # 3. Optionally quantify SRP064478 with Salmon (~1 h; needed for Step 22)
@@ -203,6 +203,7 @@ the `xr` LaTeX package (`\externaldocument{...}` in each preamble).
 | M | With-replacement validation — §3.8 negative control (canonical KRTAP/family-filtered replacement assignment; steps 05/05b mirror it) | 1 script |
 | N | Case-strengthening / robustness (S7 reference deconvolution, incremental-over-composition, random-panel null, OpenTargets genetic support, single-nucleus per-cell) | 6 scripts (BRETIGEA deconv, incremental composition, random null, genetic support, snRNA ×2) |
 | O | Shared-mechanism appraisal + cross-disease specificity (§3.10) | 3 scripts (cross-disease specificity, covariates, explainability panels) |
+| P | Independent spinal-cord / motor-cortex validation + spinal-cord single-nucleus localisation | 2 scripts |
 
 See `FIGURE_MANIFEST.md` for a per-figure / per-table lookup table mapping
 manuscript artifacts to producing scripts.
@@ -236,6 +237,12 @@ to `reproduce/logs/<step_id>.log`.
 | GSE13162 (FTLD-TDP) | cross-disease specificity | GEO | `download_geo_data.sh` |
 | GSE64810 (Huntington's, BA9) | cross-disease specificity | GEO | `download_geo_data.sh` |
 | GSE68719 (Parkinson's, BA9) | cross-disease specificity | GEO | `download_geo_data.sh` |
+| GSE255683 (lumbar SC, RNA-seq) | independent validation | GEO | `download_geo_data.sh` |
+| GSE287256 (cervical SC, RNA-seq) | independent validation | GEO | `download_geo_data.sh` |
+| GSE287257 (cervical SC, snRNA-seq; GSE287256 donors) | spinal-cord cell-type localisation | GEO | `download_geo_data.sh` |
+| GSE26927 (Illumina arrays; ALS cervical SC + AD/PD/HD/MS/SCZ arms) | independent validation + specificity | GEO | `download_geo_data.sh` |
+| E-MTAB-8635 (spinal cord, Agilent, raw GenePix) | independent validation | ArrayExpress | `download_geo_data.sh` |
+| E-MTAB-2325 (motor cortex, Agilent; 35 donors shared with E-MTAB-8635) | independent validation | ArrayExpress | `download_geo_data.sh` |
 | GSE219280 (C9ALS snRNA, ~4.6 GB) | per-cell validation (step 31) | GEO, **manual** | — see below |
 | GSE212630 (non-C9 snRNA, ~1 GB) | per-cell validation (step 32) | GEO, **manual** | — see below |
 

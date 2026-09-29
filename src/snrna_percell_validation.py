@@ -69,7 +69,9 @@ _PANEL = [
 _ALL_GENES = sorted(set(sum(_MARKERS.values(), []) + _TEST + _PANEL))
 
 
-def _read_h5_targets(path: str) -> tuple[np.ndarray, np.ndarray, list[str]]:
+def _read_h5_targets(
+    path: str, targets: list[str] | None = None
+) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Return (lognorm target-gene matrix [cells x genes], total_counts, genes).
 
     Reads the CellRanger/cellBender sparse matrix (genes x cells), computes
@@ -87,8 +89,9 @@ def _read_h5_targets(path: str) -> tuple[np.ndarray, np.ndarray, list[str]]:
     name_to_row: dict[str, int] = {}
     for i, nm in enumerate(names):
         name_to_row.setdefault(nm, i)
-    rows = [name_to_row.get(gname, -1) for gname in _ALL_GENES]
-    present = [gname for gname, r in zip(_ALL_GENES, rows) if r >= 0]
+    targets = _ALL_GENES if targets is None else targets
+    rows = [name_to_row.get(gname, -1) for gname in targets]
+    present = [gname for gname, r in zip(targets, rows) if r >= 0]
     rows = [r for r in rows if r >= 0]
     sub = mat[rows, :].toarray().T.astype(np.float32)  # (cells, genes)
     # CP10k + log1p

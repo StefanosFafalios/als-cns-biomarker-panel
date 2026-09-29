@@ -336,6 +336,14 @@ else
     echo "[39_coffeebreak_panel] SKIPPED — coffeebreak_equiv_run/deployment_mask.csv not present"
 fi
 # =============================================================================
+# P. INDEPENDENT SPINAL-CORD / MOTOR-CORTEX VALIDATION (Step 101)
+# Five cohorts no panel-selection step saw (GSE255683, GSE287256, GSE26927,
+# E-MTAB-8635, E-MTAB-2325), plus GSE26927's other disease arms, and the
+# single-nucleus localisation of the panel in spinal cord (GSE287257).
+# =============================================================================
+run_step "40_new_cohort_validation"   new_cohort_validation.py              "~35m (5 cohorts x 2 panels x 1,000 random sets)"
+run_step "41_snrna_spinal_cord"       snrna_spinal_cord.py                  "~5m (12 CellRanger .h5; extracts GSE287257_RAW.tar)"
+# =============================================================================
 # Final check. Not an analysis: it reports any output that is older than the
 # panel_critical.csv it transitively depends on, which is how three separate
 # batches of stale results were caught during this study. A clean run should

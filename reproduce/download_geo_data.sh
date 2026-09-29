@@ -3,7 +3,7 @@
 # Download all GEO datasets required for the ALS analysis.
 # Run from the repository root before running run_all.sh.
 #
-# Total download size: ~2 GB (series matrices + supplementary count files)
+# Total download size: ~3 GB (series matrices, supplementary count files, arrays)
 # =============================================================================
 set -euo pipefail
 
@@ -110,6 +110,52 @@ dl "$RES/GSE68719/matrix/GSE68719_series_matrix.txt.gz" \
    "$GEO_FTP/GSE68nnn/GSE68719/matrix/GSE68719_series_matrix.txt.gz"
 dl "$RES/GSE68719/suppl/GSE68719_mlpd_PCG_DESeq2_norm_counts.txt.gz" \
    "$GEO_FTP/GSE68nnn/GSE68719/suppl/GSE68719_mlpd_PCG_DESeq2_norm_counts.txt.gz"
+
+# ---------------------------------------------------------------------------
+# Independent spinal-cord / motor-cortex validation cohorts (Step 101,
+# new_cohort_validation.py and snrna_spinal_cord.py). None was used to select
+# the panel or the critical panel. Adds ~1.1 GB, most of it E-MTAB-8635 raw
+# scanner files and the GSE287257 single-nucleus matrices.
+# ---------------------------------------------------------------------------
+
+echo "[GSE255683] Lumbar spinal cord RNA-seq (ALS 10 / ctrl 10)"
+mkdir -p "$RES/GSE255683"/{matrix,suppl}
+dl "$RES/GSE255683/matrix/GSE255683_series_matrix.txt.gz" \
+   "$GEO_FTP/GSE255nnn/GSE255683/matrix/GSE255683_series_matrix.txt.gz"
+dl "$RES/GSE255683/suppl/GSE255683_RAW.tar" \
+   "$GEO_FTP/GSE255nnn/GSE255683/suppl/GSE255683_RAW.tar"
+
+echo "[GSE287256] Cervical spinal cord bulk RNA-seq (ALS 8 / ctrl 4)"
+mkdir -p "$RES/GSE287256"/{matrix,suppl}
+dl "$RES/GSE287256/matrix/GSE287256_series_matrix.txt.gz" \
+   "$GEO_FTP/GSE287nnn/GSE287256/matrix/GSE287256_series_matrix.txt.gz"
+dl "$RES/GSE287256/suppl/GSE287256_ALS_bulkRNAseq_results_bulk_counts_normalized.csv.gz" \
+   "$GEO_FTP/GSE287nnn/GSE287256/suppl/GSE287256_ALS_bulkRNAseq_results_bulk_counts_normalized.csv.gz"
+
+echo "[GSE287257] Cervical spinal cord snRNA-seq, same 12 donors as GSE287256"
+mkdir -p "$RES/GSE287257/suppl"
+dl "$RES/GSE287257/suppl/GSE287257_RAW.tar" \
+   "$GEO_FTP/GSE287nnn/GSE287257/suppl/GSE287257_RAW.tar"
+
+echo "[GSE26927] BrainNet Europe Illumina arrays: ALS cervical cord + AD/PD/HD/MS/SCZ arms"
+mkdir -p "$RES/GSE26927/matrix"
+dl "$RES/GSE26927/matrix/GSE26927_series_matrix.txt.gz" \
+   "$GEO_FTP/GSE26nnn/GSE26927/matrix/GSE26927_series_matrix.txt.gz"
+
+AE="https://ftp.ebi.ac.uk/biostudies/fire/E-MTAB-"
+echo "[E-MTAB-2325] Motor cortex Agilent arrays (same patients as E-MTAB-8635)"
+mkdir -p "$RES/E-MTAB-2325"
+for f in E-MTAB-2325.sdrf.txt raw_data.txt; do
+    dl "$RES/E-MTAB-2325/$f" "$AE/325/E-MTAB-2325/Files/$f"
+done
+
+echo "[E-MTAB-8635] Spinal cord Agilent arrays, raw GenePix files (ALS 30 / ctrl 10)"
+mkdir -p "$RES/E-MTAB-8635/gpr"
+dl "$RES/E-MTAB-8635/E-MTAB-8635.sdrf.txt" "$AE/635/E-MTAB-8635/Files/E-MTAB-8635.sdrf.txt"
+col=$(head -1 "$RES/E-MTAB-8635/E-MTAB-8635.sdrf.txt" | tr '\t' '\n' | grep -n -m1 "Array Data File" | cut -d: -f1)
+tail -n +2 "$RES/E-MTAB-8635/E-MTAB-8635.sdrf.txt" | cut -f"$col" | tr -d '\r' | sort -u | while read -r f; do
+    [[ -n "$f" ]] && dl "$RES/E-MTAB-8635/gpr/$f" "$AE/635/E-MTAB-8635/Files/$f"
+done
 
 echo "Done. All GEO files downloaded to $RES"
 echo "Next: run reproduce/run_all.sh"

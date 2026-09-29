@@ -49,6 +49,8 @@ output(s) to that same directory.
 | fig:panelmb | `panel_mb_network.png` | `panel_mb_network.py` + `panel_mb_postprocess.py` | S15 |
 | fig:loo_sensitivity | `panel_loo_zeroshot.png` (shared) | `panel_loo_zeroshot.py` | S22 |
 | fig:greedy_stop | `greedy_significance_stop.png` | `greedy_significance_stop.py` | S16 (panel-size trajectory + non-inferiority band) |
+| fig:new_cohorts | `new_cohort_validation.png` | `new_cohort_validation.py` | S (independent spinal-cord / motor-cortex cohorts) |
+| fig:snrna_sc | `snrna_spinal_cord.png` | `snrna_spinal_cord.py` | S (spinal cord at single-nucleus resolution) |
 | fig:weight_sensitivity | `cross_cohort_loo_sensitivity.png` | `cross_cohort_loo_sensitivity.py` | S17 (four-scheme weighting sensitivity) |
 | fig:calibration | `calibration_reliability.png` | `calibration_analysis.py` | S17 |
 | fig:dca | `decision_curve.png` | `decision_curve_analysis.py` | S22 |

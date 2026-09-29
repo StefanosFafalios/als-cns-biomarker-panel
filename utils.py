@@ -101,6 +101,8 @@ _LABEL_CONFIG: dict[str, dict[str, str]] = {
 # consumers never see the alias.
 _SYMBOL_ALIASES: dict[str, dict[str, str]] = {
     "GSE76220": {"EVI1": "MECOM"},
+    # GPL6255 (Illumina HumanRef-8 v2) annotation predates both renames
+    "GSE26927": {"EVI1": "MECOM", "TEB1": "SOHLH2"},
 }
 
 
@@ -824,7 +826,9 @@ def geo_suppl_path(
 # which silently removed 77% of critical-panel measurements. Per-gene
 # standardisation within each cohort absorbs the log-base and length-normalisation
 # differences against log1p(count) training data.
-LOG_SCALE_COHORTS = frozenset({"GSE76220"})
+# Array cohorts (log2 intensities) are on a different scale from log1p counts too, so
+# they are standardised within themselves (new_cohort_validation.py).
+LOG_SCALE_COHORTS = frozenset({"GSE76220", "GSE26927", "E-MTAB-8635", "E-MTAB-2325"})
 
 
 def needs_log1p(gse_id: str) -> bool:
