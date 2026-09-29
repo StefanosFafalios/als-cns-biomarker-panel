@@ -8,10 +8,9 @@ blood_validation_gse76220 + additional_cohort_gse122649) and 5
                                 SRP064478. Each panel: 25-gene + critical panel
                                 LGBM zero-shot ROC overlaid.
 
-  substitution_roc_all.png   — substitution-augmented ROC overlay across
-                                cohorts where substitution is informative
-                                (GSE76220 and GSE122649; SRP064478 is at
-                                ceiling so excluded).
+The substitution ROC overlay (substitution_roc_all.png) is drawn by
+replaceability_figures.py, which runs after cross_cohort_substitution.py and
+reads its surrogates.
 """
 
 from __future__ import annotations
@@ -89,11 +88,6 @@ N_BOOTSTRAP = 2000
 # them differing (0.8075 vs 0.8269 on GPL16791) was stale, not a second estimator.
 N_SEEDS = 5
 
-# Substitution wins from cross_cohort_substitution.py
-_SUBSTITUTIONS = {
-    "GSE76220": [("HERC2P8", "ZNF586", "ENSG00000083828")],
-    "GSE122649": [("HERC2P8", "XAF1", "ENSG00000132530")],
-}
 
 
 def _bootstrap_tpr(y, scores, n=N_BOOTSTRAP, seed=RANDOM_STATE):
@@ -374,79 +368,6 @@ def main() -> None:
             f"  {s['cohort']}: 25-gene AUC={s['auc25']:.4f}  "
             f"{_CRIT_LABEL} AUC={s['auc15']:.4f}"
         )
-
-    # ---- Figure 2: substitution ROC across GSE76220 + GSE122649 ----
-    fig2, axes2 = plt.subplots(1, 2, figsize=(11, 5))
-
-    for ax, cohort_name in zip(axes2, ["GSE76220", "GSE122649"]):
-        cohort = next(c for c in cohort_data if c["name"] == cohort_name)
-        # Baseline = drop missing genes (14/15 for GSE122649, 13/15 for GSE76220)
-        v = cohort["vocab"]
-        included = [
-            i
-            for i, sym in zip(_CRITICAL_IDX, [sym25[k] for k in _CRITICAL_IDX])
-            if sym in v
-        ]
-        tr_b, te_b = _panel_cols(cohort, included)
-        scores_b = _train_predict(
-            cohort["X_train_use"][:, tr_b], y_train, cohort["X_te"][:, te_b], params,
-            cohort["name"]
-        )
-        fpr_b, tpr_b, _ = roc_curve(cohort["y"], scores_b)
-        auc_b = roc_auc_score(cohort["y"], scores_b)
-        _, blo, bhi, _, _ = _bootstrap_tpr(cohort["y"], scores_b)
-
-        # Substitution panel: included + substitution columns
-        sub_info = _SUBSTITUTIONS[cohort_name]
-        tr_extra = [
-            feat_base_to_col[eg] for _, _, eg in sub_info if eg in feat_base_to_col
-        ]
-        te_extra = [v[sym] for _, sym, _ in sub_info if sym in v]
-        Xtr_sub = np.hstack(
-            [cohort["X_train_use"][:, tr_b], cohort["X_train_use"][:, tr_extra]]
-        )
-        Xte_sub = np.hstack([cohort["X_te"][:, te_b], cohort["X_te"][:, te_extra]])
-        scores_s = _train_predict(Xtr_sub, y_train, Xte_sub, params, cohort["name"])
-        fpr_s, tpr_s, _ = roc_curve(cohort["y"], scores_s)
-        auc_s = roc_auc_score(cohort["y"], scores_s)
-        _, slo, shi, _, _ = _bootstrap_tpr(cohort["y"], scores_s)
-
-        fpr_grid = np.linspace(0, 1, 200)
-        ax.plot([0, 1], [0, 1], color="grey", ls=":", lw=0.7)
-        ax.fill_between(fpr_grid, blo, bhi, color="#888", alpha=0.15)
-        ax.fill_between(fpr_grid, slo, shi, color="#1565C0", alpha=0.15)
-        sub_label = ", ".join(f"{old}→{new}" for old, new, _ in sub_info)
-        ax.plot(
-            fpr_b,
-            tpr_b,
-            color="#888",
-            lw=2.0,
-            label=f"Baseline ({len(te_b)}/15)  AUC = {auc_b:.3f}",
-        )
-        ax.plot(
-            fpr_s,
-            tpr_s,
-            color="#1565C0",
-            lw=2.0,
-            label=f"With sub: {sub_label}  AUC = {auc_s:.3f}",
-        )
-        ax.set_xlabel("False positive rate", fontsize=9)
-        ax.set_ylabel("True positive rate", fontsize=9)
-        ax.set_title(f"{cohort_name} ($n = {cohort['n']}$)", fontsize=10)
-        ax.legend(loc="lower right", fontsize=8)
-        ax.grid(alpha=0.3)
-
-    fig2.suptitle(
-        f"Cross-cohort surrogate substitution effect — pseudogene gaps in the "
-        f"{_CRIT_LABEL} panel filled by protein-coding alternatives from the "
-        f"replaceability screen.\nSRP064478 not shown (already at AUC = 1.000).",
-        fontsize=10,
-    )
-    plt.tight_layout()
-    out2 = SCRIPT_DIR / "substitution_roc_all.png"
-    plt.savefig(out2, dpi=160, bbox_inches="tight")
-    plt.close()
-    print(f"Saved: {out2}")
 
 
 if __name__ == "__main__":

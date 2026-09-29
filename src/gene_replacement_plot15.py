@@ -45,10 +45,10 @@ _PC15 = {
 # Protein-coding members of the canonical critical panel (panel_critical.csv)
 _CRITICAL_PC = set(critical_panel_symbols(protein_coding_only=True))
 
-# Number of gene-level drug targets to star (lowest replaceability among the
-# critical-panel protein-coding members). Derived in main(), not hardcoded: the
-# membership of _CRITICAL_PC changes with the canonical panel definition.
-_N_GENE_LEVEL = 4
+# Gene-level drug targets to star: critical-panel protein-coding members below this
+# artifact-corrected replaceability (%), the threshold the main text uses. Membership
+# is derived in main(): _CRITICAL_PC changes with the canonical panel definition.
+_GENE_LEVEL_MAX_PCT = 25.0
 
 _CLEAN_STATS = BASE / "gene_replacement_clean_statistics.txt"
 
@@ -92,14 +92,12 @@ def main() -> None:
     n_repl = [r["n_repl_clean"] for r in rows]
     repl_pct = [r["repl_pct_clean"] / 100.0 for r in rows]
 
-    # rows is sorted by n_repl_clean descending, so the tail is the least
-    # replaceable — those are the genes to drug directly.
+    # the least replaceable critical members are the genes to drug directly
     gene_level = {
-        r["symbol"] for r in rows if r["symbol"] in _CRITICAL_PC
+        r["symbol"]
+        for r in rows
+        if r["symbol"] in _CRITICAL_PC and r["repl_pct_clean"] < _GENE_LEVEL_MAX_PCT
     }
-    gene_level = set(
-        sorted(gene_level, key=lambda s: n_repl[symbols.index(s)])[:_N_GENE_LEVEL]
-    )
 
     # Colour: red = critical-panel member; grey = greedy-elimination dropout
     colors = ["#C62828" if s in _CRITICAL_PC else "#888" for s in symbols]
@@ -159,7 +157,7 @@ def main() -> None:
     )
 
     plt.suptitle(
-        "Gene Replacement Analysis — 15 Protein-Coding Panel Members  (n=874, 5-fold CV)\n"
+        "Gene Replacement Analysis — 15 Protein-Coding Panel Members  (n=874, donor-grouped 5-fold CV)\n"
         "★ = lowest-replaceability gene-level drug targets ("
         + ", ".join(sorted(gene_level))
         + ")",

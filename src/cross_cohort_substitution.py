@@ -21,7 +21,13 @@ For each (cohort, missing_gene):
   3. Filter to genes present in the target cohort vocabulary.
   4. For each surviving candidate c, retrain LGBM on GPL24676 with
      {panel - missing_gene + c} and evaluate zero-shot AUC on the cohort.
-  5. Report the best substitution per gap.
+  5. The surrogate is the candidate most correlated with the missing gene in
+     GPL24676 (|Pearson r|) that the cohort carries, a choice made without the
+     cohort's labels. Ranking by replacement AUC instead would pick genes the model
+     never splits on: they reproduce the AUC of simply deleting a redundant gene
+     and so tie at the top of the screen. The maximum and median over all
+     candidates are reported for context only: the maximum is selected on the
+     cohort being scored.
 
 Output:
   cross_cohort_substitution_statistics.txt
@@ -423,7 +429,8 @@ def main() -> None:
     for sym in missing_panel:
         sub_df = (
             repl_df[repl_df["panel_symbol"] == sym]
-            .sort_values("replacement_auc", ascending=False)
+            .assign(abs_r=lambda d: d["pearson_r"].abs())
+            .sort_values("abs_r", ascending=False)
             .head(MAX_CANDIDATES_PER_GAP * 4)
         )  # over-pull so we have headroom after filter
         candidates_per_panel[sym] = sub_df["candidate_ensg"].tolist()
@@ -530,9 +537,7 @@ def main() -> None:
                 )
                 continue
             # Train column for candidate = GPL24676 log expression column
-            best_auc = -1.0
-            best_sub = None
-            best_ci = (0.0, 0.0)
+            evaluated = []  # (cand, auc, scores), most co-expressed first
             for cand in sub_cands:
                 # extra_train_col: GPL24676 log expression of candidate
                 if cand["ensg"] not in feat_base_to_col:
@@ -559,11 +564,8 @@ def main() -> None:
                     extra_train_col=tr_col,
                     extra_te_col=te_col,
                 )
-                if auc > best_auc:
-                    best_auc = auc
-                    best_sub = cand
-                    best_ci = _bootstrap_auc(y_te, scores)
-            if best_sub is None:
+                evaluated.append((cand, auc, scores))
+            if not evaluated:
                 print("    No working substitution found.")
                 results.append(
                     {
@@ -580,9 +582,14 @@ def main() -> None:
                     }
                 )
                 continue
+            # the most co-expressed candidate, not the cohort maximum: picking the
+            # best of up to MAX_CANDIDATES_PER_GAP AUCs on 20-38 samples reports noise
+            best_sub, best_auc, best_scores = evaluated[0]
+            best_ci = _bootstrap_auc(y_te, best_scores)
+            cand_aucs = np.array([a for _, a, _ in evaluated])
             delta = best_auc - baseline_auc
             print(
-                f"    Best substitute: {best_sub['symbol']} ({best_sub['ensg']})  "
+                f"    Surrogate: {best_sub['symbol']} ({best_sub['ensg']})  "
                 f"AUC={best_auc:.4f} [{best_ci[0]:.3f}, {best_ci[1]:.3f}]  "
                 f"Δ={delta:+.4f}"
             )
@@ -598,6 +605,9 @@ def main() -> None:
                     "best_sub_ci": best_ci,
                     "delta": delta,
                     "n_cands_tested": len(sub_cands),
+                    "median_auc": float(np.median(cand_aucs)),
+                    "max_auc": float(cand_aucs.max()),
+                    "n_eval": len(cand_aucs),
                 }
             )
 
@@ -677,17 +687,22 @@ def main() -> None:
         "families) and present in the target cohort vocabulary. Retrain on",
         f"GPL24676 with substitution; score zero-shot ({N_SEEDS}-seed ensemble,",
         f"stratified bootstrap B={N_BOOTSTRAP}).",
+        "The surrogate is the valid candidate most correlated with the missing gene",
+        "in GPL24676 (|Pearson r|) that the cohort carries, chosen without the",
+        "cohort's labels. Median and max are",
+        "over all N candidates scored on the cohort; the max is selected on that",
+        "cohort and is an optimistic upper bound, not an estimate.",
         "",
         f"{'Cohort':<12s} {'Missing':<14s} {'Baseline AUC':<22s} "
-        f"{'Best sub':<14s} {'Sub AUC':<22s} {'Δ':>8s}",
-        "-" * 110,
+        f"{'Surrogate':<14s} {'Sub AUC':<22s} {'Δ':>8s}  {'N':>3s} {'median':>7s} {'max':>7s}",
+        "-" * 130,
     ]
     for r in results:
         base_str = f"{r['baseline_auc']:.4f} [{r['baseline_ci'][0]:.3f},{r['baseline_ci'][1]:.3f}]"
         if r["best_sub_auc"] is not None:
             sub_str = f"{r['best_sub_auc']:.4f} [{r['best_sub_ci'][0]:.3f},{r['best_sub_ci'][1]:.3f}]"
             sub_sym = r["best_sub_symbol"]
-            d = f"{r['delta']:+.4f}"
+            d = f"{r['delta']:+.4f}  {r['n_eval']:>3d} {r['median_auc']:>7.4f} {r['max_auc']:>7.4f}"
         else:
             sub_str, sub_sym, d = "n/a", "n/a", "n/a"
         lines.append(
@@ -699,7 +714,7 @@ def main() -> None:
     if joint_results:
         lines += [
             "",
-            "Joint multi-gap substitution (all single-gap best subs applied):",
+            "Joint multi-gap substitution (all single-gap surrogates applied):",
             f"{'Cohort':<12s} {'Subs':<42s} {'Baseline AUC':<22s} "
             f"{'Joint AUC':<22s} {'Δ':>8s}",
             "-" * 110,
@@ -716,6 +731,16 @@ def main() -> None:
     stat_out = SCRIPT_DIR / "cross_cohort_substitution_statistics.txt"
     stat_out.write_text("\n".join(lines) + "\n")
     print(f"\nSaved: {stat_out}")
+    # surrogates per cohort, read by replaceability_figures.py for the ROC overlay
+    surrogates: dict[str, list[list[str]]] = {}
+    for r in results:
+        if r["best_sub"] is not None:
+            surrogates.setdefault(r["cohort"], []).append(
+                [r["missing_gene"], r["best_sub_symbol"], r["best_sub"]]
+            )
+    (SCRIPT_DIR / "cross_cohort_substitution_surrogates.json").write_text(
+        json.dumps(surrogates, indent=1)
+    )
 
     # ---- Plot ----
     if results:

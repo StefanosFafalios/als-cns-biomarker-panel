@@ -82,16 +82,18 @@ def _fit_lr(X, y):
     return clf, sc
 
 
-def _cv_scores(X, y, model_fn):
-    """5-fold stratified CV scores for either lgbm or lr."""
-    from sklearn.model_selection import StratifiedKFold
+def _cv_scores(X, y, donors, model_fn):
+    """Donor-grouped 5-fold stratified CV scores for either lgbm or lr."""
+    from sklearn.model_selection import StratifiedGroupKFold
+    from utils import zero_shot_scale
 
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
     out = np.zeros(len(y))
-    for tr, va in cv.split(X, y):
+    for tr, va in cv.split(X, y, donors):
         if model_fn == "lgbm":
-            clf = _fit_lgbm(X[tr], y[tr])
-            out[va] = clf.predict_proba(X[va])[:, 1]
+            f_tr, f_va = zero_shot_scale(X[tr], X[va], "GPL24676")
+            clf = _fit_lgbm(f_tr, y[tr])
+            out[va] = clf.predict_proba(f_va)[:, 1]
         else:
             clf, sc = _fit_lr(X[tr], y[tr])
             out[va] = clf.predict_proba(sc.transform(X[va]))[:, 1]
@@ -100,13 +102,14 @@ def _cv_scores(X, y, model_fn):
 
 def main() -> None:
     from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
+    from utils import zero_shot_scale
 
     panel = pd.read_csv(_PANEL_CSV)
     panel_features = panel["feature"].tolist()
 
     print("Loading GPL24676 + GPL16791 ...")
-    X_train_raw, feat_train, y_train, _ = _load_platform("GPL24676")
-    X_test_raw, feat_test, y_test, _ = _load_platform("GPL16791")
+    X_train_raw, feat_train, y_train, _, donors_train = _load_platform("GPL24676")
+    X_test_raw, feat_test, y_test, _, _ = _load_platform("GPL16791")
     assert feat_train == feat_test
 
     X_train_log = np.log1p(X_train_raw)
@@ -130,7 +133,7 @@ def main() -> None:
     ]:
         # In-cohort 5-fold CV
         for model_name, model_fn in [("LGBM", "lgbm"), ("LR_L2", "lr")]:
-            cv_s = _cv_scores(X_tr, y_train, model_fn)
+            cv_s = _cv_scores(X_tr, y_train, donors_train, model_fn)
             results.append(
                 {
                     "condition": cond_name,
@@ -145,9 +148,10 @@ def main() -> None:
                 }
             )
 
-        # Zero-shot
-        lgbm = _fit_lgbm(X_tr, y_train)
-        te_s_lgbm = lgbm.predict_proba(X_te)[:, 1]
+        # Zero-shot: the manuscript's model, training-set scaler applied to the test cohort
+        z_tr, z_te = zero_shot_scale(X_tr, X_te, "GPL16791")
+        lgbm = _fit_lgbm(z_tr, y_train)
+        te_s_lgbm = lgbm.predict_proba(z_te)[:, 1]
         lr, sc = _fit_lr(X_tr, y_train)
         te_s_lr = lr.predict_proba(sc.transform(X_te))[:, 1]
 

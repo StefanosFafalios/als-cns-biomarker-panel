@@ -129,19 +129,20 @@ def _fit_lgbm(X_tr, y_train):
     return clf
 
 
-def _zeroshot_and_cv(X_tr, X_te, y_train):
+def _zeroshot_and_cv(X_tr, X_te, y_train, donors):
     """Fit on the full train cohort and score the test cohort (zero-shot);
-    also return 5-fold stratified CV scores on the training cohort.
+    also return donor-grouped 5-fold CV scores on the training cohort.
 
     Args:
         X_tr: Training-cohort panel matrix.
         X_te: Test-cohort panel matrix (same columns).
         y_train: Training labels.
+        donors: Training-cohort donor ids; CV folds never split a donor.
 
     Returns:
         (train_cv_scores, test_scores) probability arrays.
     """
-    from sklearn.model_selection import StratifiedKFold
+    from sklearn.model_selection import StratifiedGroupKFold
     from utils import zero_shot_scale
 
     # the manuscript's zero-shot model: training-set scaler applied to the test cohort
@@ -149,11 +150,12 @@ def _zeroshot_and_cv(X_tr, X_te, y_train):
     clf_full = _fit_lgbm(z_tr, y_train)
     test_scores = clf_full.predict_proba(z_te)[:, 1]
 
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
     train_cv_scores = np.zeros(len(y_train))
-    for tr_idx, val_idx in cv.split(X_tr, y_train):
-        cv_clf = _fit_lgbm(X_tr[tr_idx], y_train[tr_idx])
-        train_cv_scores[val_idx] = cv_clf.predict_proba(X_tr[val_idx])[:, 1]
+    for tr_idx, val_idx in cv.split(X_tr, y_train, donors):
+        f_tr, f_va = zero_shot_scale(X_tr[tr_idx], X_tr[val_idx], "GPL24676")
+        cv_clf = _fit_lgbm(f_tr, y_train[tr_idx])
+        train_cv_scores[val_idx] = cv_clf.predict_proba(f_va)[:, 1]
     return train_cv_scores, test_scores
 
 
@@ -168,8 +170,8 @@ def main() -> None:
     panel_features = panel["feature"].tolist()
 
     print("\nLoading GPL24676 (train) and GPL16791 (test) ...")
-    X_train_raw, feat_train, y_train, _ = _load_platform("GPL24676")
-    X_test_raw, feat_test, y_test, tissues_test = _load_platform("GPL16791")
+    X_train_raw, feat_train, y_train, _, donors_train = _load_platform("GPL24676")
+    X_test_raw, feat_test, y_test, tissues_test, _ = _load_platform("GPL16791")
 
     assert feat_train == feat_test
     X_train_log = np.log1p(X_train_raw)
@@ -188,9 +190,9 @@ def main() -> None:
     X_te_c = _extract_panel(X_test_log, feat_test, crit_features)
     print(f"  critical panel matched: train {X_tr_c.shape}, test {X_te_c.shape}")
 
-    print("\nComputing 5-fold CV + zero-shot scores (both panels) ...")
-    train_cv_scores, test_scores = _zeroshot_and_cv(X_tr, X_te, y_train)
-    train_cv_scores_c, test_scores_c = _zeroshot_and_cv(X_tr_c, X_te_c, y_train)
+    print("\nComputing donor-grouped 5-fold CV + zero-shot scores (both panels) ...")
+    train_cv_scores, test_scores = _zeroshot_and_cv(X_tr, X_te, y_train, donors_train)
+    train_cv_scores_c, test_scores_c = _zeroshot_and_cv(X_tr_c, X_te_c, y_train, donors_train)
     print(f"  25-gene  train CV AUC = {roc_auc_score(y_train, train_cv_scores):.4f}")
     print(f"  critical train CV AUC = {roc_auc_score(y_train, train_cv_scores_c):.4f}")
 
@@ -246,7 +248,7 @@ def main() -> None:
     ]
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     cohorts = [
-        ("Train cohort (GPL24676; 5-fold CV)", y_train, 0),
+        ("Train cohort (GPL24676; donor-grouped 5-fold CV)", y_train, 0),
         ("GPL16791 cross-platform (zero-shot)", y_test, 1),
     ]
     for ax, (title, y, which) in zip(axes, cohorts):

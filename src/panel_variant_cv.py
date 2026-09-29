@@ -3,7 +3,7 @@
 For each of the 25 panel genes, creates a variant where that gene is swapped
 for its best non-artifact replacement, then evaluates:
 
-  1. 5-fold stratified CV on GPL24676 (fast model, n_estimators=100)
+  1. Donor-grouped 5-fold stratified CV on GPL24676 (the paper's within-cohort model)
   2. Zero-shot AUC on GSE76220  (if replacement has symbol present in cohort)
   3. Zero-shot AUC on GSE122649 (if replacement has symbol present in cohort)
 
@@ -12,7 +12,7 @@ the highest-AUC non-artifact candidate with biotype="protein-coding".
 Protein-coding replacements are the primary druggability candidates since
 many panel genes are lncRNAs, pseudogenes, or poorly characterised.
 
-Baseline: original 25-gene panel evaluated with the same fast model.
+Baseline: original 25-gene panel evaluated with the same models.
 
 Outputs
 -------
@@ -37,14 +37,14 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 import matplotlib  # noqa: E402
-from utils import load_dataset, panel25_cv_auc, zero_shot_scale  # noqa: E402
+from utils import load_dataset, zero_shot_scale  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 import requests  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
-from sklearn.model_selection import StratifiedKFold  # noqa: E402
+from sklearn.model_selection import StratifiedGroupKFold  # noqa: E402
 from utils import PanelLGBMClassifier as LGBMClassifier  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
@@ -59,8 +59,6 @@ _AUDIT_CSV = SCRIPT_DIR / "shap500_artifact_audit.csv"
 
 RANDOM_STATE = 42
 N_FOLDS = 5
-FAST_N_EST = 100
-PANEL_CV_AUC = panel25_cv_auc()  # reference AUC for the full 25-gene panel
 
 _GSE122649_RAW_TAR = ALS_DIR_RES / "GSE122649" / "GSE122649_RAW.tar"
 _SOFT_URL_122649 = (
@@ -179,14 +177,15 @@ def _find_best_and_best_coding(
 # ---------------------------------------------------------------------------
 
 
-def _load_prefilter() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
-    """lgbm_prefilter_X.npy → (X, ensg_base_to_col, y)."""
+def _load_prefilter() -> tuple[np.ndarray, dict[str, int], np.ndarray, np.ndarray]:
+    """lgbm_prefilter_X.npy → (X, ensg_base_to_col, y, donor ids)."""
     names = _PREFILTER_NAMES.read_text().splitlines()
     base_to_col = {n.split(".")[0]: i for i, n in enumerate(names)}
     X = np.load(_PREFILTER_X, mmap_mode="r")
     (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR_RES)
     y = ds.y.values.astype(int)
-    return X, base_to_col, y
+    donors = ds.meta.loc[ds.y.index, "subject id"].to_numpy()
+    return X, base_to_col, y, donors
 
 
 def _load_train_raw() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
@@ -287,20 +286,21 @@ def _load_gse122649() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
 # ---------------------------------------------------------------------------
 
 
-def _fast_cv_auc(
+def _cv_auc(
     X_pre: np.ndarray,
     y: np.ndarray,
+    groups: np.ndarray,
     col_indices: list[int],
     params: dict,
 ) -> tuple[float, float]:
-    """5-fold stratified CV on prefilter matrix columns col_indices.
+    """Donor-grouped 5-fold stratified CV on prefilter matrix columns col_indices.
 
     Returns (mean_auc, std_auc).
     """
     X = np.asarray(X_pre[:, col_indices], dtype=np.float32)
-    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    skf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     aucs: list[float] = []
-    for tr, te in skf.split(X, y):
+    for tr, te in skf.split(X, y, groups):
         clf = LGBMClassifier(**params)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
@@ -410,16 +410,15 @@ def _build_variants(
                 continue
             train_cols[idx] = train_base_to_col[repl_base]
 
-            # Cohort test columns: use replacement if present, else keep original slot
+            # Cohort test columns: the replacement if the cohort has it, else the slot is
+            # dropped (keeping the original gene would test on a different gene than
+            # the model was trained on)
             cohort_te: dict[str, list[int]] = {}
             cohort_has: dict[str, bool] = {}  # True = replacement actually used in test
             for cname, sym_to_col in cohort_sym_to_cols.items():
                 te_cols = list(panel_cohort_te[cname])
-                if repl_sym and repl_sym in sym_to_col:
-                    te_cols[idx] = sym_to_col[repl_sym]
-                    cohort_has[cname] = True
-                else:
-                    cohort_has[cname] = False  # original gene kept in this slot
+                te_cols[idx] = sym_to_col.get(repl_sym, -1) if repl_sym else -1
+                cohort_has[cname] = te_cols[idx] >= 0
                 cohort_te[cname] = te_cols
 
             variants.append(
@@ -450,9 +449,12 @@ def _build_variants(
 # ---------------------------------------------------------------------------
 
 
-def _make_figure(results_df: pd.DataFrame) -> None:
-    """Horizontal grouped bar chart: CV AUC for best_clean and best_coding variants."""
-    baseline = PANEL_CV_AUC
+def _make_figure(results_df: pd.DataFrame, baseline: float) -> None:
+    """Horizontal grouped bar chart: CV AUC for best_clean and best_coding variants.
+
+    ``baseline`` is the original panel under the same donor-grouped CV, so bars and
+    reference line come from one model and one fold scheme.
+    """
 
     best_clean = results_df[results_df["kind"] == "best_clean"].set_index(
         "panel_symbol"
@@ -467,7 +469,7 @@ def _make_figure(results_df: pd.DataFrame) -> None:
 
     for ax, df_sub, title, colour in [
         (axes[0], best_clean, "Best clean replacement (any biotype)", "#4A90D9"),
-        (axes[1], best_coding, "Best protein-coding replacement", "#E05C5C"),
+        (axes[1], best_coding, "Best protein-coding replacement", "#4A90D9"),
     ]:
         rows = [
             (g, df_sub.loc[g, "cv_auc"] if g in df_sub.index else float("nan"))
@@ -491,7 +493,7 @@ def _make_figure(results_df: pd.DataFrame) -> None:
         )
         ax.set_yticks(y_pos)
         ax.set_yticklabels(syms, fontsize=7.5)
-        ax.set_xlabel("5-fold CV AUC (fast model)", fontsize=9)
+        ax.set_xlabel("Donor-grouped 5-fold CV AUC", fontsize=9)
         ax.set_xlim(0.85, 1.00)
         ax.set_title(title, fontsize=9)
         ax.legend(fontsize=8)
@@ -528,19 +530,16 @@ def _write_stats(
     lines = [
         "Panel Variant CV and Zero-Shot Comparison",
         "=" * 80,
-        f"Fast model: n_estimators={FAST_N_EST}, 5-fold stratified CV, random_state={RANDOM_STATE}",
+        f"Within-cohort model (top-500 params, colsample rescaled), donor-grouped 5-fold CV, random_state={RANDOM_STATE}; zero-shot model colsample 1.0",
         "Artifact-free pool: 41 confirmed artifacts excluded.",
         "",
         "BASELINE (original 25-gene panel)",
         "-" * 80,
-        f"  Fast-model 5-fold CV AUC : {baseline_cv[0]:.4f} ± {baseline_cv[1]:.4f}",
+        f"  Donor-grouped 5-fold CV AUC : {baseline_cv[0]:.4f} ± {baseline_cv[1]:.4f}",
     ]
     for cname, auc in baseline_zs.items():
         lines.append(f"  Zero-shot {cname:<12}: {auc:.4f}")
-    lines += [
-        f"  (Reference full-model CV AUC: {PANEL_CV_AUC:.4f})",
-        "",
-    ]
+    lines.append("")
 
     for kind, kind_label in [
         ("best_clean", "BEST CLEAN REPLACEMENT (any biotype, highest AUC)"),
@@ -574,7 +573,7 @@ def _write_stats(
                 if not np.isnan(auc):
                     b_auc = baseline_zs.get(cohort, float("nan"))
                     delta_zs = auc - b_auc if not np.isnan(b_auc) else float("nan")
-                    marker = "* repl tested" if in_cohort else "~ orig tested"
+                    marker = "* repl tested" if in_cohort else "~ slot dropped"
                     lines.append(
                         f"    {cohort:<20} zero-shot={auc:.4f}  Δ={delta_zs:+.4f}  ({marker})"
                     )
@@ -610,14 +609,10 @@ def main() -> None:
 
     panel_df = pd.read_csv(_PANEL_CSV).reset_index(drop=True)
     base_params = json.loads(_PARAMS_PATH.read_text())
-    fast_params = {
-        **base_params,
-        "n_estimators": FAST_N_EST,
-        "colsample_bytree": 1.0,
-        "verbose": -1,
-        "n_jobs": 1,
-    }
-    zs_params = {**fast_params, "n_estimators": 300, "n_jobs": -1}
+    # the paper's two models: within-cohort (top-500 params, colsample rescaled by
+    # PanelLGBMClassifier, donor-grouped folds) and zero-shot (colsample 1.0)
+    cv_params = {**base_params, "verbose": -1, "n_jobs": -1}
+    zs_params = {**base_params, "colsample_bytree": 1.0, "verbose": -1, "n_jobs": -1}
 
     # Build replacement lookup
     print("\n[1] Building clean replacement lookup ...")
@@ -643,7 +638,7 @@ def main() -> None:
 
     # Load prefilter matrix for fast CV
     print("\n[3] Loading prefilter matrix ...")
-    X_pre, pre_base_to_col, y_pre = _load_prefilter()
+    X_pre, pre_base_to_col, y_pre, donors = _load_prefilter()
     print(f"  X_pre: {X_pre.shape}")
 
     # Load GPL24676 log1p for zero-shot training
@@ -684,11 +679,11 @@ def main() -> None:
     # Evaluate baseline
     print("\n[8] Evaluating baseline (original 25-gene panel) ...")
     baseline_pre_cols = baseline_info["pre_cols"]
-    baseline_cv_auc, baseline_cv_std = _fast_cv_auc(
-        X_pre, y_pre, baseline_pre_cols, fast_params
+    baseline_cv_auc, baseline_cv_std = _cv_auc(
+        X_pre, y_pre, donors, baseline_pre_cols, cv_params
     )
     print(
-        f"  Baseline fast-model CV AUC: {baseline_cv_auc:.4f} ± {baseline_cv_std:.4f}"
+        f"  Baseline donor-grouped CV AUC: {baseline_cv_auc:.4f} ± {baseline_cv_std:.4f}"
     )
 
     baseline_zs: dict[str, float] = {}
@@ -723,7 +718,7 @@ def main() -> None:
             flush=True,
         )
 
-        cv_auc, cv_std = _fast_cv_auc(X_pre, y_pre, v["pre_cols"], fast_params)
+        cv_auc, cv_std = _cv_auc(X_pre, y_pre, donors, v["pre_cols"], cv_params)
         print(f"CV={cv_auc:.4f}", end="", flush=True)
 
         rec: dict = {
@@ -763,7 +758,7 @@ def main() -> None:
     results_df = pd.DataFrame(records)
 
     print("\n[10] Generating figure and statistics ...")
-    _make_figure(results_df)
+    _make_figure(results_df, baseline_cv_auc)
     _write_stats(
         (baseline_cv_auc, baseline_cv_std),
         baseline_zs,

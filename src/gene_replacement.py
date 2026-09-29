@@ -44,11 +44,13 @@ Outputs
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,11 +62,9 @@ ALS_DIR      = Path(__file__).parents[1]
 SCRIPT_DIR   = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-import lightgbm as lgb
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
-
-from utils import load_dataset
+from sklearn.model_selection import StratifiedGroupKFold
+from utils import PanelLGBMClassifier, adjust_colsample, load_dataset
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -82,20 +82,14 @@ MAX_CORR_CANDS = 200    # take only the top-MAX_CORR_CANDS by |r| from genes
                         # co-expression modules with thousands of strong
                         # correlates — the most correlated subset is sufficient
 
-_LGBM_PARAMS = {
-    "n_estimators":      100,
-    "learning_rate":     0.05,
-    "num_leaves":        15,
-    "min_child_samples": 5,
-    "colsample_bytree":  0.8,
-    "subsample":         0.8,
-    "reg_alpha":         0.0005,
-    "reg_lambda":        0.0001,
-    "objective":         "binary",
-    "verbose":           -1,
-    "n_jobs":            1,    # single-threaded per model; outer loop is parallel
-    "random_state":      SEED,
-}
+# The paper's within-cohort model (top-500 hyperparameters, colsample_bytree
+# rescaled to the panel size) with folds grouped by donor, so the baseline is
+# the headline within-cohort AUC and every candidate is scored as the panel is.
+_LGBM_PARAMS = dict(
+    json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text()),
+    n_jobs=1,  # single-threaded per model; the outer loop is parallel
+    verbose=-1,
+)
 
 _PREFILTER_X     = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
@@ -120,16 +114,18 @@ PANEL_SET = set(PANEL_BASES)
 # CV helper
 # ---------------------------------------------------------------------------
 
-def _cv_auc(X: np.ndarray, y: np.ndarray) -> float:
-    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=SEED)
+def _cv_auc(X: np.ndarray, y: np.ndarray, groups: np.ndarray) -> float:
+    """Mean donor-grouped 5-fold AUC of the within-cohort model on ``X``."""
+    params = adjust_colsample(_LGBM_PARAMS, X.shape[1])
+    skf = StratifiedGroupKFold(n_splits=N_SPLITS, shuffle=True, random_state=SEED)
     aucs = [
         roc_auc_score(
             y[te],
-            lgb.LGBMClassifier(**_LGBM_PARAMS)
+            PanelLGBMClassifier(**params)
               .fit(X[tr], y[tr])
               .predict_proba(X[te])[:, 1],
         )
-        for tr, te in skf.split(X, y)
+        for tr, te in skf.split(X, y, groups)
     ]
     return float(np.mean(aucs))
 
@@ -142,10 +138,11 @@ def _test_one(
     X_panel_minus: np.ndarray,  # (874, 24) pre-panel expression
     c_expr: np.ndarray,         # (874,) candidate expression
     y: np.ndarray,
+    groups: np.ndarray,
     baseline_auc: float,
 ) -> tuple[float, bool]:
     X_test = np.column_stack([X_panel_minus, c_expr]).astype(np.float32)
-    auc = _cv_auc(X_test, y)
+    auc = _cv_auc(X_test, y, groups)
     return auc, auc >= baseline_auc - DELTA
 
 
@@ -230,6 +227,7 @@ def main() -> None:
     (ds,) = load_dataset("GSE153960", platform=PLATFORM,
                          resources_dir=ALS_DIR / "resources")
     y = ds.y.values.astype(int)
+    groups = ds.meta.loc[ds.y.index, "subject id"].to_numpy()
 
     # --- symbol lookup from panel CSV -------------------------------------
     ensg_to_sym: dict[str, str] = {}
@@ -253,7 +251,7 @@ def main() -> None:
     # --- baseline AUC ------------------------------------------------------
     print("\nComputing baseline AUC (full 25-gene panel) ...")
     X_panel = X_pre[:, panel_pre_cols].astype(np.float32)
-    baseline_auc = _cv_auc(X_panel, y)
+    baseline_auc = _cv_auc(X_panel, y, groups)
     threshold    = baseline_auc - DELTA
     print(f"  Baseline AUC  = {baseline_auc:.4f}")
     print(f"  Threshold AUC = {threshold:.4f}  (baseline − {DELTA})")
@@ -374,6 +372,7 @@ def main() -> None:
                 X_panel_minus,
                 cand_exprs[:, ci],
                 y,
+                groups,
                 baseline_auc,
             )
             for ci in range(n_cands)
@@ -445,7 +444,7 @@ def main() -> None:
     lines = [
         "Gene Replacement Analysis — Core 25-Gene ALS Panel",
         "=" * 72,
-        f"Baseline panel AUC (5-fold CV):    {baseline_auc:.4f}",
+        f"Baseline panel AUC (donor-grouped 5-fold CV): {baseline_auc:.4f}",
         f"Non-inferiority tolerance DELTA:   {DELTA}",
         f"Replacement threshold AUC:         {threshold:.4f}",
         f"Correlation FWER:                  α = {ALPHA_FWER} (Bonferroni)",

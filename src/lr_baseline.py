@@ -77,14 +77,15 @@ def _fit_lr(X_tr: np.ndarray, y_train: np.ndarray):
 
 def main() -> None:
     from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
-    from sklearn.model_selection import StratifiedKFold
+    from sklearn.model_selection import StratifiedGroupKFold
+    from utils import zero_shot_scale
 
     panel = pd.read_csv(_PANEL_CSV)
     panel_features = panel["feature"].tolist()
 
     print("Loading GPL24676 + GPL16791 ...")
-    X_train_raw, feat_train, y_train, _ = _load_platform("GPL24676")
-    X_test_raw, feat_test, y_test, _ = _load_platform("GPL16791")
+    X_train_raw, feat_train, y_train, _, donors_train = _load_platform("GPL24676")
+    X_test_raw, feat_test, y_test, _, _ = _load_platform("GPL16791")
     assert feat_train == feat_test
 
     X_train_log = np.log1p(X_train_raw)
@@ -94,18 +95,17 @@ def main() -> None:
     X_te = _extract_panel(X_test_log, feat_test, panel_features)
     print(f"  Train: {X_tr.shape}  Test: {X_te.shape}")
 
-    # 5-fold CV — both models
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    # donor-grouped 5-fold CV — both models (GPL24676 has several regions per donor)
+    cv = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)
     lgbm_cv, lr_cv = np.zeros(len(y_train)), np.zeros(len(y_train))
-    for tr, va in cv.split(X_tr, y_train):
-        clf = _fit_lgbm(X_tr[tr], y_train[tr])
-        lgbm_cv[va] = clf.predict_proba(X_tr[va])[:, 1]
+    for tr, va in cv.split(X_tr, y_train, donors_train):
+        f_tr, f_va = zero_shot_scale(X_tr[tr], X_tr[va], "GPL24676")
+        clf = _fit_lgbm(f_tr, y_train[tr])
+        lgbm_cv[va] = clf.predict_proba(f_va)[:, 1]
         lr, sc = _fit_lr(X_tr[tr], y_train[tr])
         lr_cv[va] = lr.predict_proba(sc.transform(X_tr[va]))[:, 1]
 
     # Refit both on full train, predict on GPL16791
-    from utils import zero_shot_scale
-
     # the manuscript's zero-shot model: training-set scaler applied to the test cohort
     z_tr, z_te = zero_shot_scale(X_tr, X_te, "GPL16791")
     lgbm_full = _fit_lgbm(z_tr, y_train)

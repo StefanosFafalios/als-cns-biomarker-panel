@@ -1,8 +1,7 @@
 """Module-aware stability selection.
 
-Extends stability_selection.py: for each bootstrap iteration, records the
-full top-25 set (not just aggregated counts), then computes two metrics
-per panel gene:
+Extends stability_selection.py: reads each bootstrap's top-25 set that
+stability_selection.py saved, then computes two metrics per panel gene:
 
   - single_freq: fraction of bootstraps in which the panel gene itself
     appears in the top-25 (same as stability_selection.py).
@@ -26,7 +25,6 @@ from __future__ import annotations
 
 import json
 import sys
-import warnings
 from pathlib import Path
 
 import matplotlib
@@ -40,58 +38,10 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
 
-N_BOOTSTRAP = 100
-TOP_K = 25
-RANDOM_STATE = 42
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
-_SFM_RANKING = SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv"
-_PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
-_PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _REPLACEMENT_CSV = SCRIPT_DIR / "gene_replacement_results.csv"
-
-
-def _load_sfm_matrix() -> tuple[np.ndarray, list[str]]:
-    sfm_df = pd.read_csv(_SFM_RANKING)
-    sfm_features = sfm_df["feature"].tolist()
-    all_names = _PREFILTER_NAMES.read_text().splitlines()
-    name_to_col = {n: i for i, n in enumerate(all_names)}
-    kept = [f for f in sfm_features if f in name_to_col]
-    col_idx = [name_to_col[f] for f in kept]
-    X_full = np.load(_PREFILTER_X)
-    return X_full[:, col_idx].astype(np.float32), kept
-
-
-def _bootstrap_iteration(
-    X,
-    y,
-    rng,
-    params,
-    sfm_features,
-) -> set[str]:
-    import shap
-    from utils import PanelLGBMClassifier as LGBMClassifier
-
-    pos_idx = np.where(y == 1)[0]
-    neg_idx = np.where(y == 0)[0]
-    n_pos = rng.choice(pos_idx, size=len(pos_idx), replace=True)
-    n_neg = rng.choice(neg_idx, size=len(neg_idx), replace=True)
-    idx = np.concatenate([n_pos, n_neg])
-    rng.shuffle(idx)
-    X_b, y_b = X[idx], y[idx]
-    clf = LGBMClassifier(**params)
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore")
-        clf.fit(X_b, y_b)
-        explainer = shap.TreeExplainer(clf)
-        shap_vals = explainer.shap_values(X_b)
-        if isinstance(shap_vals, list):
-            shap_vals = shap_vals[1]
-        mean_abs = np.abs(shap_vals).mean(axis=0)
-        top_idx = np.argsort(mean_abs)[-TOP_K:]
-    return {sfm_features[i] for i in top_idx}
+_BOOTSTRAPS_JSON = SCRIPT_DIR / "stability_selection_bootstraps.json"
 
 
 def _build_module_map(panel_df: pd.DataFrame) -> dict[str, set[str]]:
@@ -115,44 +65,16 @@ def _to_base(feature_id: str) -> str:
 
 
 def main() -> None:
-    print("Loading SFM matrix and labels ...", flush=True)
-    X, sfm_features = _load_sfm_matrix()
-    (ds,) = load_dataset(
-        "GSE153960", platform="GPL24676", resources_dir=ALS_DIR / "resources"
-    )
-    y = ds.y.values.astype(int)
-    print(
-        f"  X: {X.shape}  ALS={int(y.sum())}  Ctrl={len(y) - int(y.sum())}", flush=True
-    )
-
-    params = json.loads(_PARAMS_PATH.read_text())
-    params["colsample_bytree"] = 1.0
-    params["random_state"] = RANDOM_STATE
-    params["n_estimators"] = 600
-    params["verbosity"] = -1
-
     panel_df = pd.read_csv(_PANEL_CSV)
-    panel_features = set(panel_df["feature"].tolist())
 
     print("Building module map from gene_replacement_results.csv ...", flush=True)
     modules = _build_module_map(panel_df)
     for sym, bases in modules.items():
         print(f"  {sym:<16}  |module|={len(bases)}", flush=True)
 
-    rng = np.random.default_rng(RANDOM_STATE)
-    iterations: list[set[str]] = []
-    import time
-
-    t0 = time.time()
-    print(f"\nRunning {N_BOOTSTRAP} bootstrap iterations ...", flush=True)
-    for b in range(N_BOOTSTRAP):
-        top = _bootstrap_iteration(X, y, rng, params, sfm_features)
-        iterations.append({_to_base(f) for f in top})
-        if (b + 1) % 10 == 0:
-            print(
-                f"  bootstrap {b + 1}/{N_BOOTSTRAP}  elapsed: {time.time() - t0:.1f}s",
-                flush=True,
-            )
+    # the bootstraps of stability_selection.py, so both analyses count the same draws
+    iterations = [{_to_base(f) for f in top} for top in json.loads(_BOOTSTRAPS_JSON.read_text())]
+    N_BOOTSTRAP = len(iterations)
 
     # Compute single + module stability per panel gene
     rows = []

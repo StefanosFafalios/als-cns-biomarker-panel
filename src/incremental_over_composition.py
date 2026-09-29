@@ -2,7 +2,7 @@
 """Incremental value of the panel over cell-type composition — experiment #2.
 
 Central rebuttal to "the panel is just a readout of microgliosis + BBB loss".
-On raw log1p GPL24676 (n=874 ALS+control), compares four 5-fold CV models:
+On raw log1p GPL24676 (n=874 ALS+control), compares four donor-grouped 5-fold CV models:
 
   A. Composition only  : 6 BRETIGEA cell-type estimates.
   B. Panel only        : 25-gene panel expression.
@@ -43,14 +43,14 @@ RANDOM_STATE = 42
 N_BOOT = 2000
 
 
-def _cv_oof(x: np.ndarray, y: np.ndarray, params: dict) -> np.ndarray:
-    """Return out-of-fold P(ALS) from 5-fold stratified CV."""
-    from sklearn.model_selection import StratifiedKFold
+def _cv_oof(x: np.ndarray, y: np.ndarray, groups: np.ndarray, params: dict) -> np.ndarray:
+    """Return out-of-fold P(ALS) from donor-grouped 5-fold stratified CV."""
+    from sklearn.model_selection import StratifiedGroupKFold
     from utils import PanelLGBMClassifier as LGBMClassifier
 
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    skf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     oof = np.zeros(len(y))
-    for tr, te in skf.split(x, y):
+    for tr, te in skf.split(x, y, groups):
         clf = LGBMClassifier(**params)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
@@ -60,15 +60,15 @@ def _cv_oof(x: np.ndarray, y: np.ndarray, params: dict) -> np.ndarray:
 
 
 def _cv_oof_residualised(
-    genes: np.ndarray, comp: np.ndarray, y: np.ndarray, params: dict
+    genes: np.ndarray, comp: np.ndarray, y: np.ndarray, groups: np.ndarray, params: dict
 ) -> np.ndarray:
-    """CV with within-fold OLS residualisation of each gene on composition."""
-    from sklearn.model_selection import StratifiedKFold
+    """Donor-grouped CV with within-fold OLS residualisation of each gene on composition."""
+    from sklearn.model_selection import StratifiedGroupKFold
     from utils import PanelLGBMClassifier as LGBMClassifier
 
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    skf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     oof = np.zeros(len(y))
-    for tr, te in skf.split(genes, y):
+    for tr, te in skf.split(genes, y, groups):
         # design matrix [1, composition] fit on train
         d_tr = np.column_stack([np.ones(len(tr)), comp[tr]])
         d_te = np.column_stack([np.ones(len(te)), comp[te]])
@@ -119,6 +119,7 @@ def main() -> None:
         warnings.filterwarnings("ignore")
         x_log = np.log1p(ds.X.values.astype(np.float32))
     y = ds.y.values.astype(int)
+    groups = ds.meta.loc[ds.y.index, "subject id"].to_numpy()  # several regions per donor
     print(
         f"  n={len(y)}  ALS={int(y.sum())}  Ctrl={int((y == 0).sum())}  genes={len(feat)}"
     )
@@ -147,10 +148,10 @@ def main() -> None:
     params.update({"verbose": -1, "n_jobs": 4})
 
     print("\n[4] 5-fold CV models ...")
-    auc_comp = _auc_ci(y, _cv_oof(comp, y, params))
-    auc_panel = _auc_ci(y, _cv_oof(genes, y, params))
-    auc_both = _auc_ci(y, _cv_oof(np.column_stack([genes, comp]), y, params))
-    auc_resid = _auc_ci(y, _cv_oof_residualised(genes, comp, y, params))
+    auc_comp = _auc_ci(y, _cv_oof(comp, y, groups, params))
+    auc_panel = _auc_ci(y, _cv_oof(genes, y, groups, params))
+    auc_both = _auc_ci(y, _cv_oof(np.column_stack([genes, comp]), y, groups, params))
+    auc_resid = _auc_ci(y, _cv_oof_residualised(genes, comp, y, groups, params))
 
     rows = [
         ("A. Composition only (6 cell types)", auc_comp),
@@ -162,7 +163,7 @@ def main() -> None:
         "Incremental value of panel over cell-type composition — experiment #2",
         "=" * 64,
         "Substrate: raw log1p GPL24676 (n=874 ALS+control); LightGBM top-500",
-        "params; 5-fold stratified CV (random_state=42); BRETIGEA composition.",
+        "params; donor-grouped 5-fold stratified CV (random_state=42); BRETIGEA composition.",
         "",
         f"{'Model':<40}{'AUC':>8}{'95% CI':>20}",
         "-" * 68,
@@ -208,7 +209,7 @@ def main() -> None:
         ],
         fontsize=9,
     )
-    ax.set_ylabel("5-fold CV AUC-ROC")
+    ax.set_ylabel("Donor-grouped 5-fold CV AUC-ROC")
     ax.set_ylim(0.4, 1.0)
     ax.set_title(
         "Panel carries ALS signal beyond cell-type composition\n"

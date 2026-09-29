@@ -2,7 +2,7 @@
 
 Computes net-benefit curves for treat-all, treat-none, and model strategies
 across threshold probabilities 0.05–0.95 for:
-  - GPL24676 5-fold CV (training cohort)
+  - GPL24676 donor-grouped 5-fold CV (training cohort)
   - GPL16791 zero-shot (primary external)
 
 Uses score arrays saved in calibration_scores.npz by calibration_analysis.py.
@@ -57,7 +57,7 @@ def main() -> None:
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
     rows = []
     for ax, (lbl, y, s) in zip(axes, [
-        ("Train cohort (GPL24676; 5-fold CV)", y_train, s_train),
+        ("Train cohort (GPL24676; donor-grouped 5-fold CV)", y_train, s_train),
         ("GPL16791 zero-shot", y_test, s_test),
     ]):
         nb_model = [_net_benefit(y, s, p) for p in thresholds]
@@ -105,7 +105,7 @@ def main() -> None:
         "  The model strategy is preferred over treat-all/treat-none across",
         "  the range of threshold probabilities where its net-benefit curve",
         "  lies above both alternatives. Within that range, the panel provides",
-        "  clinical utility beyond a naive policy.",
+        "  net benefit beyond a naive policy.",
     ]
     (SCRIPT_DIR / "decision_curve_statistics.txt").write_text("\n".join(lines))
     print("\nSaved -> decision_curve.{png,txt}")

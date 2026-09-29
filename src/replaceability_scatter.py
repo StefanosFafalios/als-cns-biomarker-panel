@@ -8,12 +8,13 @@ Colour : biological theme
 
 from __future__ import annotations
 
-import re
-import textwrap
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.patches as mpatches  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 import pandas as pd
 
@@ -74,13 +75,13 @@ panel = pd.read_csv(BASE / "lgbm_core25_panel.csv")
 # columns: rank, feature, symbol, mean_abs_shap, loo_delta_auc
 
 # ---------------------------------------------------------------------------
-# Parse gene_replacement_statistics.txt
+# Parse gene_replacement_clean_statistics.txt (artifact-corrected %, as quoted in the text)
 # ---------------------------------------------------------------------------
-repl_path = BASE / "gene_replacement_statistics.txt"
+repl_path = BASE / "gene_replacement_clean_statistics.txt"
 repl_rows = []
 in_table = False
 for line in repl_path.read_text().splitlines():
-    if line.startswith("Gene ") and "n_corr" in line:
+    if line.startswith("Gene ") and "Clean%" in line:
         in_table = True
         continue
     if in_table and line.startswith("-"):
@@ -91,7 +92,7 @@ for line in repl_path.read_text().splitlines():
         parts = line.split()
         if len(parts) >= 7:
             gene = parts[0]
-            repl_pct_str = parts[5].rstrip("%")
+            repl_pct_str = parts[2].rstrip("%")
             try:
                 repl_pct = float(repl_pct_str)
             except ValueError:
@@ -262,7 +263,7 @@ ax.set_xlabel("LOO Δ AUC  (within 25-gene panel context)", fontsize=11)
 ax.set_ylabel("Replaceability  (%)", fontsize=11)
 ax.set_title(
     "Replaceability vs LOO Δ — 15 Protein-Coding Panel Members\n"
-    "(dot size ∝ mean |SHAP|; LOO Δ from full-model 5-fold CV, replaceability from fast-model screen)",
+    "(dot size ∝ mean |SHAP|; LOO Δ from full-model 5-fold CV, artifact-corrected replaceability, donor-grouped screen)",
     fontsize=10,
 )
 ax.set_ylim(-5, 110)

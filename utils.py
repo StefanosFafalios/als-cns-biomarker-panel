@@ -300,7 +300,7 @@ def _load_suppl_expression(
 
     expr_df = expr_df.rename(columns=rename)
 
-    expr_df = normalise_symbols(expr_df, gse_id)
+    expr_df = collapse_duplicate_rows(normalise_symbols(expr_df, gse_id))
 
     gsm_cols = [c for c in expr_df.columns if c.startswith("GSM")]
     return expr_df[gsm_cols]
@@ -331,6 +331,31 @@ def normalise_symbols(expr_df: "pd.DataFrame", gse_id: str) -> "pd.DataFrame":
         + ", ".join(f"{a}->{aliases[a]}" for a in hits)
     )
     return expr_df.rename(index={a: aliases[a] for a in hits})
+
+
+def collapse_duplicate_rows(expr_df: "pd.DataFrame") -> "pd.DataFrame":
+    """Keep one row per gene label: the row with the highest mean expression.
+
+    Symbol-keyed files can carry several rows per symbol (GSE76220 has 1,203:
+    transcript-level rows, and legacy aliases renamed onto an existing gene).
+    Consumers build ``{symbol: column}`` maps, so without this the row a script
+    used depended on whether it kept the first or the last duplicate. For
+    NR4A1 those are an expressed row and a near-constant floor row, and the two
+    choices moved the panel's GSE76220 AUC by 0.03. Keeping the most highly
+    expressed row is the standard collapse (WGCNA ``collapseRows`` maxMean).
+
+    Args:
+        expr_df: Expression frame indexed by gene label, samples as columns.
+
+    Returns:
+        The frame with unique labels and the original row order. The input is
+        returned unchanged when it has no duplicates.
+    """
+    if not expr_df.index.duplicated().any():
+        return expr_df
+    mean = pd.Series(expr_df.mean(axis=1, numeric_only=True).to_numpy())
+    keep = mean.groupby(expr_df.index.to_numpy()).idxmax().to_numpy()
+    return expr_df.iloc[np.sort(keep)]
 
 
 def _assign_labels(meta_df: pd.DataFrame, gse_id: str) -> pd.Series:

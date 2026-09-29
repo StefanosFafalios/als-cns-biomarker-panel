@@ -18,7 +18,7 @@ random, is scored with the manuscript's zero-shot model: the top-500 LightGBM pa
 with ``colsample_bytree = 1.0`` (as in ``panel_critical_eval.py`` and
 ``external_validation_gpl16791.py``), trained on all GPL24676 samples (raw log1p), with
 ``zero_shot_scale``. The panel defaults to the published 25 genes; a second argument names
-another panel CSV (``feature``/``symbol`` columns), e.g. ``coffeebreak_panel.csv``. The 18-gene critical panel
+another panel CSV (``feature``/``symbol`` columns), e.g. ``coffeebreak_panel.csv``. The critical panel
 was selected on these cohorts, so a null on them is not a clean test.
 
 Empirical p = (#null AUC >= real AUC + 1) / (B + 1).

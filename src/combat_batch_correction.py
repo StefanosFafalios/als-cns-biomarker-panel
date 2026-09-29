@@ -238,8 +238,8 @@ def main() -> None:
     top500: list[str] = pd.read_csv(_SHAP_RANKING).head(500)["feature"].tolist()
 
     print("\nLoading platforms ...")
-    X_train_raw, feat_train, y_train, _ = _load_platform("GPL24676")
-    X_test_raw, feat_test, y_test, _ = _load_platform("GPL16791")
+    X_train_raw, feat_train, y_train, _, _ = _load_platform("GPL24676")
+    X_test_raw, feat_test, y_test, _, _ = _load_platform("GPL16791")
     assert feat_train == feat_test
 
     # CTD is discovery-side only; the ComBat comparison is on raw log1p (uniform

@@ -46,7 +46,6 @@ output(s) to that same directory.
 | fig:repl_greedy | `repl_vs_greedy.png` | `replaceability_figures.py` | S1.7 |
 | fig:repl_box | `repl_candidate_boxplot.png` | `replaceability_figures.py` | S1.7 |
 | fig:repl_heatmap | `repl_module_heatmap.png` | `replaceability_figures.py` | S1.7 |
-| fig:replacement_loo | `replacement_panel_loo.png` | `replacement_panel_loo.py` | S14 |
 | fig:panelmb | `panel_mb_network.png` | `panel_mb_network.py` + `panel_mb_postprocess.py` | S15 |
 | fig:loo_sensitivity | `panel_loo_zeroshot.png` (shared) | `panel_loo_zeroshot.py` | S22 |
 | fig:greedy_stop | `greedy_significance_stop.png` | `greedy_significance_stop.py` | S16 (panel-size trajectory + non-inferiority band) |

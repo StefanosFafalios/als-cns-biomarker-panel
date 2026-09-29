@@ -81,8 +81,8 @@ _COMPARTMENTS: dict[str, tuple[str, ...]] = {
 
 def _load_platform(
     platform: str,
-) -> tuple[np.ndarray, list[str], np.ndarray, list[str]]:
-    """Return X_raw, feature_names, y, tissues for one platform."""
+) -> tuple[np.ndarray, list[str], np.ndarray, list[str], np.ndarray]:
+    """Return X_raw, feature_names, y, tissues and donor ids for one platform."""
     (ds,) = load_dataset(
         "GSE153960", platform=platform, resources_dir=ALS_DIR / "resources"
     )
@@ -90,8 +90,9 @@ def _load_platform(
     feature_names: list[str] = list(ds.X.columns)
     y = ds.y.values.astype(int)
     tissues: list[str] = ds.meta.get("tissue", ["unknown"] * len(y)).tolist()
+    donors = ds.meta.loc[ds.y.index, "subject id"].to_numpy()
     print(f"  {platform}: n={len(y)}  ALS={y.sum()}  Ctrl={(y == 0).sum()}")
-    return X_raw, feature_names, y, tissues
+    return X_raw, feature_names, y, tissues, donors
 
 
 def _ctd_residualise(
@@ -292,8 +293,8 @@ def main() -> None:
     panel_symbols: list[str] = panel["symbol"].tolist()
 
     print("\nLoading platforms ...")
-    X_train_raw, feat_train, y_train, _ = _load_platform(TRAIN_PLATFORM)
-    X_test_raw, feat_test, y_test, tissues_test = _load_platform(TEST_PLATFORM)
+    X_train_raw, feat_train, y_train, _, _ = _load_platform(TRAIN_PLATFORM)
+    X_test_raw, feat_test, y_test, tissues_test, _ = _load_platform(TEST_PLATFORM)
 
     # Verify feature alignment
     assert feat_train == feat_test, "Feature lists differ between platforms"

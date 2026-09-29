@@ -1,12 +1,12 @@
 # ruff: noqa: E402
-"""Disease specificity: does the ALS panel score FTLD/PSP as ALS-like?
+"""Disease specificity: does the ALS panel score FTD as ALS-like?
 
 GSE153960 GPL24676 contains four disease groups accessible via raw metadata:
 
   ALS Spectrum MND                              : ~684  (training positives)
   Non-Neurological Control                      : ~190  (training negatives)
-  Other Neurological Disorders                  : ~212  FTLD-TDP + PSP (mixed,
-                                                         not sub-typed in GEO)
+  Other Neurological Disorders                  : 125 samples, 49 donors,
+                                                  clinical FTD (NYGC donor table)
   ALS Spectrum MND, Other Neurological Disorders: ~172  ALS-FTD comorbid
                                                          (in training as ALS)
 
@@ -16,11 +16,12 @@ Strategy
 2. Load supplementary RSEM counts for all samples.
 3. Assign group labels from the "group" characteristic field.
 4. Define training set: ALS (pure + ALS-FTD) vs Control.
-5. Extract the 25 core panel genes; apply log1p → StandardScaler (fit on train).
-6. Train LightGBM (top-500 best params, colsample_bytree=1.0) on training set.
-7. Score all four groups with the trained model.
-8. Plot score distributions (violin) + ROC curve (ALS vs FTLD/PSP).
-9. Mann-Whitney U tests: FTLD/PSP vs ALS and FTLD/PSP vs Control.
+5. Extract the 25 core panel genes (log1p).
+6. Donor-grouped 5-fold CV with the within-cohort LightGBM: out-of-fold scores
+   for ALS and controls, fold-averaged scores for the held-out FTD group.
+7. Donor-level tests, and a genotype test inside the FTD group.
+8. Plot score distributions (violin) + ROC curve (ALS vs FTD).
+9. Mann-Whitney U tests: FTD vs ALS and FTD vs Control.
 
 Outputs
 -------
@@ -35,11 +36,13 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
+sys.path.insert(0, str(Path(__file__).parent))
 
-from utils import _load_suppl_expression, _parse_series_matrix, panel25_cv_auc
+from utils import _load_suppl_expression, _parse_series_matrix
 
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
@@ -50,7 +53,6 @@ _MATRIX_PATH = (
     RESOURCES_DIR / "GSE153960" / "matrix" / "GSE153960-GPL24676_series_matrix.txt.gz"
 )
 
-TRAIN_CV_AUC = panel25_cv_auc()  # derived; see utils.panel25_cv_auc
 N_BOOTSTRAP = 2_000
 RANDOM_STATE = 42
 
@@ -70,6 +72,7 @@ def _load_all_samples() -> tuple[
     np.ndarray,  # X_log  (n_all, n_genes)  log1p RSEM
     list[str],  # feature_names
     dict[str, list[int]],  # group_idx: group_name → list of row indices
+    "pd.DataFrame",  # meta_df aligned to X_log rows (donor, tissue)
 ]:
     """Parse GPL24676 series matrix and load expression for ALL samples."""
 
@@ -96,14 +99,13 @@ def _load_all_samples() -> tuple[
     counts = {
         "ALS (pure)": als_mask.sum(),
         "ALS-FTD": alsftd_mask.sum(),
-        "FTLD/PSP": ftld_mask.sum(),
+        "FTD": ftld_mask.sum(),
         "Control": ctrl_mask.sum(),
         "Other/excluded": (~als_mask & ~alsftd_mask & ~ftld_mask & ~ctrl_mask).sum(),
     }
     for grp, n in counts.items():
         print(f"    {grp:<25} n={n}")
 
-    all_idx = list(common)
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -112,11 +114,44 @@ def _load_all_samples() -> tuple[
     group_idx: dict[str, list[int]] = {
         "ALS (pure)": [i for i, m in enumerate(als_mask) if m],
         "ALS-FTD": [i for i, m in enumerate(alsftd_mask) if m],
-        "FTLD/PSP": [i for i, m in enumerate(ftld_mask) if m],
+        "FTD": [i for i, m in enumerate(ftld_mask) if m],
         "Control": [i for i, m in enumerate(ctrl_mask) if m],
     }
 
-    return X_log, list(expr_df.index), group_idx
+    return X_log, list(expr_df.index), group_idx, meta_df
+
+
+def _ftd_genotypes(donors: np.ndarray) -> "pd.Series":
+    """Classify FTD donors by the pathology their mutated gene implies.
+
+    TDP-43: C9orf72 expansion (ExpansionHunter/RP-PCR call), GRN or TBK1 variant.
+    tau: MAPT variant. Donors with neither are left out. Source: NYGC ALS
+    Consortium donor table (ST1, ST2; Zenodo 20025792).
+    """
+    import pandas as pd
+    from nygc_clinical_association import ST1, _st1
+
+    if not ST1.exists():  # donor table not downloaded: no genotype test
+        print(f"  [skip] genotype test needs {ST1.name}")
+        return pd.Series(dtype=str)
+    st1 = _st1().reindex(donors)
+    raw = pd.read_excel(ST1, sheet_name="ST2", header=None)
+    h = raw.index[raw.iloc[:, 0].astype(str).str.strip().eq("donor_id")][0]
+    st2 = raw.iloc[h + 1 :].copy()
+    st2.columns = raw.iloc[h].astype(str).str.strip()
+    st2_genes = st2.groupby(st2["donor_id"].astype(str))["annotated_gene"].apply(
+        lambda g: " ".join(g.astype(str))
+    )
+    site = st1["site_reported_mutations"].astype(str)
+    genes = st2_genes.reindex(donors).fillna("")
+    tdp = (
+        (st1["c9"] == 1)
+        | site.str.contains("Positive for (?:C9orf72|GRN|TBK1)", regex=True)
+        | genes.str.contains(r"(?:^|\s)C9orf72(?:\s|$)|GRN|TBK1", regex=True)
+    )
+    tau = site.str.contains("MAPT") | genes.str.contains("MAPT")
+    out = pd.Series(np.where(tdp & ~tau, "TDP-43", np.where(tau & ~tdp, "tau", "")), index=donors)
+    return out[out != ""]
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +211,7 @@ def _plot(
 
     # --- Violin plot of score distributions ---
     ax = axes[0]
-    order = ["Control", "FTLD/PSP", "ALS-FTD", "ALS (pure)"]
+    order = ["Control", "FTD", "ALS-FTD", "ALS (pure)"]
     colours = ["#4878d0", "#ee854a", "#d65f5f", "#6acc65"]
     data = [group_scores[g] for g in order]
     parts = ax.violinplot(
@@ -205,7 +240,7 @@ def _plot(
         med = float(np.median(group_scores[g]))
         ax.text(i, med + 0.04, f"{med:.2f}", ha="center", va="bottom", fontsize=7)
 
-    # --- ROC: ALS vs FTLD/PSP + 5-fold CV reference ---
+    # --- ROC: ALS vs FTD + 5-fold CV reference ---
     ax2 = axes[1]
     fpr_ftld, tpr_ftld, _ = roc_curve(y_ftld, scores_ftld)
 
@@ -215,7 +250,7 @@ def _plot(
         tpr_ftld,
         lw=2,
         color="#ee854a",
-        label=f"ALS vs FTLD/PSP  AUC={auc_als_vs_ftld:.4f}\n"
+        label=f"ALS vs FTD  AUC={auc_als_vs_ftld:.4f}\n"
         f"95% CI [{ci_lo_ftld:.4f}, {ci_hi_ftld:.4f}]",
     )
     ax2.fill_between(_FPR_GRID, tpr_lo_cv, tpr_hi_cv, alpha=0.2, color="#4878d0")
@@ -224,15 +259,15 @@ def _plot(
         tpr_cv,
         lw=2,
         color="#4878d0",
-        label=f"ALS vs Control   AUC={auc_cv:.4f}  (5-fold CV)\n"
+        label=f"ALS vs Control   AUC={auc_cv:.4f}  (donor-grouped CV)\n"
         f"95% CI [{ci_lo_cv:.4f}, {ci_hi_cv:.4f}]",
     )
     ax2.plot([0, 1], [0, 1], "k--", lw=0.8)
     ax2.set_xlabel("False Positive Rate")
     ax2.set_ylabel("True Positive Rate")
     ax2.set_title(
-        "ROC: ALS vs FTLD/PSP  (zero-shot scoring of held-out groups)\n"
-        "FTLD/PSP = 'Other Neurological Disorders' in GPL24676",
+        "ROC: ALS vs FTD  (zero-shot scoring of held-out groups)\n"
+        "FTD = 'Other Neurological Disorders' in GPL24676",
         fontsize=9,
     )
     ax2.legend(fontsize=8, loc="lower right")
@@ -257,20 +292,21 @@ def main() -> None:
     import pandas as pd
     from scipy.stats import mannwhitneyu
     from sklearn.metrics import roc_auc_score
-    from sklearn.preprocessing import StandardScaler
     from utils import PanelLGBMClassifier as LGBMClassifier
 
     matplotlib.use("Agg")
 
     print("\n" + "=" * 65)
-    print("Disease Specificity: ALS panel on FTLD/PSP (GPL24676)")
+    print("Disease Specificity: ALS panel on FTD (GPL24676)")
     print("=" * 65)
 
     panel = pd.read_csv(_PANEL_CSV)
     panel_features: list[str] = panel["feature"].tolist()
 
     print("\nLoading all GPL24676 samples ...")
-    X_log, feat_names, group_idx = _load_all_samples()
+    X_log, feat_names, group_idx, meta_df = _load_all_samples()
+    donor_all = meta_df["subject id"].astype(str).to_numpy()
+    tissue_all = meta_df["tissue"].astype(str).to_numpy()
 
     # Map panel features to column indices (strip version suffix)
     feat_base = {n.split(".")[0]: i for i, n in enumerate(feat_names)}
@@ -300,42 +336,39 @@ def main() -> None:
         f"ALS={len(tr_als_idx)}  Ctrl={len(tr_ctrl_idx)}"
     )
 
-    params = json.loads(_PARAMS_PATH.read_text())
-    params["colsample_bytree"] = 1.0
+    # the paper's within-cohort model (top-500 params; PanelLGBMClassifier rescales
+    # colsample to the panel size), folds grouped by donor
+    params = {**json.loads(_PARAMS_PATH.read_text()), "verbose": -1}
 
-    # 5-fold CV: OOF scores for training groups AND fold-averaged scores for FTLD/PSP.
-    # Both groups are scored by the same 5 fold models (none of which ever saw FTLD/PSP),
-    # eliminating the asymmetry between in-sample ALS and zero-shot FTLD/PSP.
+    # Donor-grouped 5-fold CV: OOF scores for training groups AND fold-averaged
+    # scores for the held-out FTD group. Both are scored by the same 5 fold models
+    # (none of which ever saw an FTD sample), so the two are symmetric.
     from sklearn.metrics import roc_curve as _roc_curve
-    from sklearn.model_selection import StratifiedKFold
+    from sklearn.model_selection import StratifiedGroupKFold
 
-    print("\nRunning 5-fold CV ...")
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    print("\nRunning donor-grouped 5-fold CV ...")
+    skf = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
     X_tr = X_panel[tr_idx]
-    X_ftld = X_panel[group_idx["FTLD/PSP"]]
+    X_ftld = X_panel[group_idx["FTD"]]
     oof_scores = np.zeros(len(tr_idx))
-    ftld_fold_scores = np.zeros((5, len(group_idx["FTLD/PSP"])))
-    for k, (fold_tr, fold_val) in enumerate(skf.split(X_tr, y_train)):
-        sc_fold = StandardScaler()
-        Xf_tr = sc_fold.fit_transform(X_tr[fold_tr]).astype(np.float32)
-        Xf_val = sc_fold.transform(X_tr[fold_val]).astype(np.float32)
-        Xf_ftld = sc_fold.transform(X_ftld).astype(np.float32)
+    ftld_fold_scores = np.zeros((5, len(group_idx["FTD"])))
+    for k, (fold_tr, fold_val) in enumerate(skf.split(X_tr, y_train, donor_all[tr_idx])):
         clf_fold = LGBMClassifier(**params)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            clf_fold.fit(Xf_tr, y_train[fold_tr])
-        oof_scores[fold_val] = clf_fold.predict_proba(Xf_val)[:, 1]
-        ftld_fold_scores[k] = clf_fold.predict_proba(Xf_ftld)[:, 1]
-    ftld_cv_scores = ftld_fold_scores.mean(axis=0)  # fold-averaged FTLD/PSP scores
+            clf_fold.fit(X_tr[fold_tr], y_train[fold_tr])
+        oof_scores[fold_val] = clf_fold.predict_proba(X_tr[fold_val])[:, 1]
+        ftld_fold_scores[k] = clf_fold.predict_proba(X_ftld)[:, 1]
+    ftld_cv_scores = ftld_fold_scores.mean(axis=0)  # fold-averaged FTD scores
 
-    # Honest scores: OOF for training groups, fold-averaged CV for FTLD/PSP
+    # Honest scores: OOF for training groups, fold-averaged CV for FTD
     # All scores come from the same 5 fold models — no asymmetry.
     n_als_pure = len(group_idx["ALS (pure)"])
     honest_scores: dict[str, np.ndarray] = {
         "ALS (pure)": oof_scores[:n_als_pure],
         "ALS-FTD": oof_scores[n_als_pure : len(tr_als_idx)],
         "Control": oof_scores[len(tr_als_idx) :],
-        "FTLD/PSP": ftld_cv_scores,
+        "FTD": ftld_cv_scores,
     }
     print("\nHonest (OOF / fold-averaged CV) score distributions:")
     for g, sc in honest_scores.items():
@@ -343,21 +376,21 @@ def main() -> None:
 
     rng = np.random.default_rng(RANDOM_STATE)
 
-    # AUC: ALS (pure, OOF) vs FTLD/PSP (zero-shot) — fully honest
+    # AUC: ALS (pure, OOF) vs FTD (zero-shot) — fully honest
     y_als_ftld = np.concatenate(
         [
             np.ones(n_als_pure, dtype=int),
-            np.zeros(len(group_idx["FTLD/PSP"]), dtype=int),
+            np.zeros(len(group_idx["FTD"]), dtype=int),
         ]
     )
     scores_als_ftld = np.concatenate(
         [
             honest_scores["ALS (pure)"],
-            honest_scores["FTLD/PSP"],
+            honest_scores["FTD"],
         ]
     )
     auc_als_vs_ftld = float(roc_auc_score(y_als_ftld, scores_als_ftld))
-    print(f"\nAUC (ALS pure OOF vs FTLD/PSP zero-shot): {auc_als_vs_ftld:.4f}")
+    print(f"\nAUC (ALS pure OOF vs FTD zero-shot): {auc_als_vs_ftld:.4f}")
     boot_ftld, tpr_lo_ftld, tpr_hi_ftld = _bootstrap_roc(
         y_als_ftld, scores_als_ftld, N_BOOTSTRAP, rng
     )
@@ -378,19 +411,41 @@ def main() -> None:
         f"95% CI [{ci_lo_cv:.4f}, {ci_hi_cv:.4f}]"
     )
 
-    # Mann-Whitney U tests (using honest OOF/zero-shot scores)
-    mw_ftld_vs_als, p_ftld_als = mannwhitneyu(
-        honest_scores["FTLD/PSP"], honest_scores["ALS (pure)"], alternative="less"
-    )
-    mw_ftld_vs_ctrl, p_ftld_ctrl = mannwhitneyu(
-        honest_scores["FTLD/PSP"], honest_scores["Control"], alternative="greater"
-    )
-    mw_alsftd_vs_als, p_alsftd_als = mannwhitneyu(
-        honest_scores["ALS-FTD"], honest_scores["ALS (pure)"], alternative="two-sided"
-    )
-    print(f"\nMann-Whitney U (FTLD/PSP < ALS pure):    p={p_ftld_als:.3e}")
-    print(f"Mann-Whitney U (FTLD/PSP > Control):     p={p_ftld_ctrl:.3e}")
-    print(f"Mann-Whitney U (ALS-FTD ≠ ALS pure):     p={p_alsftd_als:.3e}")
+    # Donor-level tests: several regions per donor, so a sample-level p-value would
+    # count one donor several times. Scores are z-scored within tissue (over the
+    # four groups) and averaged per donor.
+    idx_all = np.concatenate([np.asarray(group_idx[g], dtype=int) for g in honest_scores])
+    sc_all = np.concatenate(list(honest_scores.values()))
+    lab_all = np.concatenate([[g] * len(v) for g, v in honest_scores.items()])
+    dfs = pd.DataFrame({"s": sc_all, "tissue": tissue_all[idx_all],
+                        "donor": donor_all[idx_all], "group": lab_all})
+    dfs["z"] = dfs.groupby("tissue")["s"].transform(lambda c: (c - c.mean()) / (c.std(ddof=0) or 1.0))
+    dmean = dfs.groupby(["group", "donor"])["z"].mean()
+    n_donors = {g: int(dmean.loc[g].size) for g in honest_scores}
+    _, p_ftld_als = mannwhitneyu(dmean.loc["FTD"], dmean.loc["ALS (pure)"], alternative="less")
+    _, p_ftld_ctrl = mannwhitneyu(dmean.loc["FTD"], dmean.loc["Control"], alternative="greater")
+    _, p_alsftd_als = mannwhitneyu(dmean.loc["ALS-FTD"], dmean.loc["ALS (pure)"], alternative="two-sided")
+    print(f"\nDonors: {n_donors}")
+    print(f"Donor-level MWU (FTD < ALS pure):     p={p_ftld_als:.3e}")
+    print(f"Donor-level MWU (FTD > Control):      p={p_ftld_ctrl:.3e}")
+    print(f"Donor-level MWU (ALS-FTD ≠ ALS pure): p={p_alsftd_als:.3e}")
+
+    # Genotype test inside the FTD group: donors carrying a variant in a gene whose
+    # pathology is TDP-43 (C9orf72, GRN, TBK1) vs tau (MAPT), from the NYGC
+    # donor table (ST1 C9 call and site-reported mutations, ST2 annotated gene).
+    geno = _ftd_genotypes(np.unique(donor_all[group_idx["FTD"]]))
+    ftd_d = dfs[dfs.group == "FTD"].groupby("donor")["s"].mean()
+    tdp = ftd_d[ftd_d.index.isin(geno[geno == "TDP-43"].index)]
+    tau = ftd_d[ftd_d.index.isin(geno[geno == "tau"].index)]
+    unk = ftd_d[~ftd_d.index.isin(geno.index)]
+    if len(tdp) and len(tau):
+        _, p_geno = mannwhitneyu(tdp, tau, alternative="two-sided")
+        auc_geno = float(roc_auc_score(np.r_[np.ones(len(tdp)), np.zeros(len(tau))], np.r_[tdp, tau]))
+    else:
+        p_geno, auc_geno = float("nan"), float("nan")
+    print(f"FTD genotype: TDP-43 genes n={len(tdp)} median={tdp.median():.3f} | "
+          f"MAPT n={len(tau)} median={tau.median():.3f} | unknown n={len(unk)} "
+          f"median={unk.median():.3f} | AUC {auc_geno:.3f} p={p_geno:.3g}")
 
     print("\nGenerating plot ...")
     _plot(
@@ -416,12 +471,13 @@ def main() -> None:
         "Disease Specificity Analysis — GSE153960 GPL24676",
         "=" * 65,
         "Training set : ALS Spectrum MND (pure + ALS-FTD) vs Non-Neurological Control",
+        "Model: within-cohort LightGBM (top-500 params, colsample rescaled), donor-grouped 5-fold CV",
         f"  ALS in training : {len(tr_als_idx)} (pure ALS={len(group_idx['ALS (pure)'])},"
         f" ALS-FTD={len(group_idx['ALS-FTD'])})",
         f"  Control         : {len(tr_ctrl_idx)}",
         f"Panel genes used  : {len(panel_cols)}/25",
         "",
-        "Group score distributions (honest: OOF for training groups, zero-shot for FTLD/PSP):",
+        "Group score distributions (honest: OOF for training groups, zero-shot for FTD):",
     ]
     for g, sc in honest_scores.items():
         lines.append(
@@ -431,19 +487,25 @@ def main() -> None:
         )
     lines += [
         "",
-        f"Train 5-fold CV AUC          : {TRAIN_CV_AUC:.4f}",
-        f"AUC ALS (pure) vs FTLD/PSP   : {auc_als_vs_ftld:.4f}",
+                f"AUC ALS (pure) vs FTD   : {auc_als_vs_ftld:.4f}",
         f"Bootstrap 95% CI             : [{ci_lo:.4f}, {ci_hi:.4f}]  (n={N_BOOTSTRAP})",
-        f"AUC ALS vs Control (5-fold CV): {auc_als_vs_ctrl:.4f}  "
+        f"AUC ALS vs Control (donor-grouped OOF): {auc_als_vs_ctrl:.4f}  "
         f"Bootstrap 95% CI [{ci_lo_cv:.4f}, {ci_hi_cv:.4f}]  (reference)",
         "",
-        f"Mann-Whitney U (FTLD/PSP < ALS pure) : p={p_ftld_als:.3e}",
-        f"Mann-Whitney U (FTLD/PSP > Control)  : p={p_ftld_ctrl:.3e}",
-        f"Mann-Whitney U (ALS-FTD ≠ ALS pure)  : p={p_alsftd_als:.3e}",
+        f"Donors: {n_donors}",
+        "Donor-level Mann-Whitney U (score z-scored within tissue, averaged per donor):",
+        f"  FTD < ALS pure     : p={p_ftld_als:.3e}",
+        f"  FTD > Control      : p={p_ftld_ctrl:.3e}",
+        f"  ALS-FTD ≠ ALS pure : p={p_alsftd_als:.3e}",
         "",
-        "Caution: 'Other Neurological Disorders' in GEO is a mixed group",
-        "(FTLD-TDP + PSP not sub-typed). Sub-type breakdown requires",
-        "paper supplementary metadata (Prudencio et al. 2020, PNAS).",
+        "FTD donors by genotype (NYGC ST1/ST2; donor mean of the fold-averaged score):",
+        f"  TDP-43 genes (C9orf72, GRN, TBK1): n={len(tdp)}  median={tdp.median():.4f}",
+        f"  MAPT (tau)                       : n={len(tau)}  median={tau.median():.4f}",
+        f"  no known mutation                : n={len(unk)}  median={unk.median():.4f}",
+        f"  TDP-43 vs MAPT: AUC={auc_geno:.4f}  MWU p={p_geno:.3g}",
+        "",
+        "The 'Other Neurological Disorders' group is clinical FTD (47 of 49 donors in",
+        "the NYGC donor table; one FTD with PSP), not a PSP series.",
     ]
     stat_out = SCRIPT_DIR / "disease_specificity_statistics.txt"
     stat_out.write_text("\n".join(lines))

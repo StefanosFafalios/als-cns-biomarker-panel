@@ -8,9 +8,9 @@
     per PC panel gene. Highlights the spread that the single replaceability
     % number collapses.
 
-(3) substitution_roc.png — for GSE76220 and GSE122649, overlay the baseline
-    14-of-15 ROC against the protein-coding-substituted ROC, showing visible
-    gain.
+(3) substitution_roc_all.png — for GSE76220 and GSE122649, overlay the ROC of
+    the critical panel's cohort-present genes against the same panel with its
+    vocabulary gaps filled by cross_cohort_substitution.py's surrogates.
 
 (4) repl_module_heatmap.png — for each PC panel gene, the count of valid
     replacement candidates broken down by biotype (protein-coding /
@@ -23,7 +23,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-import warnings
 from pathlib import Path
 
 import matplotlib
@@ -267,7 +266,13 @@ def fig_candidate_boxplot() -> tuple[Path, dict]:
         patch.set_facecolor(c)
         patch.set_alpha(0.6)
     # Baseline reference
-    baseline = 0.9469  # fast-LGBM baseline used by gene_replacement.py
+    # baseline written by gene_replacement.py (donor-grouped within-cohort model)
+    baseline = float(
+        re.search(
+            r"Baseline panel AUC[^:]*:\s+([\d.]+)",
+            (SCRIPT_DIR / "gene_replacement_statistics.txt").read_text(),
+        ).group(1)
+    )
     threshold = baseline - 0.002
     ax.axhline(
         baseline, color="black", ls="--", lw=0.8, label=f"Baseline AUC = {baseline:.4f}"
@@ -303,168 +308,63 @@ def fig_candidate_boxplot() -> tuple[Path, dict]:
 # Figure 3: substitution-augmented ROC overlay
 # ---------------------------------------------------------------------------
 
-# Which pseudogene gap each cohort has, and the protein-coding surrogate that
-# cross_cohort_substitution.py nominated for it. The AUCs are NOT recorded here:
-# they are recomputed below from the current data. Earlier versions cached them
-# (GSE76220 baseline 0.9688) and those values survived two GSE76220 corrections
-# without being noticed, because nothing read them.
-_GAP_WINS = [
-    {
-        "cohort": "GSE76220",
-        "missing": "HERC2P8",
-        "sub_symbol": "ZNF586",
-        "sub_ensg": None,  # filled in at runtime
-        "use_symbol_match": True,
-    },
-    {
-        "cohort": "GSE122649",
-        "missing": "HERC2P8",
-        "sub_symbol": "XAF1",
-        "sub_ensg": None,
-        "use_symbol_match": True,
-    },
-]
-
-
-# Need to find the ENSG IDs of ZNF586, XAF1 via gene_replacement_results.csv
-def _resolve_sub_ensg(repl_df: pd.DataFrame) -> dict:
-    """Pull the candidate ENSG for each substitution from the replacement table."""
-    import mygene
-
-    mg = mygene.MyGeneInfo()
-    syms = list({w["sub_symbol"] for w in _GAP_WINS})
-    res = mg.querymany(
-        syms, scopes="symbol", fields="ensembl.gene", species="human", verbose=False
-    )
-    out = {}
-    for r in res:
-        if r.get("notfound"):
-            continue
-        sym = r["query"]
-        ens = r.get("ensembl", {})
-        if isinstance(ens, list):
-            ens = ens[0]
-        eg = ens.get("gene") if ens else None
-        if eg:
-            out[sym] = eg
-    return out
+_SUB_JSON = SCRIPT_DIR / "cross_cohort_substitution_surrogates.json"
 
 
 def fig_substitution_roc() -> tuple[Path, dict]:
+    """Baseline vs surrogate-filled critical panel on GSE76220 and GSE122649.
+
+    The surrogates are read from cross_cohort_substitution.py's output, never
+    hardcoded: two earlier hardcoded sets survived reruns that had replaced them.
+    """
     from sklearn.metrics import roc_auc_score, roc_curve
-    from sklearn.preprocessing import StandardScaler
 
-    warnings.filterwarnings("ignore")
-
-    params_raw = json.loads(_PARAMS_PATH.read_text())
-    params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
-
-    df_panel = pd.read_csv(_PANEL_CSV)
-    feat_col = next(
-        c for c in df_panel.columns if "feature" in c.lower() or "ensg" in c.lower()
-    )
-    sym_col = next(c for c in df_panel.columns if "symbol" in c.lower())
-    feat25 = df_panel[feat_col].tolist()
-    sym25 = df_panel[sym_col].tolist()
-    feat25_bases = [f.split(".")[0] for f in feat25]
-    crit_idx = [sym25.index(s) for s in critical_panel_symbols()]
-    panel_syms = [sym25[i] for i in crit_idx]
-    panel_bases = [feat25_bases[i] for i in crit_idx]
-
-    print("Loading GPL24676 ...")
+    params = dict(json.loads(_PARAMS_PATH.read_text()), colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    subs = json.loads(_SUB_JSON.read_text())  # {cohort: [[missing, symbol, ensg], ...]}
+    panel = pd.read_csv(_PANEL_CSV)
+    bases = dict(zip(panel["symbol"], panel["feature"].str.split(".").str[0]))
+    crit = critical_panel_symbols()
     _, y_train, X_train_log, feat_train = _load_gpl24676_ctd()
-    feat_base_to_col = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
-    print("Loading GSE76220 ...")
-    X76, vocab76, y76 = _load_gse76220()
-    v76 = {s: i for i, s in enumerate(vocab76)}
-    print("Loading GSE122649 ...")
-    X122, vocab122, y122 = _load_gse122649()
-    v122 = {s: i for i, s in enumerate(vocab122)}
-
-    sub_ensg = _resolve_sub_ensg(pd.read_csv(_REPL_CSV))
-
-    cohorts = {
-        "GSE76220": (y76, X76, v76, True),
-        "GSE122649": (y122, X122, v122, True),
-    }
+    tr_col = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
-    for ax, win in zip(axes, [_GAP_WINS[0], _GAP_WINS[1]]):
-        cohort = win["cohort"]
-        y_te, X_te, v_map, by_sym = cohorts[cohort]
-        # Baseline panel: drop everything cohort-missing.
-        missing_in_cohort = set()
-        for i, (sym, base) in enumerate(zip(panel_syms, panel_bases)):
-            key = sym if by_sym else base
-            if key not in v_map:
-                missing_in_cohort.add(i)
-        included = [i for i in range(15) if i not in missing_in_cohort]
-
-        # Build baseline matrices
-        train_cols = [feat_base_to_col[panel_bases[i]] for i in included]
-        Xtr = X_train_log[:, train_cols]
-        te_keys = [panel_syms[i] if by_sym else panel_bases[i] for i in included]
-        Xte = X_te[:, [v_map[k] for k in te_keys]]
-        Ztr, Zte = zero_shot_scale(Xtr, Xte, cohort)
-        scores_base = _ensemble_scores(Ztr, y_train, Zte, params, seeds=tuple(range(5)))
-        auc_base = roc_auc_score(y_te, scores_base)
-        fpr_b, tpr_b, _ = roc_curve(y_te, scores_base)
-
-        # Substitution: add the substitute column to baseline
-        eg = sub_ensg.get(win["sub_symbol"])
-        if eg is None or eg not in feat_base_to_col:
-            print(f"  No ENSG for {win['sub_symbol']} — skip plot for {cohort}")
-            continue
-        if win["sub_symbol"] not in v_map:
-            print(f"  {win['sub_symbol']} not in {cohort} vocab — skip")
-            continue
-        tr_col = X_train_log[:, feat_base_to_col[eg]].reshape(-1, 1)
-        te_col = X_te[:, v_map[win["sub_symbol"]]].reshape(-1, 1)
-        Xtr2 = np.hstack([Xtr, tr_col])
-        Xte2 = np.hstack([Xte, te_col])
-        sc2 = StandardScaler().fit(Xtr2)
-        scores_sub = _ensemble_scores(
-            sc2.transform(Xtr2),
-            y_train,
-            sc2.transform(Xte2),
-            params,
-            seeds=tuple(range(5)),
+    meta: dict[str, float] = {}
+    for ax, (cohort, loader) in zip(axes, (("GSE76220", _load_gse76220), ("GSE122649", _load_gse122649))):
+        X_te, vocab, y_te = loader()
+        v = {sym: i for i, sym in enumerate(vocab)}
+        present = [(sym, bases[sym]) for sym in crit if sym in v]
+        fills = [(m, sym, e) for m, sym, e in subs.get(cohort, []) if sym in v and e in tr_col]
+        arms = (
+            (f"Baseline {len(present)}/{len(crit)}", present, "#888"),
+            ("Filled: " + ", ".join(f"{m}$\\to${sym}" for m, sym, _ in fills),
+             present + [(sym, e) for _, sym, e in fills], "#1565C0"),
         )
-        auc_sub = roc_auc_score(y_te, scores_sub)
-        fpr_s, tpr_s, _ = roc_curve(y_te, scores_sub)
-
-        # Plot
+        for label, genes, colour in arms:
+            Ztr, Zte = zero_shot_scale(
+                X_train_log[:, [tr_col[b] for _, b in genes]], X_te[:, [v[g] for g, _ in genes]], cohort
+            )
+            scores = _ensemble_scores(Ztr, y_train, Zte, params, seeds=tuple(range(5)))
+            fpr, tpr, _ = roc_curve(y_te, scores)
+            auc = roc_auc_score(y_te, scores)
+            ax.plot(fpr, tpr, color=colour, lw=2.0, label=f"{label}  AUC = {auc:.3f}")
+            meta[f"{cohort} {label.split(':')[0].split(' ')[0]}"] = round(float(auc), 4)
         ax.plot([0, 1], [0, 1], color="grey", ls=":", lw=0.7)
-        ax.plot(
-            fpr_b,
-            tpr_b,
-            color="#888",
-            lw=2.0,
-            label=f"Baseline 14/15 (drop {win['missing']})  AUC = {auc_base:.3f}",
-        )
-        ax.plot(
-            fpr_s,
-            tpr_s,
-            color="#1565C0",
-            lw=2.0,
-            label=f"With {win['missing']}$\\to${win['sub_symbol']}  AUC = {auc_sub:.3f}",
-        )
         ax.set_xlabel("False positive rate")
         ax.set_ylabel("True positive rate")
         ax.set_title(f"{cohort} (n={len(y_te)})", fontsize=11)
-        ax.legend(loc="lower right", fontsize=9)
+        ax.legend(loc="lower right", fontsize=8)
         ax.grid(alpha=0.3)
 
     fig.suptitle(
-        "Substitution-augmented ROC: filling pseudogene gaps with protein-coding "
-        "surrogates from the genome-wide replaceability screen",
+        "Critical-panel vocabulary gaps filled with protein-coding surrogates "
+        "(the valid protein-coding candidate most co-expressed with the missing gene)",
         fontsize=11,
     )
     plt.tight_layout()
-    out = SCRIPT_DIR / "substitution_roc.png"
+    out = SCRIPT_DIR / "substitution_roc_all.png"
     plt.savefig(out, dpi=160, bbox_inches="tight")
     plt.close()
-    return out, {"plot": str(out)}
+    return out, meta
 
 
 # ---------------------------------------------------------------------------

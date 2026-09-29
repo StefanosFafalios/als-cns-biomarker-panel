@@ -12,7 +12,8 @@ Also evaluates:
   - The top-N greedy selections applied to GSE76220 (secondary objective).
   - All pairwise combinations of the top-4 single-swap improvers.
 
-Fast model (n_estimators=100) for CV; n_estimators=300 for zero-shot.
+The paper's models: within-cohort LightGBM with donor-grouped CV, and the
+zero-shot LightGBM (top-500 params, colsample_bytree 1.0).
 
 Outputs:
   panel_variant_greedy.png
@@ -41,7 +42,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
-from sklearn.model_selection import StratifiedKFold  # noqa: E402
+from sklearn.model_selection import StratifiedGroupKFold  # noqa: E402
 from utils import PanelLGBMClassifier as LGBMClassifier  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
@@ -55,7 +56,6 @@ _VARIANT_STATS = SCRIPT_DIR / "panel_variant_cv_statistics.txt"
 
 RANDOM_STATE = 42
 N_FOLDS = 5
-FAST_N_EST = 100
 
 _GSE122649_RAW_TAR = ALS_DIR_RES / "GSE122649" / "GSE122649_RAW.tar"
 _SOFT_URL_122649 = (
@@ -78,13 +78,14 @@ _SINGLE_SWAP_CODING: list[dict] = []  # populated from panel_variant_cv_statisti
 # ---------------------------------------------------------------------------
 
 
-def _load_prefilter() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
+def _load_prefilter() -> tuple[np.ndarray, dict[str, int], np.ndarray, np.ndarray]:
     names = _PREFILTER_NAMES.read_text().splitlines()
     base_to_col = {n.split(".")[0]: i for i, n in enumerate(names)}
     X = np.load(_PREFILTER_X, mmap_mode="r")
     (ds,) = load_dataset("GSE153960", platform="GPL24676", resources_dir=ALS_DIR_RES)
     y = ds.y.values.astype(int)
-    return X, base_to_col, y
+    donors = ds.meta.loc[ds.y.index, "subject id"].to_numpy()
+    return X, base_to_col, y, donors
 
 
 def _load_train_raw() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
@@ -173,13 +174,14 @@ def _load_gse122649() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
 def _cv_auc(
     X_pre: np.ndarray,
     y: np.ndarray,
+    groups: np.ndarray,
     cols: list[int],
     params: dict,
 ) -> float:
     X = np.asarray(X_pre[:, cols], dtype=np.float32)
-    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    skf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     aucs = []
-    for tr, te in skf.split(X, y):
+    for tr, te in skf.split(X, y, groups):
         clf = LGBMClassifier(**params)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
@@ -265,9 +267,10 @@ class PanelState:
             sw = self.swap_options[sym]
             pre_cols[idx] = sw["pre_col"]
             tr_cols[idx] = sw["tr_col"]
+            # a replacement the cohort lacks drops the slot there: keeping the original
+            # gene's column would test on a different gene than the model was trained on
             for cname, sym_map in self.cohort_sym_maps.items():
-                if repl_sym and repl_sym in sym_map:
-                    coh_cols[cname][idx] = sym_map[repl_sym]
+                coh_cols[cname][idx] = sym_map.get(repl_sym, -1) if repl_sym else -1
 
         return pre_cols, tr_cols, coh_cols
 
@@ -292,23 +295,13 @@ def main() -> None:
 
     panel_df = pd.read_csv(_PANEL_CSV).reset_index(drop=True)
     base_params = json.loads(_PARAMS_PATH.read_text())
-    fast_params = {
-        **base_params,
-        "n_estimators": FAST_N_EST,
-        "colsample_bytree": 1.0,
-        "verbose": -1,
-        "n_jobs": 1,
-    }
-    zs_params = {
-        **base_params,
-        "n_estimators": 300,
-        "colsample_bytree": 1.0,
-        "verbose": -1,
-        "n_jobs": -1,
-    }
+    # the paper's two models: within-cohort (top-500 params, colsample rescaled by
+    # PanelLGBMClassifier, donor-grouped folds) and zero-shot (colsample 1.0)
+    cv_params = {**base_params, "verbose": -1, "n_jobs": -1}
+    zs_params = {**base_params, "colsample_bytree": 1.0, "verbose": -1, "n_jobs": -1}
 
     print("\n[1] Loading data ...")
-    X_pre, pre_b2c, y_pre = _load_prefilter()
+    X_pre, pre_b2c, y_pre, donors = _load_prefilter()
     X_tr, tr_b2c, y_tr = _load_train_raw()
     X_76, sym_76, y_76 = _load_gse76220()
     X_122, sym_122, y_122 = _load_gse122649()
@@ -370,7 +363,7 @@ def main() -> None:
     # -----------------------------------------------------------------------
     print("\n[3] Evaluating baseline ...")
     pre_b, tr_b, coh_b = state.cols()
-    baseline_cv = _cv_auc(X_pre, y_pre, pre_b, fast_params)
+    baseline_cv = _cv_auc(X_pre, y_pre, donors, pre_b, cv_params)
     baseline_zs: dict[str, float] = {}
     for cname, (X_te, sym_map, y_te) in cohort_data.items():
         paired = [(tc, ec) for tc, ec in zip(tr_b, coh_b[cname]) if tc >= 0 and ec >= 0]
@@ -429,7 +422,7 @@ def main() -> None:
 
         # Evaluate full state
         pre_c, tr_c, coh_c = state.cols()
-        cv = _cv_auc(X_pre, y_pre, pre_c, fast_params)
+        cv = _cv_auc(X_pre, y_pre, donors, pre_c, cv_params)
 
         zs_full: dict[str, float] = {}
         for cname, (X_te, sym_map, y_te) in cohort_data.items():
@@ -461,6 +454,12 @@ def main() -> None:
             f"(+{best_gain:.4f})  ZS_76={zs_full.get('GSE76220', float('nan')):.4f}"
         )
 
+    # accepted swaps, read by replacement_panel_heldout.py
+    (SCRIPT_DIR / "panel_variant_greedy_swaps.json").write_text(json.dumps({
+        h["swapped"]: [h["replacement"], state.swap_options[h["swapped"]]["repl_base"]]
+        for h in greedy_history
+    }, indent=1))
+
     # -----------------------------------------------------------------------
     # Max-coding panel (all protein-coding swaps simultaneously)
     # -----------------------------------------------------------------------
@@ -469,7 +468,7 @@ def main() -> None:
     state_all = PanelState(panel_df, pre_b2c, tr_b2c, cohort_sym_maps, single_swaps)
     state_all.active = all_swaps
     pre_all, tr_all, coh_all = state_all.cols()
-    cv_all = _cv_auc(X_pre, y_pre, pre_all, fast_params)
+    cv_all = _cv_auc(X_pre, y_pre, donors, pre_all, cv_params)
     zs_all: dict[str, float] = {}
     for cname, (X_te, sym_map, y_te) in cohort_data.items():
         paired = [
@@ -591,7 +590,7 @@ def main() -> None:
     lines = [
         "Greedy Druggable Panel Optimisation",
         "=" * 80,
-        f"Baseline (fast model CV): {baseline_cv:.4f}",
+        f"Baseline (donor-grouped CV, within-cohort model): {baseline_cv:.4f}",
     ]
     for c, v in baseline_zs.items():
         lines.append(f"Baseline zero-shot {c}: {v:.4f}")

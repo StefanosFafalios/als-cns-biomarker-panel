@@ -120,8 +120,8 @@ run_step "03e_shap500_artifact"       shap500_artifact_audit.py             "<5m
 # C. STABILITY AND MULTI-ALGORITHM ROBUSTNESS (§3.1, S19)
 # =============================================================================
 run_step "21_multi_algorithm"         multi_algorithm_robustness.py         "~30m"
-run_step "21a_stability_selection"    stability_selection.py                "~45m"
-run_step "21b_stability_module"       stability_module.py                   "~5m"
+# 21a/21b run after step 27 (section K): the module-aware stability reads the
+# replacement screen's gene_replacement_results.csv.
 
 # =============================================================================
 # D. EXTERNAL VALIDATION — CNS COHORTS (§3.4)
@@ -186,7 +186,7 @@ run_step "15b_panel_mb_postprocess"   panel_mb_postprocess.py               "<5m
 # G. DRUG TARGET ANNOTATION (§3.13, tab:bio_evidence, tab:druggability)
 # =============================================================================
 run_step "07_drug_targets"            drug_targets.py                       "21s (DGIdb + OpenTargets; network-bound)"
-run_step "07ab_druggable_replacements" druggable_replacement_targets.py     "~3m (DGIdb druggable co-regulated surrogates; needs 27)"
+# 07ab runs after step 27 (section K): it reads gene_replacement_results.csv.
 run_step "07a_gtex_specificity"       gtex_tissue_specificity.py            "~10m (GTEx API)"
 
 # =============================================================================
@@ -214,19 +214,27 @@ run_step "14_blood_gse234297"         blood_validation_gse234297.py         "~10
 # K. GENE REPLACEMENT AND CROSS-COHORT SUBSTITUTION (§3.8, NEW)
 # Genome-wide non-inferiority screen + replaceability-informed substitution.
 # =============================================================================
-run_step "27_gene_replacement"        gene_replacement.py                   "~3h (genome-wide screen)"
+run_step "27_gene_replacement"        gene_replacement.py                   "~1.5h (genome-wide screen; measured 2026-09-28)"
 run_step "27a_gene_replacement_clean" gene_replacement_clean.py             "~5m (artifact correction)"
 run_step "27b_gene_replacement_plot"  gene_replacement_plot15.py            "<5m"
 run_step "27c_replaceability_scatter" replaceability_scatter.py             "<5m"
 run_step "27d_panel_variant_cv"       panel_variant_cv.py                   "42s"
 run_step "27e_panel_variant_greedy"   panel_variant_greedy.py               "38s"
-run_step "27f_replacement_panel_loo"  replacement_panel_loo.py              "~3m (measured 2026-08-04; the ~9h estimate was taken under heavy contention)"
+# 27e picks its swaps on GSE122649, so 27f tests them on cohorts the search never saw
+# (donor-disjoint GPL16791 primary, non-inferiority margin 0.01). It replaces the
+# replacement-panel LOO, which weighted GSE122649 at 38/58 and so re-used the selection cohort.
+run_step "27f_replacement_heldout"    replacement_panel_heldout.py          "~5m (reads 27e swaps)"
 run_step "27g_cross_cohort_subst"     cross_cohort_substitution.py          "~13m (depends on 27)"
 # 07aa must follow 27g: the surrogate assignments are read from
 # cross_cohort_substitution_statistics.txt, not hardcoded (they were until
 # 2026-08-04, and two of three were wrong).
 run_step "07aa_drug_surrogates"       drug_targets_surrogates.py            "2s (surrogates derived from 27g output; must follow it)"
 run_step "27h_replaceability_figs"    replaceability_figures.py             "33s (depends on 24, 27, 27g)"
+run_step "07ab_druggable_replacements" druggable_replacement_targets.py     "~3m (DGIdb druggable co-regulated surrogates; needs 27)"
+# 21a reruns the published SHAP ranking on 100 donor-level bootstraps and saves
+# each top 25; 21b reads those draws plus the step-27 replacement modules.
+run_step "21a_stability_selection"    stability_selection.py                "~5m (100 donor-level bootstraps x published ranking)"
+run_step "21b_stability_module"       stability_module.py                   "<1m (reads 21a draws and 27 modules)"
 
 # =============================================================================
 # L. CALIBRATION AND LINEAR-MODEL SENSITIVITY (S17, S18)

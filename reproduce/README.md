@@ -198,7 +198,7 @@ the `xr` LaTeX package (`\externaldocument{...}` in each preamble).
 | H | Cell-type deconvolution + progression (§3.9, S7, deconv-robustness) | 3 scripts (incl. cell-type-assignment bootstrap) |
 | I | Disease specificity + subtype (§3.10, §3.7, S6) | 4 scripts |
 | J | Regional scoring + blood validation (§3.4.3, §3.4.4) | 2 scripts |
-| K | Gene replacement + cross-cohort substitution (§3.8) | 9 scripts (incl. 2 new analyses) |
+| K | Gene replacement, held-out test of the replacement panel, cross-cohort substitution, stability selection (§3.8) | 13 scripts |
 | L | Calibration + linear-model sensitivity (S17, S18, ComBat) | 6 scripts (incl. ComBat batch correction) |
 | M | With-replacement validation — §3.8 negative control (canonical KRTAP/family-filtered replacement assignment; steps 05/05b mirror it) | 1 script |
 | N | Case-strengthening / robustness (S7 reference deconvolution, incremental-over-composition, random-panel null, OpenTargets genetic support, single-nucleus per-cell) | 6 scripts (BRETIGEA deconv, incremental composition, random null, genetic support, snRNA ×2) |

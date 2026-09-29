@@ -2,9 +2,12 @@
 
 Reviewer M5: Cross-architecture Jaccard 0.06-0.11 is weak; the standard
 antidote is stability selection. This script:
-  - Bootstraps 100 stratified resamples of the 874 training samples.
-  - In each replicate, fits LightGBM on the 3,704-gene SFM matrix and
-    records the top-25 SHAP-ranked features.
+  - Draws 100 donor-level bootstraps of the 874 training samples (donors
+    resampled with replacement within each diagnosis, all of a donor's
+    samples kept together, since GPL24676 has several regions per donor).
+  - In each replicate, reruns the published ranking steps on the 3,704-gene
+    SFM pool (nested_panel_cv._rank: SHAP top 500 with the top-500 LightGBM,
+    then SHAP re-rank) and records the top 25.
   - Reports per-gene selection frequency across replicates.
   - Reports which of the 25 panel members survive a frequency threshold.
 
@@ -16,6 +19,7 @@ Outputs:
   stability_selection.csv          (per-gene selection frequency, top 50)
   stability_selection_statistics.txt
   stability_selection.png
+  stability_selection_bootstraps.json (each bootstrap's top 25; read by stability_module.py)
 """
 
 from __future__ import annotations
@@ -36,12 +40,15 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
+sys.path.insert(0, str(SCRIPT_DIR))
+
+from nested_panel_cv import _rank  # noqa: E402
 from utils import load_dataset  # noqa: E402
 
 N_BOOTSTRAP = 100
 TOP_K = 25
 RANDOM_STATE = 42
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
+BOOTSTRAPS_JSON = SCRIPT_DIR / "stability_selection_bootstraps.json"
 _SFM_RANKING = SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv"
 _PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
@@ -62,34 +69,20 @@ def _load_sfm_matrix() -> tuple[np.ndarray, list[str]]:
 def _bootstrap_iteration(
     X: np.ndarray,
     y: np.ndarray,
+    donor_rows: dict[int, dict[str, np.ndarray]],
     rng: np.random.Generator,
-    params: dict,
     sfm_features: list[str],
-) -> set[str]:
-    import shap
-    from utils import PanelLGBMClassifier as LGBMClassifier
-
-    # Stratified resample
-    pos_idx = np.where(y == 1)[0]
-    neg_idx = np.where(y == 0)[0]
-    n_pos = rng.choice(pos_idx, size=len(pos_idx), replace=True)
-    n_neg = rng.choice(neg_idx, size=len(neg_idx), replace=True)
-    idx = np.concatenate([n_pos, n_neg])
-    rng.shuffle(idx)
-    X_b, y_b = X[idx], y[idx]
-
-    clf = LGBMClassifier(**params)
+) -> list[str]:
+    """One donor-level stratified bootstrap; return its top-K genes, best first."""
+    parts = []
+    for label in (1, 0):
+        rows = donor_rows[label]
+        picks = rng.choice(list(rows), size=len(rows), replace=True)
+        parts += [rows[d] for d in picks]
+    idx = np.concatenate(parts)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
-        clf.fit(X_b, y_b)
-        # SHAP top-25 on the bootstrap sample
-        explainer = shap.TreeExplainer(clf)
-        shap_vals = explainer.shap_values(X_b)
-        if isinstance(shap_vals, list):
-            shap_vals = shap_vals[1]
-        mean_abs = np.abs(shap_vals).mean(axis=0)
-        top_idx = np.argsort(mean_abs)[-TOP_K:]
-    return {sfm_features[i] for i in top_idx}
+        return _rank(X[idx], y[idx], sfm_features)[:TOP_K]
 
 
 def main() -> None:
@@ -101,12 +94,12 @@ def main() -> None:
     y = ds.y.values.astype(int)
     print(f"  X: {X.shape}  ALS={int(y.sum())}  Ctrl={len(y) - int(y.sum())}")
 
-    params = json.loads(_PARAMS_PATH.read_text())
-    params["colsample_bytree"] = 1.0
-    params["random_state"] = RANDOM_STATE
-    params["n_estimators"] = 600  # reduce for bootstrap speed
-    # disable verbose
-    params["verbosity"] = -1
+    groups = ds.meta.loc[ds.y.index, "subject id"].to_numpy()
+    donor_rows = {
+        label: {d: np.flatnonzero(groups == d) for d in np.unique(groups[y == label])}
+        for label in (1, 0)
+    }
+    print(f"  donors: {len(donor_rows[1])} ALS, {len(donor_rows[0])} control")
 
     panel_df = pd.read_csv(_PANEL_CSV)
     panel_features = set(panel_df["feature"].tolist())
@@ -114,12 +107,14 @@ def main() -> None:
 
     rng = np.random.default_rng(RANDOM_STATE)
     counts: dict[str, int] = {}
+    boots: list[list[str]] = []
     import time
 
     print(f"\nRunning {N_BOOTSTRAP} bootstrap iterations ...")
     t_start = time.time()
     for b in range(N_BOOTSTRAP):
-        top = _bootstrap_iteration(X, y, rng, params, sfm_features)
+        top = _bootstrap_iteration(X, y, donor_rows, rng, sfm_features)
+        boots.append(top)
         for f in top:
             counts[f] = counts.get(f, 0) + 1
         if (b + 1) % 10 == 0:
@@ -127,6 +122,8 @@ def main() -> None:
                 f"  bootstrap {b + 1}/{N_BOOTSTRAP}  elapsed: {time.time() - t_start:.1f}s",
                 flush=True,
             )
+
+    BOOTSTRAPS_JSON.write_text(json.dumps(boots))
 
     # Build frequency table
     rows = []
@@ -168,7 +165,7 @@ def main() -> None:
 
     # Statistics file
     lines = [
-        f"Stability selection — {N_BOOTSTRAP} stratified bootstraps × top-{TOP_K} SHAP on 3,704 SFM genes",
+        f"Stability selection — {N_BOOTSTRAP} donor-level bootstraps × published ranking steps, top-{TOP_K} of the 3,704 SFM genes",
         "=" * 70,
         "",
         "Panel gene selection frequencies:",

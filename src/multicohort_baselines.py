@@ -216,7 +216,7 @@ def main() -> None:
     panel_symbols = panel["symbol"].tolist()
 
     print("Loading GPL24676 training set ...")
-    X_train_raw, feat_train, y_train, _ = _load_platform("GPL24676")
+    X_train_raw, feat_train, y_train, _, _ = _load_platform("GPL24676")
     X_train_log = np.log1p(X_train_raw)
     # CTD is discovery-side only; baselines use raw log1p (uniform with all cohorts)
     X_tr = _extract_panel(X_train_log, feat_train, panel_features)
@@ -229,7 +229,7 @@ def main() -> None:
 
     # Cohort 1: GPL16791 (Ensembl ID match, full pipeline)
     print("\nGPL16791 ...")
-    X_test_raw, feat_test, y_test, _ = _load_platform("GPL16791")
+    X_test_raw, feat_test, y_test, _, _ = _load_platform("GPL16791")
     X_test_log = np.log1p(X_test_raw)
     X_te = _extract_panel(X_test_log, feat_test, panel_features)
     all_results.extend(_score_cohort("GPL16791", X_tr, y_train, X_te, y_test))

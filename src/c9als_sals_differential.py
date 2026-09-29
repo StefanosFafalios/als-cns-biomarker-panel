@@ -57,6 +57,9 @@ from scipy.stats import mannwhitneyu
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
+sys.path.insert(0, str(Path(__file__).parent))
+
+from nygc_clinical_association import _donor_means  # noqa: E402
 from utils import _load_suppl_expression, _parse_series_matrix  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
@@ -263,8 +266,7 @@ def main() -> None:
     import json
 
     from sklearn.metrics import roc_auc_score
-    from sklearn.model_selection import StratifiedKFold
-    from sklearn.preprocessing import StandardScaler
+    from sklearn.model_selection import StratifiedGroupKFold
     from utils import PanelLGBMClassifier as LGBMClassifier
 
     print("=" * 65)
@@ -295,10 +297,25 @@ def main() -> None:
     als_ftd_mask = grp.str.match(r"^ALS Spectrum MND, Other Neurological Dis", na=False)
     ctrl_mask = grp.str.match(r"^Non-Neurological Control", na=False)
 
-    n_als = int(als_mask.sum())
-    n_ftd = int(als_ftd_mask.sum())
-    n_ctrl = int(ctrl_mask.sum())
-    print(f"  Pure ALS: {n_als} | ALS-FTD: {n_ftd} | Control: {n_ctrl}")
+    # GPL24676 holds several regions per donor, so every test is run at donor level:
+    # each gene is z-scored within tissue, averaged per donor (as in
+    # nygc_clinical_association.py), and donors, not samples, are compared.
+    keep = (als_mask | als_ftd_mask | ctrl_mask).values
+    tissue = meta_df["tissue"].astype(str)[keep]
+    donor = meta_df["subject id"].astype(str)[keep]
+    donor_group = grp[keep].groupby(donor.values).first()
+    d_als = (donor_group == "ALS Spectrum MND").values
+    d_ftd = donor_group.str.match(r"^ALS Spectrum MND, Other Neurological Dis").values
+    d_ctrl = donor_group.str.match(r"^Non-Neurological Control").values
+
+    def _donor_matrix(rows: list[int]) -> np.ndarray:
+        vals = pd.DataFrame(X_log[rows][:, keep].T, index=donor.index)
+        return _donor_means(vals, tissue, donor).loc[donor_group.index].to_numpy()
+
+    n_als, n_ftd, n_ctrl = int(d_als.sum()), int(d_ftd.sum()), int(d_ctrl.sum())
+    n_s = (int(als_mask.sum()), int(als_ftd_mask.sum()), int(ctrl_mask.sum()))
+    print(f"  Donors: pure ALS {n_als} | ALS-FTD {n_ftd} | control {n_ctrl}")
+    print(f"  Samples: pure ALS {n_s[0]} | ALS-FTD {n_s[1]} | control {n_s[2]}")
 
     # -----------------------------------------------------------------------
     # Analysis 1: Panel-gene ALS-FTD vs pure ALS comparison
@@ -316,11 +333,11 @@ def main() -> None:
             print(f"  [WARN] {sym} not found in expression matrix")
             continue
         idx = feature_names.index(fname)
-        expr_vec = X_log[idx, :]
+        expr_vec = _donor_matrix([idx])[:, 0]
 
-        als_expr = expr_vec[als_mask.values]
-        ftd_expr = expr_vec[als_ftd_mask.values]
-        ctrl_expr = expr_vec[ctrl_mask.values]
+        als_expr = expr_vec[d_als]
+        ftd_expr = expr_vec[d_ftd]
+        ctrl_expr = expr_vec[d_ctrl]
 
         rb_ftd_als = _rank_biserial(ftd_expr, als_expr)  # + = higher in ALS-FTD
         rb_als_ctrl = _rank_biserial(als_expr, ctrl_expr)  # + = higher in ALS
@@ -368,7 +385,7 @@ def main() -> None:
     # -----------------------------------------------------------------------
     # Analysis 3: Within-ALS subtype classification (25-gene panel)
     # -----------------------------------------------------------------------
-    print("\n[3] Within-ALS subtype classification (5-fold CV) ...")
+    print("\n[3] Within-ALS subtype classification (donor-grouped 5-fold CV) ...")
 
     als_any_mask = als_mask | als_ftd_mask
     # Build feature matrix using all 25 panel genes
@@ -386,27 +403,19 @@ def main() -> None:
 
     print(f"  Samples: ALS-FTD={y_als.sum()}, pure ALS={(y_als == 0).sum()}")
 
-    params = json.loads(_PARAMS_PATH.read_text())
-    params["colsample_bytree"] = 1.0
-    params["verbose"] = -1
-    cv_params = {
-        **params,
-        "min_child_samples": max(1, params.get("min_child_samples", 20) // 4),
-    }
+    # the paper's within-cohort model (top-500 params; PanelLGBMClassifier rescales
+    # colsample to the panel size) with folds grouped by donor
+    cv_params = {**json.loads(_PARAMS_PATH.read_text()), "verbose": -1}
+    groups_als = meta_df["subject id"].astype(str)[als_any_mask].to_numpy()
 
-    scaler = StandardScaler()
-    X_als_sc = scaler.fit_transform(X_als).astype(np.float32)
-
-    skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+    skf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
     cv_scores = np.zeros(len(y_als))
-    for fold, (tr_idx, te_idx) in enumerate(skf.split(X_als_sc, y_als)):
+    for fold, (tr_idx, te_idx) in enumerate(skf.split(X_als, y_als, groups_als)):
         clf = LGBMClassifier(**cv_params)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore")
-            clf.fit(X_als_sc[tr_idx], y_als[tr_idx])
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            cv_scores[te_idx] = clf.predict_proba(X_als_sc[te_idx])[:, 1]
+            clf.fit(X_als[tr_idx], y_als[tr_idx])
+            cv_scores[te_idx] = clf.predict_proba(X_als[te_idx])[:, 1]
         fold_auc = float(roc_auc_score(y_als[te_idx], cv_scores[te_idx]))
         print(f"  Fold {fold + 1} AUC: {fold_auc:.4f}")
 
@@ -425,29 +434,22 @@ def main() -> None:
     sfm_features: list[str] = shap_df["feature"].tolist()
 
     sfm_records: list[dict] = []
-    n_genes = len(sfm_features)
-    als_idx = np.where(als_mask.values)[0]
-    ftd_idx = np.where(als_ftd_mask.values)[0]
-
+    matched = []
     for i, feat in enumerate(sfm_features):
-        if (i + 1) % 500 == 0:
-            print(f"  {i + 1}/{n_genes} ...")
-        ensg_base = feat.split(".")[0]
-        fname = _match_feature(ensg_base, feature_names)
-        if fname is None:
-            continue
-        idx = feature_names.index(fname)
-        als_vals = X_log[idx, als_idx]
-        ftd_vals = X_log[idx, ftd_idx]
-        rb = _rank_biserial(ftd_vals, als_vals)
-        _, p = mannwhitneyu(ftd_vals, als_vals, alternative="two-sided")
+        fname = _match_feature(feat.split(".")[0], feature_names)
+        if fname is not None:
+            matched.append((i, feature_names.index(fname)))
+    D = _donor_matrix([j for _, j in matched])
+    ftd_d, als_d = D[d_ftd], D[d_als]
+    _, p_all = mannwhitneyu(ftd_d, als_d, alternative="two-sided", axis=0)
+    for k, (i, _) in enumerate(matched):
         sfm_records.append(
             {
                 "shap_rank": shap_df.iloc[i]["rank"],
-                "feature": feat,
+                "feature": sfm_features[i],
                 "mean_abs_shap": shap_df.iloc[i]["mean_abs_shap"],
-                "rb_ftd_vs_als": rb,
-                "p": p,
+                "rb_ftd_vs_als": _rank_biserial(ftd_d[:, k], als_d[:, k]),
+                "p": float(p_all[k]),
             }
         )
 
@@ -508,10 +510,11 @@ def main() -> None:
         "NOTE: C9orf72 genetic status not in public GEO metadata.",
         "ALS-FTD label used as C9orf72-enriched proxy (~50% of fALS-FTD carry C9 repeat).",
         "",
-        f"Dataset: GSE153960 GPL24676 (n={n_als + n_ftd + n_ctrl})",
-        f"  Pure ALS (sALS):  n={n_als}",
-        f"  ALS-FTD:          n={n_ftd}  (C9-enriched proxy)",
-        f"  Control:          n={n_ctrl}",
+        "Donor-level tests: each gene z-scored within tissue, averaged per donor.",
+        f"Dataset: GSE153960 GPL24676 ({sum(n_s)} samples)",
+        f"  Pure ALS:  {n_als} donors ({n_s[0]} samples)",
+        f"  ALS-FTD:   {n_ftd} donors ({n_s[1]} samples)",
+        f"  Control:   {n_ctrl} donors ({n_s[2]} samples)",
         "",
         "─" * 70,
         "ANALYSIS 1: Panel-gene ALS-FTD vs pure ALS (positive rb = higher in ALS-FTD)",
@@ -563,10 +566,10 @@ def main() -> None:
     lines += [
         "",
         "─" * 70,
-        "ANALYSIS 3: Within-ALS subtype classification (25-gene panel, 5-fold CV)",
+        "ANALYSIS 3: Within-ALS subtype classification (25-gene panel, donor-grouped 5-fold CV)",
         "─" * 70,
         "Target: ALS-FTD (1) vs pure ALS (0)",
-        f"AUC (5-fold CV): {auc_cv:.4f}",
+        f"AUC (donor-grouped 5-fold CV, sample level): {auc_cv:.4f}",
         f"Bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]",
         "",
         "─" * 70,

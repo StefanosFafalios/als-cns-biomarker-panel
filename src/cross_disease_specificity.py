@@ -102,7 +102,6 @@ _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 PREFIX = "cross_disease_specificity"
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
-N_SPLITS = 5  # matches disease_specificity.py / all CV in this study
 
 # ---------------------------------------------------------------------------
 # colsample_bytree feature-space correction
@@ -549,16 +548,16 @@ def _score(
     params: dict,
     mode: str,
     y_te: np.ndarray | None = None,
-    adjust_colsample: bool = True,
+    adjust_colsample: bool = False,
 ) -> dict[str, dict]:
-    """Fold-averaged cross-validated scoring of a target cohort.
+    """Score a target cohort with the paper's zero-shot models, fit once on all training samples.
 
-    Follows the convention established in ``disease_specificity.py`` (Step 10):
-    a 5-fold stratified CV is run on the GPL24676 training set; the training-set
-    estimate is out-of-fold, and the held-out target cohort is scored by every
-    fold model with the per-sample scores averaged across folds.  This removes
-    the dependence on a single full-data fit and exposes fold-to-fold
-    variability on the model side, which a single fit hides.
+    LightGBM is the zero-shot model of every external validation in the study
+    (top-500 hyperparameters, ``colsample_bytree`` 1.0, set by the caller), and
+    LR-L2 is the linear baseline of ``lr_baseline.py`` (``LogisticRegressionCV``,
+    liblinear, 5-fold, AUC). Both are fit once on all GPL24676 training samples,
+    so the ALS positive control reproduces the main-text GPL16791 values in
+    canonical mode.
 
     Args:
         X_tr: Training matrix (matched panel columns, log1p).
@@ -567,70 +566,37 @@ def _score(
         params: LightGBM hyperparameters (carries random_state and verbose).
         mode: ``"canonical"`` (scaler fit on training) or ``"zscore"``
             (per-gene standardisation fit within each cohort).
-        y_te: Optional target labels, used only to report per-fold target AUCs.
+        y_te: Unused; kept for callers that pass it.
+        adjust_colsample: Rescale the tuned ``colsample_bytree`` to this feature
+            space (for colsample_sensitivity.py); the zero-shot model does not.
 
     Returns:
-        ``{model: {"scores": mean target score per sample,
-                   "oof_auc": training out-of-fold AUC,
-                   "fold_aucs": per-fold target AUCs (empty if y_te is None)}}``
+        ``{model: {"scores": target score per sample}}``
     """
     from lightgbm import LGBMClassifier
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import roc_auc_score
-    from sklearn.model_selection import StratifiedKFold
+    from sklearn.linear_model import LogisticRegressionCV
     from sklearn.preprocessing import StandardScaler
 
     if mode not in ("canonical", "zscore"):  # pragma: no cover
         raise ValueError(mode)
-
-    # Re-express the tuned colsample_bytree for this feature space (see
-    # _adjust_colsample). colsample_sensitivity.py passes adjust_colsample=False
-    # because it sets the value explicitly.
     if adjust_colsample:
         params = _adjust_colsample(params, X_tr.shape[1])
 
-    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
-    models = ("LGBM", "LR-L2")
-    fold_scores: dict[str, list[np.ndarray]] = {m: [] for m in models}
-    oof: dict[str, np.ndarray] = {m: np.zeros(len(y_tr)) for m in models}
-    fold_aucs: dict[str, list[float]] = {m: [] for m in models}
-
-    for tr_idx, val_idx in skf.split(X_tr, y_tr):
-        sc = StandardScaler().fit(X_tr[tr_idx])
-        Xf = sc.transform(X_tr[tr_idx])
-        Xv = sc.transform(X_tr[val_idx])
-        # The target is harmonised with the same rule as the full-cohort case:
-        # canonical borrows the fold's training scaler, zscore standardises the
-        # target within itself (so it never sees training-set location/scale).
-        Xt = (
-            sc.transform(X_te)
-            if mode == "canonical"
-            else (StandardScaler().fit_transform(X_te))
-        )
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore")
-            fitted = {
-                "LGBM": LGBMClassifier(**params).fit(Xf, y_tr[tr_idx]),
-                "LR-L2": LogisticRegression(
-                    penalty="l2", max_iter=5_000, random_state=RANDOM_STATE
-                ).fit(Xf, y_tr[tr_idx]),
-            }
-        for m, clf in fitted.items():
-            oof[m][val_idx] = clf.predict_proba(Xv)[:, 1]
-            s = clf.predict_proba(Xt)[:, 1]
-            fold_scores[m].append(s)
-            if y_te is not None and len(np.unique(y_te)) > 1:
-                fold_aucs[m].append(float(roc_auc_score(y_te, s)))
-
-    return {
-        m: {
-            "scores": np.mean(fold_scores[m], axis=0),
-            "oof_auc": float(roc_auc_score(y_tr, oof[m])),
-            "fold_aucs": fold_aucs[m],
+    sc = StandardScaler().fit(X_tr)
+    Xf = sc.transform(X_tr)
+    # canonical borrows the training scaler; zscore standardises the target
+    # within itself (the only scale-valid mode for the microarray cohort)
+    Xt = sc.transform(X_te) if mode == "canonical" else StandardScaler().fit_transform(X_te)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore")
+        fitted = {
+            "LGBM": LGBMClassifier(**params).fit(Xf, y_tr),
+            "LR-L2": LogisticRegressionCV(
+                cv=5, solver="liblinear", penalty="l2", scoring="roc_auc",
+                max_iter=2000, random_state=RANDOM_STATE, refit=True,
+            ).fit(Xf, y_tr),
         }
-        for m in models
-    }
+    return {m: {"scores": clf.predict_proba(Xt)[:, 1]} for m, clf in fitted.items()}
 
 
 def _loo_deltas(
@@ -648,9 +614,8 @@ def _loo_deltas(
     Uses the same sign convention as the rest of the study:
     ``Delta = baseline AUC - leave-one-out AUC``, so a **positive** delta means
     the gene is irreplaceable in that cohort (removing it degrades transfer) and
-    a negative delta means it is redundant there.  Every refit is fold-averaged
-    exactly as in :func:`_score`, so the deltas are cross-validated on the model
-    side rather than derived from a single fit.
+    a negative delta means it is redundant there.  Every refit uses the same
+    single full-data fit as :func:`_score`.
 
     Args:
         X_tr: Training matrix restricted to the matched panel columns.
@@ -773,7 +738,8 @@ def main() -> None:
     print("Cross-disease specificity — ALS panel vs AD / FTLD-TDP / HD / PD")
     print("=" * 74)
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    # the zero-shot model of every external validation: colsample_bytree 1.0
+    params = {**json.loads(_PARAMS_PATH.read_text()), "colsample_bytree": 1.0}
     panel = pd.read_csv(_PANEL_CSV)
     panel_feats: list[str] = panel["feature"].tolist()
     panel_syms: list[str] = panel["symbol"].tolist()
@@ -822,7 +788,7 @@ def main() -> None:
         "id_type": "ensembl",
     }
 
-    print("\n[3] Scoring (5-fold CV on training; target scores fold-averaged) ...")
+    print("\n[3] Scoring (zero-shot model fit on all training samples) ...")
     rows: list[dict] = []
     score_store: dict[tuple[str, str, str, str], np.ndarray] = {}
     loo_store: dict[str, dict[str, dict[str, float]]] = {}
@@ -882,31 +848,12 @@ def main() -> None:
                             "median_score_disease": float(np.median(s[y_te == 1])),
                             "median_score_control": float(np.median(s[y_te == 0])),
                             "mwu_p": p,
-                            "train_oof_auc": res["oof_auc"],
-                            "fold_auc_min": (
-                                float(np.min(res["fold_aucs"]))
-                                if res["fold_aucs"]
-                                else float("nan")
-                            ),
-                            "fold_auc_max": (
-                                float(np.max(res["fold_aucs"]))
-                                if res["fold_aucs"]
-                                else float("nan")
-                            ),
-                            "fold_auc_sd": (
-                                float(np.std(res["fold_aucs"], ddof=1))
-                                if len(res["fold_aucs"]) > 1
-                                else float("nan")
-                            ),
                         }
                     )
                     score_store[(gse, pname, mode, model)] = s
                     print(
                         f"  {gse:<20}{pname:<9}{mode:<10}{model:<7}"
                         f"AUC={auc:.4f} [{lo:.3f}, {hi:.3f}]  "
-                        f"folds[{np.min(res['fold_aucs']):.3f}-"
-                        f"{np.max(res['fold_aucs']):.3f}]  "
-                        f"OOF={res['oof_auc']:.4f}  "
                         f"matched {len(tr_keys)}/{len(feats)}"
                     )
 
@@ -1028,17 +975,12 @@ def _write_report(
     )
     add(f"Bootstrap: N={N_BOOTSTRAP}, random_state={RANDOM_STATE}")
     add("")
-    add("CROSS-VALIDATION PROVENANCE")
-    add("  Scoring follows disease_specificity.py (Step 10): 5-fold stratified")
-    add(f"  CV on the GPL24676 training set (random_state={RANDOM_STATE}); the")
-    add("  training estimate is out-of-fold, and each target cohort is scored by")
-    add("  all 5 fold models with per-sample scores AVERAGED across folds. The")
-    add("  fold_auc_min/max columns show model-side fold-to-fold spread; the")
-    add("  bootstrap CI covers target-sample variability. Target AUCs are")
-    add("  zero-shot: no target sample enters training or thresholding.")
-    add("  Caveat that CV does NOT remove: the panel and hyperparameters were")
-    add("  selected on this same training cohort, so the training-side estimate")
-    add("  is post-selection and optimistic (as noted in the main text).")
+    add("MODEL PROVENANCE")
+    add("  Every cohort is scored by the zero-shot model of the main text: the")
+    add("  top-500 LightGBM with colsample_bytree 1.0, fit once on all GPL24676")
+    add("  ALS and control samples (LR-L2: LogisticRegressionCV as lr_baseline.py).")
+    add("  Target AUCs are zero-shot: no target sample enters training or")
+    add("  thresholding. The bootstrap CI covers target-sample variability.")
     add("")
     add("MODEL: LightGBM is primary, consistent with the rest of the study.")
     add("  LR-L2 is a sensitivity baseline only (cf. lr_baseline.py). The two")
@@ -1188,12 +1130,12 @@ def _write_report(
 
     if loo_df is not None and not loo_df.empty:
         add("-" * 74)
-        add(f"LEAVE-ONE-GENE-OUT PER COHORT ({_CRIT_LABEL}, zscore, fold-averaged)")
+        add(f"LEAVE-ONE-GENE-OUT PER COHORT ({_CRIT_LABEL}, zscore)")
         add("-" * 74)
         add("Delta = baseline AUC - leave-one-out AUC, the same sign convention")
         add("used throughout this study: POSITIVE = irreplaceable in that cohort,")
-        add("NEGATIVE = redundant there. Every refit is fold-averaged, so these")
-        add("deltas are cross-validated on the model side.")
+        add("NEGATIVE = redundant there. Every refit is the zero-shot model fit")
+        add("once on all training samples.")
         add("")
         for model in sorted(loo_df["model"].unique()):
             sub = loo_df[loo_df["model"] == model]
@@ -1354,7 +1296,7 @@ def _plot_loo(loo_df) -> None:
         )
     fig.suptitle(
         "Which panel genes carry the signal in each disease "
-        f"({_CRIT_LABEL}, z-score mode, fold-averaged)",
+        f"({_CRIT_LABEL}, z-score mode)",
         fontsize=13,
         y=0.995,
     )
