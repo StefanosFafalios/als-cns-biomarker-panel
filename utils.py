@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import io
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -605,14 +606,90 @@ def adjust_colsample(params: dict, n_features: int) -> dict:
     return out
 
 
-# The exact ``colsample_bytree`` produced by the top-500 Bayesian optimisation.
-# Used as a signature so PanelLGBMClassifier corrects only params that actually
-# came from that search, and never a hand-set or differently-tuned value.
-TOP500_COLSAMPLE = 0.06669642753855967
+# The exact ``colsample_bytree`` and ``min_child_samples`` produced by the top-500
+# Bayesian optimisation, read from its output so they follow any re-tuning. Used as
+# signatures so the wrappers below correct only params that actually came from that
+# search, and never a hand-set or differently-tuned value.
+_TOP500_PARAMS = json.loads((Path(__file__).parent / "GSE153960" / "lgbm_top500_best_params.json").read_text())
+TOP500_COLSAMPLE = _TOP500_PARAMS["colsample_bytree"]
 _COLSAMPLE_TOL = 1e-9
 
+# min_child_samples is a count, so it too means something different on another
+# training-set size. The search scored each configuration by 5-fold CV on the
+# 874 GPL24676 samples, i.e. on training sets of 874 * 4/5 samples, so the tuned
+# value is a fraction of the training set (tuned / 699.2). Every fit of the tuned
+# model keeps that fraction (for 69: 69 on a CV fold, 86 on 874 samples, 2 on 19).
+TOP500_MIN_CHILD = _TOP500_PARAMS["min_child_samples"]
+TUNED_TRAIN_N = 874 * 4 / 5
 
+
+def scale_min_child(n_train: int) -> int:
+    """Tuned ``min_child_samples`` re-expressed for *n_train* training samples.
+
+    Args:
+        n_train: Number of samples the model is fitted on.
+
+    Returns:
+        ``round(TOP500_MIN_CHILD * n_train / TUNED_TRAIN_N)``, at least 1.
+    """
+    return max(1, round(TOP500_MIN_CHILD * n_train / TUNED_TRAIN_N))
+
+
+_TUNED_LGBM_CLS = None
 _PANEL_LGBM_CLS = None
+
+
+def _tuned_lgbm_class():
+    """Build (once) the LGBMClassifier subclass that rescales the tuned leaf size.
+
+    Defined lazily so that importing :mod:`utils` does not require lightgbm.
+
+    Returns:
+        The ``_TunedLGBM`` class object.
+    """
+    global _TUNED_LGBM_CLS
+    if _TUNED_LGBM_CLS is not None:
+        return _TUNED_LGBM_CLS
+
+    from lightgbm import LGBMClassifier
+
+    class _TunedLGBM(LGBMClassifier):
+        """LightGBM classifier that rescales the top-500 min_child_samples at fit time."""
+
+        def fit(self, X, y, **kwargs):  # noqa: D102 - inherits LGBMClassifier.fit
+            tuned = self.get_params().get("min_child_samples")
+            if tuned != TOP500_MIN_CHILD:
+                self.min_child_samples_effective_ = tuned
+                return super().fit(X, y, **kwargs)
+            self.set_params(min_child_samples=scale_min_child(len(y)))
+            self.min_child_samples_effective_ = self.get_params()["min_child_samples"]
+            try:
+                return super().fit(X, y, **kwargs)
+            finally:
+                # keep the tuned value, so clones and refits rescale for their own n
+                self.set_params(min_child_samples=tuned)
+
+    _TUNED_LGBM_CLS = _TunedLGBM
+    return _TUNED_LGBM_CLS
+
+
+def TunedLGBMClassifier(*args, **kwargs):  # noqa: N802 - mimics a class name
+    """Construct an LGBMClassifier that rescales the top-500 ``min_child_samples``.
+
+    Drop-in replacement for :class:`lightgbm.LGBMClassifier`, intended to be
+    imported as ``from utils import TunedLGBMClassifier as LGBMClassifier``. Only
+    the tuned value ``TOP500_MIN_CHILD`` is rescaled (see ``scale_min_child``);
+    any other ``min_child_samples`` is left untouched.
+
+    Args:
+        *args: Positional arguments forwarded to ``LGBMClassifier``.
+        **kwargs: Hyperparameters forwarded to ``LGBMClassifier``.
+
+    Returns:
+        An ``LGBMClassifier`` subclass instance. After fitting,
+        ``min_child_samples_effective_`` records the value actually used.
+    """
+    return _tuned_lgbm_class()(*args, **kwargs)
 
 
 def _panel_lgbm_class():
@@ -627,10 +704,8 @@ def _panel_lgbm_class():
     if _PANEL_LGBM_CLS is not None:
         return _PANEL_LGBM_CLS
 
-    from lightgbm import LGBMClassifier
-
-    class _PanelLGBM(LGBMClassifier):
-        """LightGBM classifier that rescales the top-500 colsample at fit time."""
+    class _PanelLGBM(_tuned_lgbm_class()):
+        """LightGBM classifier that rescales the top-500 colsample (and leaf size) at fit time."""
 
         def fit(self, X, y, **kwargs):  # noqa: D102 - inherits LGBMClassifier.fit
             cs = self.get_params().get("colsample_bytree")
@@ -898,6 +973,27 @@ CRITICAL_PANEL_CSV = Path(__file__).parent / "GSE153960" / "panel_critical.csv"
 _CURVE_CSV = Path(__file__).parent / "GSE153960" / "lgbm_top500_final_curve.csv"
 
 
+def break_even_k(auc: "np.ndarray | list[float]") -> int:
+    """Core panel cutoff from the incremental curve (supplement, sec:stage3).
+
+    With relative gain ``G(k) = (AUC(k) - AUC(1)) / (AUC(K) - AUC(1))`` over the
+    full curve ``k = 1..K``, ``k* = min{k : G(k) - G(k-1) < G(K) / K}``: the first
+    gene whose marginal gain is below the mean per-gene contribution.
+
+    Args:
+        auc: Mean CV AUC at k = 1..K features, in order.
+
+    Returns:
+        The break-even panel size ``k*``.
+    """
+    a = np.asarray(auc, dtype=float)
+    g = (a - a[0]) / (a[-1] - a[0])
+    below = np.flatnonzero(np.diff(g) < g[-1] / len(a))
+    if not below.size:
+        raise ValueError("marginal gain never falls below the mean per-gene contribution")
+    return int(below[0]) + 2  # np.diff index i is the step from k = i + 1 to k = i + 2
+
+
 def panel25_cv_auc(k: int = 25) -> float:
     """Return the within-cohort 5-fold CV AUC of the SHAP-ranked top-``k`` panel.
 
@@ -1039,6 +1135,79 @@ def critical_panel_label(protein_coding_only: bool = False) -> str:
     return f"{critical_panel_size(protein_coding_only)}-crit"
 
 
+CORE_PANEL_CSV = Path(__file__).parent / "GSE153960" / "lgbm_core25_panel.csv"
+GENE_INFO_CACHE = Path(__file__).parent / "GSE153960" / "gene_info_cache.json"
+
+
+def gene_info(symbols: list[str]) -> dict[str, dict[str, str]]:
+    """MyGeneInfo ``type_of_gene`` and Entrez ID per symbol (cached).
+
+    Args:
+        symbols: HGNC symbols (or ENSG IDs, which resolve to nothing).
+
+    Returns:
+        ``{symbol: {"type": ..., "entrez": ...}}``; both are ``""`` when the
+        symbol has no MyGeneInfo hit.
+    """
+    import mygene
+
+    cache = json.loads(GENE_INFO_CACHE.read_text()) if GENE_INFO_CACHE.exists() else {}
+    todo = sorted({s for s in symbols if s not in cache})
+    if todo:
+        hits = mygene.MyGeneInfo().querymany(
+            todo, scopes="symbol", fields="type_of_gene,entrezgene", species="human", verbose=False
+        )
+        for r in hits:  # the best-scoring hit comes first
+            if not r.get("notfound"):
+                cache.setdefault(r["query"], {"type": r.get("type_of_gene", ""), "entrez": str(r.get("entrezgene", ""))})
+        cache.update({s: cache.get(s, {"type": "", "entrez": ""}) for s in todo})
+        GENE_INFO_CACHE.write_text(json.dumps(cache))
+    return {s: cache[s] for s in symbols}
+
+
+def core_panel_symbols(protein_coding_only: bool = False) -> list[str]:
+    """Return the 25-gene panel's symbols (lgbm_core25_panel.csv), in SHAP rank order.
+
+    Scripts read the panel here instead of hardcoding it, so a re-derived panel
+    propagates everywhere.
+
+    Args:
+        protein_coding_only: Keep only MyGeneInfo protein-coding members.
+
+    Returns:
+        Gene symbols ordered by SHAP rank.
+    """
+    syms = list(pd.read_csv(CORE_PANEL_CSV).sort_values("rank").symbol)
+    if protein_coding_only:
+        info = gene_info(syms)
+        syms = [s for s in syms if info[s]["type"] == "protein-coding"]
+    return syms
+
+
+def core_panel_ensg(protein_coding_only: bool = False) -> dict[str, str]:
+    """Return the 25-gene panel's unversioned Ensembl IDs.
+
+    Args:
+        protein_coding_only: Keep only protein-coding members.
+
+    Returns:
+        ``{symbol: ENSG}`` in SHAP rank order.
+    """
+    ensg = {s: str(f).split(".")[0] for s, f in pd.read_csv(CORE_PANEL_CSV)[["symbol", "feature"]].itertuples(index=False)}
+    return {s: ensg[s] for s in core_panel_symbols(protein_coding_only)}
+
+
+def core_panel_entrez() -> dict[str, int]:
+    """Return Entrez IDs of the 25-gene panel's protein-coding members.
+
+    Returns:
+        ``{symbol: entrez}`` in SHAP rank order.
+    """
+    syms = core_panel_symbols(protein_coding_only=True)
+    info = gene_info(syms)
+    return {s: int(info[s]["entrez"]) for s in syms}
+
+
 GENE_PROFILING_CSV = Path(__file__).parent / "GSE153960" / "gene_profiling_summary.csv"
 
 
@@ -1061,6 +1230,22 @@ def critical_panel_directions(protein_coding_only: bool = False) -> dict[str, st
         FileNotFoundError: If the gene-profiling summary is missing.
         KeyError: If a panel member has no direction call.
     """
+    return _directions(critical_panel_symbols(protein_coding_only))
+
+
+def core_panel_directions(protein_coding_only: bool = False) -> dict[str, str]:
+    """Return each 25-gene panel member's direction of effect in ALS ("up"/"down").
+
+    Args:
+        protein_coding_only: Restrict to protein-coding members.
+
+    Returns:
+        Mapping of gene symbol to ``"up"`` or ``"down"``, ordered by SHAP rank.
+    """
+    return _directions(core_panel_symbols(protein_coding_only))
+
+
+def _directions(symbols: list[str]) -> dict[str, str]:
     if not GENE_PROFILING_CSV.exists():
         raise FileNotFoundError(
             f"gene profiling summary not found at {GENE_PROFILING_CSV}; "
@@ -1068,7 +1253,7 @@ def critical_panel_directions(protein_coding_only: bool = False) -> dict[str, st
         )
     prof = pd.read_csv(GENE_PROFILING_CSV).set_index("symbol")["direction"]
     out: dict[str, str] = {}
-    for sym in critical_panel_symbols(protein_coding_only):
+    for sym in symbols:
         if sym not in prof.index:
             raise KeyError(f"no direction call for panel member {sym}")
         out[sym] = "up" if str(prof[sym]).startswith("up") else "down"

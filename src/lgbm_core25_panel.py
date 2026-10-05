@@ -35,7 +35,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import adjust_colsample, load_dataset
+from utils import adjust_colsample, gene_info, load_dataset
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -111,9 +111,9 @@ def _sym(sym_map: dict[str, str], feat: str) -> str:
 
 
 def _cv_baseline(X: np.ndarray, y: np.ndarray) -> float:
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
     fold_aucs = []
@@ -139,9 +139,9 @@ def _run_loo(
     X: np.ndarray, y: np.ndarray, feature_names: list[str], baseline_auc: float
 ) -> list[dict]:
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
     all_mask = np.ones(PANEL_SIZE, dtype=bool)
@@ -199,23 +199,6 @@ def _run_loo(
 # ---------------------------------------------------------------------------
 
 
-_PROTEIN_CODING_PANEL = {
-    "MECOM",
-    "SERTAD1",
-    "FCN3",
-    "PROS1",
-    "ANGPT2",
-    "EMP1",
-    "TINAGL1",
-    "CKMT2",
-    "VWF",
-    "CLDN5",
-    "NR4A1",
-    "SOHLH2",
-    "HEXB",
-    "MCEE",
-    "SLC37A2",
-}
 _CLR_PC = "#d62728"  # red — protein-coding transferable panel
 _CLR_NC = "#aec7e8"  # light blue — non-coding elements
 
@@ -230,7 +213,8 @@ def _plot_curve(feature_names: list[str], sym_map: dict[str, str]) -> None:
     auc = df["mean_auc"].values
     best_k, best_auc = int(k[auc.argmax()]), float(auc.max())
     labels = [_sym(sym_map, f) for f in feature_names]
-    is_pc = [lbl in _PROTEIN_CODING_PANEL for lbl in labels]
+    info = gene_info(labels)
+    is_pc = [info[lbl]["type"] == "protein-coding" for lbl in labels]
 
     fig, ax = plt.subplots(figsize=(14, 6))
 

@@ -1,11 +1,11 @@
-"""Bootstrap-based stability selection on the 3,704-gene SFM space.
+"""Bootstrap-based stability selection on the SFM gene space.
 
 Reviewer M5: Cross-architecture Jaccard 0.06-0.11 is weak; the standard
 antidote is stability selection. This script:
   - Draws 100 donor-level bootstraps of the 874 training samples (donors
     resampled with replacement within each diagnosis, all of a donor's
     samples kept together, since GPL24676 has several regions per donor).
-  - In each replicate, reruns the published ranking steps on the 3,704-gene
+  - In each replicate, reruns the published ranking steps on the SFM
     SFM pool (nested_panel_cv._rank: SHAP top 500 with the top-500 LightGBM,
     then SHAP re-rank) and records the top 25.
   - Reports per-gene selection frequency across replicates.
@@ -50,6 +50,7 @@ TOP_K = 25
 RANDOM_STATE = 42
 BOOTSTRAPS_JSON = SCRIPT_DIR / "stability_selection_bootstraps.json"
 _SFM_RANKING = SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv"
+_N_SFM = sum(1 for _ in _SFM_RANKING.open()) - 1  # header row
 _PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -165,7 +166,7 @@ def main() -> None:
 
     # Statistics file
     lines = [
-        f"Stability selection — {N_BOOTSTRAP} donor-level bootstraps × published ranking steps, top-{TOP_K} of the 3,704 SFM genes",
+        f"Stability selection — {N_BOOTSTRAP} donor-level bootstraps × published ranking steps, top-{TOP_K} of the {_N_SFM:,} SFM genes",
         "=" * 70,
         "",
         "Panel gene selection frequencies:",

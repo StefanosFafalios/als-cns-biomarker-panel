@@ -10,13 +10,13 @@ outer fold, on the training donors only, and scores the held-out donors:
 2. SelectFromModel(LightGBM, top-500 params, threshold="mean");
 3. LightGBM on the SFM set, SHAP ranking, top 500 (as ``lgbm_iterative_pipeline.py``);
 4. LightGBM on those 500, SHAP re-ranking (as ``lgbm_top500_final_analysis.py``);
-5. top 25 and top 18 by that ranking, fitted with ``PanelLGBMClassifier`` and
+5. top 25 and top k_crit (the critical-panel size) by that ranking, fitted with ``PanelLGBMClassifier`` and
    ``adjust_colsample`` exactly as the published panel CV, scored on the held-out donors.
 
 The published fixed panels are scored on the same folds, so ``fixed - nested`` is a
 paired estimate of the selection optimism. Held fixed, and disclosed: the LightGBM
-hyperparameters (tuned once on all samples) and the greedy 25 -> 18 reduction (it
-selects on the external cohorts; "top 18 by SHAP" stands in for it here).
+hyperparameters (tuned once on all samples) and the greedy 25 -> k_crit trim (it
+selects on the external cohorts; "top k_crit by SHAP" stands in for it here).
 
 Outputs ``nested_panel_cv.csv`` (one row per seed x fold),
 ``nested_panel_cv_selection.csv`` (per-gene re-selection frequency) and
@@ -50,6 +50,7 @@ from utils import (  # noqa: E402
     PanelLGBMClassifier,
     adjust_colsample,
     critical_panel_features,
+    critical_panel_size,
     load_dataset,
 )
 
@@ -57,14 +58,15 @@ PARAMS = json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text())
 SEEDS = (42, 43, 44)
 FOLDS = 5
 TOP_SFM = 500
-PANEL_SIZES = (25, 18)
+K_CRIT = critical_panel_size()
+PANEL_SIZES = (25, K_CRIT)
 OUT_CSV = SCRIPT_DIR / "nested_panel_cv.csv"
 OUT_SEL = SCRIPT_DIR / "nested_panel_cv_selection.csv"
 OUT_TXT = SCRIPT_DIR / "nested_panel_cv_statistics.txt"
 
 
 def _fit_lgbm(X: np.ndarray, y: np.ndarray, params: dict):
-    from lightgbm import LGBMClassifier
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -73,8 +75,8 @@ def _fit_lgbm(X: np.ndarray, y: np.ndarray, params: dict):
 
 def _discover(X: np.ndarray, y: np.ndarray, names: list[str]) -> list[str]:
     """Steps 2-4 on training rows only; return all 500 names, best first."""
-    from lightgbm import LGBMClassifier
     from sklearn.feature_selection import SelectFromModel
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     t0 = time.monotonic()
     with warnings.catch_warnings():
@@ -123,14 +125,14 @@ def main(max_features: int | None = None, seeds: tuple[int, ...] = SEEDS) -> Non
 
     published = {
         25: pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").feature.tolist(),
-        18: critical_panel_features(),
+        K_CRIT: critical_panel_features(),
     }
     pool, _ = _resolve_contamination_pool({n.split(".")[0]: n for n in all_names})
     discard = KNOWN_ALS_FEATURES | pool
     keep = [i for i, n in enumerate(all_names) if n not in discard]
     n_discarded = len(all_names) - len(keep)
     if max_features:  # smoke test: a slice, plus the published genes so both arms run
-        must = set(published[25]) | set(published[18])
+        must = set(published[25]) | set(published[K_CRIT])
         keep = sorted(set(keep[:max_features]) | {i for i in keep if all_names[i] in must})
     names = [all_names[i] for i in keep]
     X = np.asarray(X_all[:, keep], dtype=np.float32)
@@ -158,7 +160,8 @@ def main(max_features: int | None = None, seeds: tuple[int, ...] = SEEDS) -> Non
                 )
                 row[f"overlap_{k}"] = len(set(nested) & set(published[k]))
             print(f"    AUC nested25 {row['nested_25']:.4f} fixed25 {row['fixed_25']:.4f} "
-                  f"nested18 {row['nested_18']:.4f} fixed18 {row['fixed_18']:.4f}", flush=True)
+                  f"nested{K_CRIT} {row[f'nested_{K_CRIT}']:.4f} fixed{K_CRIT} {row[f'fixed_{K_CRIT}']:.4f}",
+                  flush=True)
             rows.append(row)
 
     suffix = "_smoke" if max_features else ""
@@ -182,8 +185,8 @@ def main(max_features: int | None = None, seeds: tuple[int, ...] = SEEDS) -> Non
         f"GPL24676: {len(y)} samples, {len(set(groups))} donors; {len(names)} candidate genes; "
         f"StratifiedGroupKFold({FOLDS}) x seeds {list(seeds)} = {n_fits} outer folds",
         "Inside each fold: SFM -> SHAP top 500 -> SHAP re-rank -> top k (training donors only).",
-        "Fixed: LightGBM hyperparameters (tuned on all samples); 25->18 greedy step "
-        "(top 18 by SHAP stands in).",
+        f"Fixed: LightGBM hyperparameters (tuned on all samples); 25->{K_CRIT} greedy trim "
+        f"(top {K_CRIT} by SHAP stands in).",
         "",
     ]
     for k in PANEL_SIZES:

@@ -64,8 +64,8 @@ FIG_COHORTS = ("GPL16791 donor-disjoint", "GSE122649", "SRP064478", "GSE76220")
 
 
 def _auc(xtr: np.ndarray, ytr: np.ndarray, xte: np.ndarray, yte: np.ndarray, gse: str) -> float:
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     ztr, zte = zero_shot_scale(xtr, xte, gse)
     with warnings.catch_warnings():

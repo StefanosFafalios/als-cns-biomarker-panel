@@ -36,8 +36,12 @@ LOO_CSV = SCRIPT_DIR / "lgbm_iter_final_loo_summary.csv"
 PREFILTER_X_NPY = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 PREFILTER_NAMES_TXT = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 
-# Final SFM features come from the last (clean) iteration cache
-_SFM_CACHE = SCRIPT_DIR / "lgbm_iter_2_sfm_features.txt"
+
+
+def _sfm_cache() -> Path:
+    """Final SFM features: the last (clean) iteration's cache, as in lgbm_iterative_pipeline."""
+    last = len(pd.read_csv(SCRIPT_DIR / "lgbm_iter_log.csv")) - 1
+    return SCRIPT_DIR / f"lgbm_iter_{last}_sfm_features.txt"
 
 TOP_SHAP = 50
 TOP_BEESWARM = 20
@@ -153,7 +157,7 @@ def plot_shap_beeswarm(sym_map: dict[str, str]) -> None:
     top_features = shap_ranking["feature"].head(TOP_BEESWARM).tolist()
 
     # Reconstruct X_final from pre-filter cache + SFM feature list
-    sfm_names = [s.strip() for s in _SFM_CACHE.read_text().splitlines() if s.strip()]
+    sfm_names = [s.strip() for s in _sfm_cache().read_text().splitlines() if s.strip()]
     all_names = PREFILTER_NAMES_TXT.read_text().splitlines()
     name_to_prefilter_col = {n: i for i, n in enumerate(all_names)}
     sfm_col_in_prefilter = [name_to_prefilter_col[n] for n in sfm_names]

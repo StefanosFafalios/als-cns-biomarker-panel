@@ -11,8 +11,9 @@ one that is not.
 
 Method
 ------
-1. Fit the model once per (panel size, cohort) and store per-sample zero-shot
-   scores. The model is not refit inside the bootstrap: the question is how much
+1. Score every panel size once with the greedy's own criterion (pooled grouped
+   5x10-fold CV over the merged trimming cohorts, iterative_panel_elimination.pooled_oof)
+   and store the per-sample out-of-fold scores. The model is not refit inside the bootstrap: the question is how much
    the *evaluation* would move on a different sample of subjects, not how much
    training would move.
 2. Paired bootstrap over subjects, stratified by class within each cohort so a
@@ -55,12 +56,10 @@ SCRIPT_DIR = Path(__file__).parent
 ALS_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import PanelLGBMClassifier, zero_shot_scale  # noqa: E402
 
 warnings.filterwarnings("ignore")
 
 _CKPT = SCRIPT_DIR / "iterative_panel_elimination_ckpt.json"
-_RUN_LOG = SCRIPT_DIR / "iterative_panel_elimination_run.log"
 _PARAMS = SCRIPT_DIR / "lgbm_top500_best_params.json"
 N_BOOT = 2000
 RANDOM_STATE = 42
@@ -76,10 +75,9 @@ SENSITIVITY_DROP_COHORT = "SRP064478"
 
 def _trajectory() -> tuple[list[str], list[str], dict[int, float]]:
     """Return (full 25-gene panel, drop order, {k: W.mean}) from the greedy run."""
-    line = next(
-        ln for ln in _RUN_LOG.read_text().splitlines() if "25-gene panel:" in ln
-    )
-    full = eval(line.split("panel: ", 1)[1].strip())  # noqa: S307 - our own log
+    # The greedy indexes the panel in lgbm_core25_panel.csv row order. This was parsed
+    # from a manual-run log that run_all.sh never writes, so a rerun read a stale panel.
+    full = pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv")["symbol"].tolist()
     hist = json.loads(_CKPT.read_text())["history"]
     drops = [h["dropped"] for h in hist if h["dropped"]]
     wmean = {h["panel_size"]: h["wmean"] for h in hist if h["panel_size"] is not None}
@@ -184,7 +182,7 @@ _SCORES_CSV = SCRIPT_DIR / "greedy_significance_stop.csv"
 def _cached_scores(ks: list[int]) -> "pd.DataFrame | None":
     """Return the per-k bootstrap table from a previous run, if it is complete.
 
-    Scoring 25 panel sizes across 4 cohorts is ~8 h under the corrected
+    Scoring 25 panel sizes across the trimming cohorts is ~8 h under the corrected
     colsample_bytree, and it depends only on the greedy trajectory and the
     cohort matrices -- not on the reporting parameters (margin, sweep) that get
     revised far more often. Reusing a complete table makes regenerating the
@@ -235,76 +233,33 @@ def main() -> None:
     src = ipe.read_text()
     ns: dict = {"__name__": "notmain", "__file__": str(ipe)}
     exec(compile(src.split("def main(")[0], "ipe", "exec"), ns)  # noqa: S102
-    np_ = ns["np"]
-    load_dataset = ns["load_dataset"]
 
     panel_df = pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv")
     sym25 = list(panel_df.symbol)
     feat25_bases = [f.split(".")[0] for f in panel_df.feature]
 
     print("Loading cohorts (greedy's own loaders) ...")
-    X_train_log, y_train, _, feat_train = ns["_load_gpl24676_ctd"]()
+    _, _, _, feat_train = ns["_load_gpl24676_ctd"]()
     base_map = {f.split(".")[0]: j for j, f in enumerate(feat_train)}
     panel_train_cols = [base_map[b] for b in feat25_bases]
-    Xtr25 = X_train_log[:, panel_train_cols].astype(np_.float32)
 
-    (ds16,) = load_dataset(
-        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
-    )
-    X16 = np_.log1p(ds16.X.values.astype(np_.float32))[:, panel_train_cols]
-    y16 = ds16.y.values.astype(int)
-
-    def _sym_cohort(loader, vocab_keys):
-        X, vocab, y = ns[loader]()
-        vm = {s: i for i, s in enumerate(vocab)}
-        avail = [i for i, s in enumerate(vocab_keys) if s in vm]
-        M = (
-            np_.column_stack([X[:, vm[vocab_keys[i]]] for i in avail]).astype(
-                np_.float32
-            )
-            if avail
-            else np_.empty((len(y), 0), dtype=np_.float32)
-        )
-        return M, avail, y
-
-    X76, avail76, y76 = _sym_cohort("_load_gse76220", sym25)
-    X122, avail122, y122 = _sym_cohort("_load_gse122649", sym25)
-    Xsrp, availsrp, ysrp = _sym_cohort("_load_srp064478", feat25_bases)
-
-    # cohort -> (test matrix, panel-index list it covers, labels)
-    cohorts = {
-        "GPL16791": (X16, list(range(25)), y16),
-        "GSE76220": (X76, avail76, y76),
-        "GSE122649": (X122, avail122, y122),
-        "SRP064478": (Xsrp, availsrp, ysrp),
-    }
-    for c, (M, av, y) in cohorts.items():
-        print(f"  {c}: n={len(y)} genes={len(av)}/25")
-    weights = {c: 0.25 for c in cohorts}
+    # The greedy's own cohorts and weights (every CNS cohort except discovery, one
+    # equal-weight unit each), so the stopping rule scores exactly what it trimmed on.
+    cohorts = ns["_trim_cohorts"](sym25, feat25_bases, panel_train_cols)
+    weights = ns["_W"]
+    merged = ns["merge_cohorts"](cohorts, len(sym25))
+    fold = ns["cv_folds"](merged)
 
     print(f"Scoring {len(ks)} panel sizes on {len(cohorts)} cohorts ...")
-
-    # GSE76220 is rank-normalised log2(RPKM); the training scaler cannot be
-    # reused for it (see findings.md Step 43/44). Matches the greedy exactly.
 
     scores: dict[int, dict[str, np.ndarray]] = {}
     labels: dict[str, np.ndarray] = {c: v[2] for c, v in cohorts.items()}
     sym_index = {s: i for i, s in enumerate(sym25)}
 
     for k in ks:
-        panel_idx = {sym_index[g] for g in _panel_at(full, drops, k)}
-        scores[k] = {}
-        for cname, (Xte, av, y_te) in cohorts.items():
-            common = [pi for pi in av if pi in panel_idx]
-            if not common:
-                scores[k][cname] = np.full(len(y_te), 0.5)
-                continue
-            pos = {pi: j for j, pi in enumerate(av)}
-            Xtr = Xtr25[:, common]
-            Xt = Xte[:, [pos[pi] for pi in common]]
-            Ztr, Zt = zero_shot_scale(Xtr, Xt, cname)
-            m = PanelLGBMClassifier(**params).fit(Ztr, y_train)
-            scores[k][cname] = m.predict_proba(Zt)[:, 1]
+        panel_idx = sorted(sym_index[g] for g in _panel_at(full, drops, k))
+        oof = ns["pooled_oof"](merged, panel_idx, fold, params)
+        scores[k] = {c: oof[merged.cid == c] for c in cohorts}
         print(f"  k={k:<3} done", flush=True)
 
     # One shared set of resample indices per cohort -> paired comparison.
@@ -333,13 +288,14 @@ def main() -> None:
     wb = {k: sum(weights[c] * cboot[k][c] for c in cohorts) for k in ks}
 
     keep3 = [c for c in cohorts if c != SENSITIVITY_DROP_COHORT]
-    wb3 = {k: sum(cboot[k][c] for c in keep3) / len(keep3) for k in ks}
+    w3 = {c: weights[c] / sum(weights[d] for d in keep3) for c in keep3}
+    wb3 = {k: sum(w3[c] * cboot[k][c] for c in keep3) for k in ks}
 
     cohort_point = {
         k: {c: roc_auc_score(labels[c], scores[k][c]) for c in cohorts} for k in ks
     }
     point = {k: sum(weights[c] * cohort_point[k][c] for c in cohorts) for k in ks}
-    point3 = {k: sum(cohort_point[k][c] for c in keep3) / len(keep3) for k in ks}
+    point3 = {k: sum(w3[c] * cohort_point[k][c] for c in keep3) for k in ks}
     peak = max(point, key=point.get)
     peak3 = max(point3, key=point3.get)
     print(f"  peak panel: k={peak}  W.mean={point[peak]:.4f}")
@@ -437,10 +393,10 @@ def _cohort_section(df: "pd.DataFrame", core_k: int, peak: int) -> list[str]:
         w3_full = float(df.loc[df.k == df.k.max(), "wmean_drop1"].iloc[0])
         out += [
             "",
-            f"  3-cohort peak: k={peak3} (4-cohort peak was k={peak})",
+            f"  peak without {SENSITIVITY_DROP_COHORT}: k={peak3} (all-unit peak was k={peak})",
             f"  Gain of the core panel over the full {int(df.k.max())}-gene panel:",
-            f"    4-cohort equal weight : {w4_core:.4f} - {w4_full:.4f} = {w4_core - w4_full:+.4f}",
-            f"    3-cohort equal weight : {w3_core:.4f} - {w3_full:.4f} = {w3_core - w3_full:+.4f}",
+            f"    all units, equal weight      : {w4_core:.4f} - {w4_full:.4f} = {w4_core - w4_full:+.4f}",
+            f"    without {SENSITIVITY_DROP_COHORT}, reweighted : {w3_core:.4f} - {w3_full:.4f} = {w3_core - w3_full:+.4f}",
         ]
     return out
 
@@ -573,10 +529,17 @@ def _report(
         "",
         "Cross-checks:",
         f"  sequential rule (stop at first significant drop below peak): k={seq_k}",
-        f"    -- driven by a dW of {seq_dw:+.4f} AUC: statistically real, practically trivial.",
+        f"    -- driven by a dW of {seq_dw:+.4f} AUC: statistically real, "
+        + ("practically trivial." if abs(seq_dw) < MARGIN else f"larger than the {MARGIN} margin."),
         f"  naive 'smallest not significantly worse': k={naive_k} -- REJECTED, rewards",
-        f"    low power (k={wide_k} has a LARGER dW of {wide_dw:+.4f} yet is 'not significant'",
-        f"    only because its CI is {wide_ratio:.0f}x wider than the core panel's).",
+        *(
+            [
+                f"    low power (k={wide_k} has a LARGER dW of {wide_dw:+.4f} yet is 'not significant'",
+                f"    only because its CI is {wide_ratio:.0f}x wider than the core panel's).",
+            ]
+            if wide_k != core_k
+            else ["    low power (its CI on the loss vs the peak is too wide to show non-inferiority)."]
+        ),
     ]
     lines += _cohort_section(df, core_k, peak)
     (SCRIPT_DIR / "greedy_significance_stop.txt").write_text("\n".join(lines) + "\n")
@@ -599,7 +562,7 @@ def _report(
     ax.axvline(core_k, color="#27ae60", ls="--", lw=1.4, label=f"core panel k={core_k}")
     ax.axvline(peak, color="#c0392b", ls=":", lw=1.4, label=f"peak k={peak}")
     ax.set_xlabel("panel size k")
-    ax.set_ylabel("weighted mean zero-shot AUC")
+    ax.set_ylabel("weighted mean pooled-CV AUC")
     ax.set_title("Greedy trajectory with significance-based stopping rule")
     ax.legend(frameon=False, fontsize=8)
     ax.grid(alpha=0.25)

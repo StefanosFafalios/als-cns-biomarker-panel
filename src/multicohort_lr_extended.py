@@ -25,7 +25,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 import pandas as pd
-from utils import load_dataset
+from utils import core_panel_entrez, load_dataset
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -33,23 +33,7 @@ _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 RANDOM_STATE = 42
 
 # Entrez IDs for the 15 protein-coding panel genes (from blood_validation_gse234297.py)
-_PC_ENTREZ: dict[str, int] = {
-    "MECOM": 2122,
-    "SERTAD1": 29950,
-    "FCN3": 8547,
-    "PROS1": 5627,
-    "ANGPT2": 285,
-    "EMP1": 2012,
-    "TINAGL1": 64129,
-    "CKMT2": 1160,
-    "VWF": 7450,
-    "CLDN5": 7122,
-    "NR4A1": 3164,
-    "SOHLH2": 54937,
-    "HEXB": 3074,
-    "MCEE": 84693,
-    "SLC37A2": 219855,
-}
+_PC_ENTREZ: dict[str, int] = core_panel_entrez()
 
 _GSE122649_TAR = ALS_DIR / "resources" / "GSE122649" / "GSE122649_RAW.tar"
 _GSE122649_SOFT_URL = (

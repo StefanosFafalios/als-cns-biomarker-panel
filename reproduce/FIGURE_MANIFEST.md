@@ -1,127 +1,45 @@
 # Figure & Table Manifest
 
-Mapping every `\includegraphics` reference in `manuscript.tex` /
-`supplementary.tex` to the script that produces it. Use this to verify a
-specific result without re-running the full pipeline.
+Every figure and table in `manuscript.tex` / `supplementary.tex` (2026-10-05 rewrite),
+with the script and `run_all.sh` step that produce it. PNG and statistics paths are
+relative to `src/`.
 
-PNG paths are relative to `src/`. Each script writes its
-output(s) to that same directory.
+## Main text
 
-## Main-text figures
-
-| Label | File | Producing script | Section |
-|---|---|---|---|
-| fig:transfer_random | `random_panel_null_cohorts.png` | `random_panel_null_cohorts.py` (step 30a; needs 30) | Results: credentialing the panel's genes by transfer |
-| fig:iter_perf | `lgbm_iter_performance.png` | `lgbm_iter_plots.py` | §3.1 |
-| fig:core25_curve | `lgbm_top500_final_curve_top50.png` | `lgbm_top500_final_analysis.py` | §3.1 |
-| fig:core25_loo | `lgbm_core25_loo.png` | `lgbm_core25_panel.py` | §3.1 |
-| fig:core25_curve_zoom | `lgbm_core25_curve.png` | `lgbm_core25_panel.py` | §3.1 |
-| fig:core25_shap | `lgbm_core25_shap_beeswarm.png` | `lgbm_core25_panel.py` | §3.3 |
-| fig:gpl16791 | `external_validation_gpl16791.png` (in `external_validation_gpl16791.py` output) | `external_validation_gpl16791.py` | §3.4 |
-| fig:gse76220 | `blood_validation_gse76220.png` | `external_validation_gse76220.py` | §3.4.1 |
-| fig:gse122649 | `additional_cohort_gse122649.png` | `additional_cohort_gse122649.py` | §3.4.1 |
-| fig:srp064478 | `srp064478_validation.png` | `srp064478_figure.py` (depends on `srp064478_validation.py`) | §3.4.1 |
-| fig:cross_cohort_loo | `panel_loo_zeroshot.png` | `panel_loo_zeroshot.py` (v2) | §3.4.2 |
-| fig:validations | `combined_validation_roc.png` | `combined_validation_roc.py` (step 22b; depends on all external validations) | §3.4 |
-| fig:gse67196 | `gse67196_regional_scoring.png` | `gse67196_regional_scoring.py` | §3.4.3 |
-| fig:blood | `blood_validation_gse234297.png` | `blood_validation_gse234297.py` | §3.4.4 |
-| fig:pathway_ora_up | `pathway_ora_up_in_als.png` | `pathway_ora.py` | §3.6 |
-| fig:pathway_ora_down | `pathway_ora_down_in_als.png` | `pathway_ora.py` | §3.6 |
-| fig:pathway_ora_np | `pathway_ora_non_predictive.png` | `pathway_ora.py` | §3.6 |
-| fig:gene_profiling_auc | `gene_profiling_auc.png` | `gene_profiling.py` | §3.3 |
-| fig:gene_profiling_tissue | `gene_profiling_tissue.png` | `gene_profiling.py` | §3.3 |
-| fig:gene_profiling_volcano | `gene_profiling_volcano.png` | `gene_profiling.py` | §3.3 |
-| fig:c9 | `c9als_sals_differential.png` | `c9als_sals_differential.py` | §3.7 |
-| fig:replacement | `gene_replacement.png` | `gene_replacement.py` (cleaned: `gene_replacement_plot15.py`) | §3.8 |
-| fig:repl_scatter | `replaceability_scatter.png` | `replaceability_scatter.py` | §3.8 |
-| fig:deconv | `cell_type_deconvolution.png` | `cell_type_deconvolution.py` | §3.9 |
-| fig:specificity | `disease_specificity.png` | `disease_specificity.py` | §3.10 |
-| fig:string | `string_network.png` | `string_network.py` | §3.13 |
-| fig:causal | `causal_panel_network.png` | `causal_panel_network.py` | §3.13 |
-
-## Supplementary figures
-
-| Label | File | Producing script | Supplementary section |
-|---|---|---|---|
-| fig:repl_greedy | `repl_vs_greedy.png` | `replaceability_figures.py` | S1.7 |
-| fig:repl_box | `repl_candidate_boxplot.png` | `replaceability_figures.py` | S1.7 |
-| fig:repl_heatmap | `repl_module_heatmap.png` | `replaceability_figures.py` | S1.7 |
-| fig:panelmb | `panel_mb_network.png` | `panel_mb_network.py` + `panel_mb_postprocess.py` | S15 |
-| fig:loo_sensitivity | `panel_loo_zeroshot.png` (shared) | `panel_loo_zeroshot.py` | S22 |
-| fig:greedy_stop | `greedy_significance_stop.png` | `greedy_significance_stop.py` | S16 (panel-size trajectory + non-inferiority band) |
-| fig:new_cohorts | `new_cohort_validation.png` | `new_cohort_validation.py` | S (independent spinal-cord / motor-cortex cohorts) |
-| fig:snrna_sc | `snrna_spinal_cord.png` | `snrna_spinal_cord.py` | S (spinal cord at single-nucleus resolution) |
-| fig:weight_sensitivity | `cross_cohort_loo_sensitivity.png` | `cross_cohort_loo_sensitivity.py` | S17 (four-scheme weighting sensitivity) |
-| fig:calibration | `calibration_reliability.png` | `calibration_analysis.py` | S17 |
-| fig:dca | `decision_curve.png` | `decision_curve_analysis.py` | S22 |
-| fig:tfs | `upstream_regulators.png` | `upstream_regulators.py` | S5 |
-| fig:stability | `stability_selection.png` | `stability_selection.py` | S19 |
-| fig:stability_module | `stability_module.png` | `stability_module.py` | S19 |
-| fig:progression | `als_progression_proxies.png` | `als_progression_proxies.py` | S7 |
-| fig:deconv_corr | `cell_type_deconvolution_corr.png` | `cell_type_deconvolution.py` | (auxiliary) |
-| fig:panel_variant_cv | `panel_variant_cv.png` | `panel_variant_cv.py` | S13 |
-| fig:panel_variant_greedy | `panel_variant_greedy.png` | `panel_variant_greedy.py` | S13 |
-| fig:robustness | `multi_algorithm_robustness.png` | `multi_algorithm_robustness.py` | S19 (moved from main) |
-| fig:sub_bar | `cross_cohort_substitution.png` | `cross_cohort_substitution.py` | S1.7 (moved from main) |
-| fig:sub_roc | `substitution_roc_all.png` | `replaceability_figures.py` | S1.7 (moved from main) |
-| fig:combat | `combat_batch_correction.png` | `combat_batch_correction.py` | S (ComBat batch correction) |
-| fig:bretigea | `deconv_reference_bretigea.png` | `deconv_reference_bretigea.py` | S (robustness: composition) |
-| fig:snrna | `snrna_percell_validation.png` | `snrna_percell_validation.py` (GSE219280 snRNA; #1) | S (robustness: single-nucleus) |
-| fig:snrna2 | `snrna_validation_gse212630.png` | `snrna_validation_gse212630.py` (GSE212630 non-C9 snRNA; #2 generalisation) | S (robustness: single-nucleus) |
-| fig:top1axis | `top1_axis_check.png` | `top1_axis_check.py` (Zhou 2026 DNA-repair + cryptic-exon sets; expression deciles) | S (shared-mechanism appraisal) |
-| fig:crossdisease | `cross_disease_specificity.png` | `cross_disease_specificity.py` (AD / FTLD-TDP / HD / PD vs own controls + ALS positive control; ALS-vs-disease control-referenced z) | S (cross-disease specificity) |
-| fig:crossdisease_loo | `cross_disease_specificity_loo.png` | `cross_disease_specificity.py` (per-cohort leave-one-gene-out Δ AUC heatmap, both models) | S (cross-disease specificity) |
-| fig:crossdisease_covar | `cross_disease_covariates.png` | `cross_disease_covariates.py` (panel score vs PMI / RIN / age in the HD and PD cohorts) | S (cross-disease specificity) |
-| fig:expl_covar | `explainability_covariates.png` | `explainability_figures.py` (panel score vs PMI / RIN / age / Braak, cases and controls fitted separately) | S (explainability) |
-| fig:expl_crossdisease | `explainability_crossdisease.png` | `explainability_figures.py` (per-cohort case vs own-control score strips, constant grey control band) | S (explainability) |
-| fig:expl_deconv | `explainability_deconv.png` | `explainability_figures.py` (cell-type assignment block heatmap, bootstrap-separation asterisks) | S (explainability) |
-
-## Tables
-
-Most tables are hardcoded in the .tex files, but their data values come from
-the following statistics files. Updating a table number = rerunning that
-producing script.
-
-| Table | Data source | Producing script |
+| Label | Artefact | Producing script (step) |
 |---|---|---|
-| tab:core25_short | `lgbm_core25_panel.csv` | `lgbm_core25_panel.py` |
-| tab:critical_panel (panel membership, used throughout) | `panel_critical.csv` — **canonical panel definition**, read by every downstream script via `utils.critical_panel_symbols()` | `greedy_significance_stop.py` |
-| panel-size stopping rule (§3.4.2) | `greedy_significance_stop.txt` / `.csv` / `.png` | `greedy_significance_stop.py` |
-| tab:validation_summary | `lr_vs_lgbm_zeroshot.txt` + `panel_critical_eval_statistics.txt` | `lr_vs_lgbm_zeroshot.py` + `panel_critical_eval.py` |
-| donor-grouped internal CV AUC (abstract, §3.1, limitations) + GPL16791 donor-disjoint AUCs (§3.4, Fig 3 caption, S-tab:validation) | `donor_leakage_sensitivity_statistics.txt` / `.csv` | `donor_leakage_sensitivity.py` |
-| tab:bio_evidence, tab:druggability | `drug_targets_statistics.txt` + `cell_type_deconvolution_statistics.txt` + `drug_targets_surrogates.txt` (Tier-S surrogate rows) | `drug_targets.py` + `cell_type_deconvolution.py` + `drug_targets_surrogates.py` |
-| tab:specificity | `disease_specificity_statistics.txt` | `disease_specificity.py` |
-| tab:tfs | `upstream_regulators_statistics.txt` | `upstream_regulators.py` |
-| tab:coverage_matrix | `lr_vs_lgbm_zeroshot.txt` | `lr_vs_lgbm_zeroshot.py` |
-| tab:multicohort | `lr_vs_lgbm_zeroshot.txt` + `multicohort_baselines.txt` | `lr_vs_lgbm_zeroshot.py` + `multicohort_baselines.py` |
-| tab:ctd_sensitivity | `compartment_regression_sensitivity_statistics.txt` | `compartment_regression_sensitivity.py` |
-| tab:lr_baseline | `lr_baseline_statistics.txt` | `lr_baseline.py` |
-| tab:loo_sensitivity | `panel_loo_zeroshot_statistics.txt` + `cross_cohort_loo_sensitivity.txt` | `panel_loo_zeroshot.py` + `cross_cohort_loo_sensitivity.py` |
-| tab:deconv_robust | `deconv_robustness.txt` / `.csv` | `deconv_robustness.py` (cell-type assignment bootstrap; also sets composition-driver labels in tab:bio_evidence) |
-| tab:drugrepl | `druggable_replacement_targets.csv` / `.txt` | `druggable_replacement_targets.py` (DGIdb druggable co-regulated surrogates; depends on `gene_replacement.py`) |
-| tab:combat | `combat_batch_correction_statistics.txt` | `combat_batch_correction.py` |
-| tab:incremental | `incremental_over_composition_statistics.txt` | `incremental_over_composition.py` (panel vs composition; #2) |
-| (sec:genetic_support, text) | `genetic_support_opentargets_statistics.txt` | `genetic_support_opentargets.py` (OpenTargets ALS genetic support; #6) |
-| tab:top1axis | `top1_axis_check_statistics.txt` / `.csv` | `top1_axis_check.py` (Zhou 2026 DNA-repair + cryptic-exon sets; expression deciles) |
-| tab:crossdisease | `cross_disease_specificity_statistics.txt` / `.csv` | `cross_disease_specificity.py` (cross-disease sensitivity matrix; Braak dose-response; FTLD-U region contrast) |
-| (sec:crossdisease, ALS-vs-disease) | `cross_disease_specificity_als_vs_disease.csv` | `cross_disease_specificity.py` (control-referenced z, ALS vs each other disease) |
-| (sec:crossdisease, LOO) | `cross_disease_specificity_loo.csv` | `cross_disease_specificity.py` (per-cohort leave-one-gene-out Δ AUC) |
-| (sec:crossdisease, covariates) | `cross_disease_covariates_statistics.txt` / `.csv` / `_adjusted.csv` | `cross_disease_covariates.py` (PMI / RIN / age confounding check) |
+| tab:cohorts | dataset sizes and panel-gene coverage | `cohort_validation_table.py` (24b) |
+| fig:beeswarm | `lgbm_core25_shap_beeswarm.png` | `lgbm_core25_panel.py` (02d) |
+| tab:panel25 | `lgbm_core25_panel.csv`, `gene_profiling_summary.csv` | `lgbm_core25_panel.py` (02d), `gene_profiling.py` (03) |
+| tab:validation | `cohort_validation_table.{csv,txt}` | `cohort_validation_table.py` (24b) |
+| fig:validation | `cohort_validation.png` | `cohort_validation_figure.py` (24d) |
+| fig:trim | `greedy_significance_stop.png` | `greedy_significance_stop.py` (24a) |
+| fig:direction, tab:direction | `drug_direction.png`, `drug_direction_{table.csv,statistics.txt}` | `drug_direction_figure.py` (07c; needs 07, 41, 41a, 42) |
 
-## Statistics-text references in narrative
+## Supplementary
 
-The manuscript narrative cites a handful of specific numbers (AUCs, CIs,
-p-values) that come from these statistics files. If only the corresponding
-script is rerun, those numbers will refresh automatically.
-
-| Section | Numbers come from |
-|---|---|
-| Abstract (5-fold CV AUC = 0.9621) | `lgbm_top500_final_curve.csv` |
-| §3.4.2 W.mean trajectory | `iterative_panel_elimination_statistics.txt` |
-| §3.4.2 D_ZS CIs | `panel_loo_zeroshot_statistics.txt` |
-| §3.8 cross-cohort substitution Δ AUC | `cross_cohort_substitution_statistics.txt` |
-| §3.10 ALS vs FTLD/PSP AUC = 0.9067 | `disease_specificity_statistics.txt` |
-| §3.13 DGIdb counts | `drug_targets_statistics.txt` |
+| Label | Artefact | Producing script (step) |
+|---|---|---|
+| tab:supp_hyper | `lgbm_top500_best_params.json` | Bayesian search (02b, not in this repository; the JSON ships in `src/`) |
+| tab:supp_random | `random_panel_null_cohorts_statistics.txt` | `random_panel_null_cohorts.py` (30a) |
+| S3 pooled null | `pooled_cv_random_null_statistics.txt` | `pooled_cv_random_null.py` (24c) |
+| tab:supp_nested | `nested_panel_cv_statistics.txt`, `nested_cv_decomposition_statistics.txt` | `nested_panel_cv.py` (30b), `nested_cv_decomposition.py` (30c) |
+| tab:supp_trim, fig:supp_trim | `iterative_panel_elimination{.png,_statistics.txt}`, `greedy_significance_stop_statistics.txt` | `iterative_panel_elimination.py` (24), `greedy_significance_stop.py` (24a) |
+| tab:supp_deconv | `cell_type_deconvolution_statistics.txt`, `deconv_robustness.txt` | `cell_type_deconvolution.py` (11), `deconv_robustness.py` (11a) |
+| BRETIGEA paragraph | `deconv_reference_bretigea_statistics.txt` | `deconv_reference_bretigea.py` (11b) |
+| tab:supp_incremental | `incremental_over_composition_statistics.txt` | `incremental_over_composition.py` (11c) |
+| tab:supp_percell, fig:supp_snrna | `snrna_spinal_cord{.png,_percell.csv}`, `snrna_cortex_percell_statistics.txt` | `snrna_spinal_cord.py` (41), `snrna_cortex_percell.py` (41a) |
+| tab:supp_meta | `multicohort_meta_analysis{.csv,_statistics.txt}` | `multicohort_meta_analysis.py` (42) |
+| tab:supp_gstm1 | `gstm1_null_check_statistics.txt` | `gstm1_null_check.py` (07b) |
+| tab:supp_crossdisease | `cross_disease_specificity_statistics.txt` | `cross_disease_specificity.py` (35) |
+| S10 within-cohort FTD | `disease_specificity_statistics.txt` | `disease_specificity.py` (10) |
+| S10 blood paragraph | `blood_validation_gse234297_statistics.txt` | `blood_validation_gse234297.py` (14) |
+| S11 clinical | `nygc_clinical_association_statistics.txt` | `nygc_clinical_association.py` (38, gated) |
+| tab:supp_drugs | `drug_targets_summary.csv` | `drug_targets.py` (07), `genetic_support_opentargets.py` (07ac) |
+| S13 context | `panel_mb_*`, `upstream_regulators*`, `pathway_ora*`, `gtex_tissue_specificity*` | 15a/15b, 08, 06, 07a |
+| S14 robustness | `calibration_analysis_statistics.txt`, `lr_baseline_statistics.txt`, `combat_batch_correction_statistics.txt`, `stability_selection_statistics.txt`, `gene_replacement*` | 28, 28c, 28aa, 21a, 27/27a |
+| S15 coffeeBreak | `coffeebreak_panel_statistics.txt` | `coffeebreak_panel_loo.py` (39, gated; needs coffeeBreak) |
+| S3 newer cohorts | `new_cohort_validation_statistics.txt` | `new_cohort_validation.py` (40) |
 
 ## Exploratory scripts not in `run_all.sh`
 
@@ -133,7 +51,8 @@ results:
 ```
 biomarker_discovery_lr_bayesopt.py    # Alternative LR-based discovery
 loc112268270_greedy.py                # LOC112268270 lysosomal probe (deep-dive cut; now 1 sentence in main text)
-cmap_drug_repurposing.py              # CMap/LINCS repurposing (section removed: negative result, no FDR-significant hits)
+cmap_drug_repurposing.py              # Enrichr LINCS overlap with an older 15-gene list; no FDR-significant hits; not the per-cell screen proposed in the Discussion
+multicohort_lr_extended.py            # LR vs LGBM on GSE122649/GSE234297/SRP064478; own (raw-count) blood loader, not cited
 reciprocal_discovery.py               # Reciprocal discovery on GSE122649 (n=38); omitted: underpowered, panel re-discovery overfits (transfer 0.54). Due-diligence only.
 ses_markov_blanket.py                 # IAMB Markov-blanket selection; removed from paper (alpha-dependent sensitivity analysis)
 iamb_alpha_grid.py                    # IAMB alpha-tuning grid; removed from paper
@@ -146,14 +65,3 @@ validation_panel_loo.py               # Legacy panel LOO (superseded by panel_lo
 cross_cohort_panel_loo.py             # Legacy cross-cohort LOO (superseded by iterative_panel_elimination.py)
 colsample_sensitivity.py              # colsample_bytree transfer sensitivity; internal check, not cited
 ```
-
-## Tables added in the 2026-09-28 revision
-
-| Label | Artefact | Producing script | Section |
-|---|---|---|---|
-| tab:transfer_random | `random_panel_null_cohorts_statistics.txt` | `random_panel_null_cohorts.py` (30a) | Results |
-| tab:random_null | `random_panel_null_cohorts_statistics{,_lgbm_core25_panel_annotated}.txt` | `panel_annotation.py` (30), `random_panel_null_cohorts.py` (30a) | S random gene-set baseline |
-| tab:nested_cv | `nested_panel_cv_statistics.txt`, `nested_cv_decomposition_statistics.txt` | `nested_panel_cv.py` (30b), `nested_cv_decomposition.py` (30c) | S nested CV |
-| tab:iamb_alpha | `ses_markov_blanket_statistics.txt`, `iamb_alpha_grid.txt` | `ses_markov_blanket.py` (30d), `iamb_alpha_grid.py` (30e); need the coffeeBreak library, not in the public repo | S IAMB |
-| tab:coffeebreak_panel | `coffeebreak_panel_statistics.txt`, `random_panel_null_cohorts_statistics_coffeebreak_panel.txt` | `coffeebreak_panel_loo.py` (39, gated); needs coffeeBreak and its search output, not in the public repo | S coffeeBreak |
-| (C9 paragraph) | `nygc_clinical_association_statistics.txt` | `nygc_clinical_association.py` (38, gated) | Results: ALS subtype |

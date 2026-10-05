@@ -17,6 +17,12 @@ Only protein-coding genes with a known HGNC symbol are queried.
 Pseudogenes, ncRNAs, snoRNAs, and uncharacterised TEC entries
 are excluded from drug target annotation.
 
+Candidate ranking (user decision 2026-10-05): primary evidence is the per-cell
+ALS vs control change in each gene's top cell type in spinal-cord single-nucleus
+data (snrna_spinal_cord.py, step 41), which tests directly whether the cells
+themselves change. The bulk deconvolution label (cell_type_deconvolution.py) is
+secondary: it only infers that from bulk tissue, and on this panel the two disagree.
+
 Outputs
 -------
   drug_targets_summary.csv     — full drug-gene interaction table
@@ -95,25 +101,34 @@ _PROTEIN_CODING_GENES: list[dict[str, str]] = _panel_genes()
 #   → cannot be explained by composition alone → per-cell dysregulation likely
 # ---------------------------------------------------------------------------
 
-# Values transcribed from cell_type_deconvolution.py for the 25-gene panel's
-# protein-coding members, of which the critical panel is a subset. The 2026-09-27 rerun
-# of that script reproduced its outputs byte for byte, so they stand. Re-derive them
-# from that script (do not hand-edit) if the deconvolution changes.
-_DECONV: dict[str, dict] = {
-    "MECOM": {"dominant_ct": "Endothelial", "rho": 0.929, "ct_als_dir": "down"},
-    "FCN3": {"dominant_ct": "Endothelial", "rho": 0.650, "ct_als_dir": "down"},
-    "ANGPT2": {"dominant_ct": "Endothelial", "rho": 0.670, "ct_als_dir": "down"},
-    "EMP1": {"dominant_ct": "Microglia", "rho": 0.771, "ct_als_dir": "up"},
-    "TINAGL1": {"dominant_ct": "Endothelial", "rho": 0.932, "ct_als_dir": "down"},
-    "CKMT2": {"dominant_ct": "OPC", "rho": 0.785, "ct_als_dir": "ns"},
-    "VWF": {"dominant_ct": "Endothelial", "rho": 0.957, "ct_als_dir": "down"},
-    "CLDN5": {"dominant_ct": "Endothelial", "rho": 0.964, "ct_als_dir": "down"},
-    "NR4A1": {"dominant_ct": "Pericyte", "rho": 0.786, "ct_als_dir": "down"},
-    "SOHLH2": {"dominant_ct": "Astrocyte", "rho": 0.525, "ct_als_dir": "ns"},
-    "HEXB": {"dominant_ct": "Microglia", "rho": 0.775, "ct_als_dir": "up"},
-    "MCEE": {"dominant_ct": "Astrocyte", "rho": 0.623, "ct_als_dir": "ns"},
-    "SLC37A2": {"dominant_ct": "Microglia", "rho": 0.905, "ct_als_dir": "up"},
-}
+# Per-gene composition label written by cell_type_deconvolution.py (step 11).
+_DECONV: dict[str, dict] = (
+    pd.read_csv(SCRIPT_DIR / "cell_type_deconvolution_genes.csv").set_index("symbol").to_dict("index")
+)
+
+
+# Per-cell change in each gene's top cell type, spinal-cord snRNA (step 41; 8 ALS /
+# 4 control donors, the GSE287256 bulk donors). Read in main() so a missing file
+# fails with the step order rather than at import.
+_SNRNA_CSV = SCRIPT_DIR / "snrna_spinal_cord_percell.csv"
+_SNRNA_ORDER = {"confirmed": 0, "suggestive": 1, "none": 2, "not_measured": 2, "opposite": 3}
+_DECONV_ORDER = {"sign_reversal": 0, "ambiguous_ct": 1, "composition_driven": 2}
+
+
+def _snrna_evidence(gene_dir: str, rec: dict | None) -> str:
+    """Grade the single-nucleus per-cell test for one gene.
+
+    Returns "confirmed" (q < 0.05, same direction as bulk), "suggestive" (p < 0.05,
+    q >= 0.05, same direction), "opposite" (p < 0.05 against the bulk direction),
+    "none" (p >= 0.05) or "not_measured".
+    """
+    if rec is None or pd.isna(rec["p"]):
+        return "not_measured"
+    if rec["p"] >= 0.05:
+        return "none"
+    if (rec["log2fc"] > 0) != (gene_dir == "up_in_ALS"):
+        return "opposite"
+    return "confirmed" if rec["q"] < 0.05 else "suggestive"
 
 
 def _per_cell_evidence(gene_dir: str, deconv: dict) -> str:
@@ -263,6 +278,14 @@ def main() -> None:
     print("=" * 60)
 
     symbols = [g["symbol"] for g in _PROTEIN_CODING_GENES]
+    if not _SNRNA_CSV.exists():
+        raise SystemExit(f"{_SNRNA_CSV.name} missing -- run snrna_spinal_cord.py (step 41) first")
+    snrna = pd.read_csv(_SNRNA_CSV).set_index("gene").to_dict("index")
+    # Independent-donor replication in cortex snRNA (snrna_cortex_percell.py, step 41a).
+    cortex_csv = SCRIPT_DIR / "snrna_cortex_percell.csv"
+    if not cortex_csv.exists():
+        raise SystemExit(f"{cortex_csv.name} missing -- run snrna_cortex_percell.py (step 41a) first")
+    cortex = pd.read_csv(cortex_csv)
 
     # ------------------------------------------------------------------
     # 1. DGIdb batch query
@@ -344,6 +367,7 @@ def main() -> None:
         deconv_rho = dc.get("rho", 0.0)
         ct_als_dir = dc.get("ct_als_dir", "ns")
         per_cell = _per_cell_evidence(direction, dc) if dc else "unknown"
+        sn = snrna.get(sym)
 
         rows.append(
             {
@@ -366,6 +390,15 @@ def main() -> None:
                 "deconv_rho": deconv_rho,
                 "ct_als_dir": ct_als_dir,
                 "per_cell_evidence": per_cell,
+                "snrna_celltype": sn["celltype"] if sn else "",
+                "snrna_log2fc": sn["log2fc"] if sn else float("nan"),
+                "snrna_p": sn["p"] if sn else float("nan"),
+                "snrna_q": sn["q"] if sn else float("nan"),
+                "snrna_evidence": _snrna_evidence(direction, sn),
+                **{
+                    f"cortex_{r.cohort}": f"{r.log2fc:+.2f} (p {r.p:.2g})"
+                    for r in cortex[cortex.gene == sym].itertuples()
+                },
             }
         )
 
@@ -375,45 +408,46 @@ def main() -> None:
     # ------------------------------------------------------------------
     # 4. Write statistics
     # ------------------------------------------------------------------
-    # Priority order for deconv-adjusted ranking:
-    # sign_reversal > ambiguous_ct > composition_driven
-    _priority_order = {"sign_reversal": 0, "ambiguous_ct": 1, "composition_driven": 2}
-    deconv_sorted = summary_df.sort_values(
-        "per_cell_evidence",
-        key=lambda s: s.map(_priority_order).fillna(3),
-    )
+    # Candidate priority: single-nucleus per-cell evidence first, bulk deconvolution
+    # second, SHAP rank last.
+    ranked = summary_df.assign(
+        _k1=summary_df.snrna_evidence.map(_SNRNA_ORDER).fillna(4),
+        _k2=summary_df.per_cell_evidence.map(_DECONV_ORDER).fillna(3),
+    ).sort_values(["_k1", "_k2", "shap_rank"])
 
     lines: list[str] = [
         "Drug Target Annotation — Critical ALS Panel (protein-coding members)",
         "=" * 70,
         f"Protein-coding genes queried: {len(symbols)}",
         "Sources: DGIdb v5 GraphQL + OpenTargets Platform GraphQL",
-        "Deconvolution: z-score module scoring (cell_type_deconvolution.py)",
+        "Per-cell evidence (primary): spinal-cord snRNA GSE287257, ALS vs control donor pseudobulk",
+        "  in each gene's top cell type (snrna_spinal_cord.py). 8 ALS / 4 control donors (the GSE287256",
+        "  bulk donors, a trimming cohort); the smallest attainable two-sided MWU p is 0.004.",
+        "Bulk deconvolution (secondary): z-score module scoring (cell_type_deconvolution.py)",
+        "Cortex replication (reported, not used for tiers): the same cell type in two cortex snRNA",
+        "  cohorts with independent donors (snrna_cortex_percell.py): " + ", ".join(sorted(cortex.cohort.unique())),
         "",
-        "DECONVOLUTION-ADJUSTED PRIORITY TABLE",
-        "(sign_reversal > ambiguous_ct > composition_driven)",
-        "-" * 80,
-        f"{'Symbol':<10} {'Dir':<14} {'LOO Δ':<10} {'Tract.':<12} "
-        f"{'Dominant CT':<15} {'ρ':<7} {'CT dir':<8} {'Per-cell evidence'}",
-        "-" * 80,
+        "CANDIDATE PRIORITY TABLE (snRNA per-cell evidence > bulk deconvolution > SHAP rank)",
+        "-" * 100,
+        f"{'Symbol':<9} {'Dir':<12} {'snRNA cell type':<16} {'log2FC':>7} {'q':>7}  {'per-cell':<13}"
+        f"{'bulk deconv':<19} {'Tract.':<10} {'DGIdb n':>7}",
+        "-" * 100,
     ]
-
-    for _, r in deconv_sorted.iterrows():
+    for _, r in ranked.iterrows():
         lines.append(
-            f"{r['symbol']:<10} {r['direction']:<14} {r['loo_delta']:<10} "
-            f"{r['tractability']:<12} {r['dominant_ct']:<15} "
-            f"{r['deconv_rho']:<7.3f} {r['ct_als_dir']:<8} {r['per_cell_evidence']}"
+            f"{r['symbol']:<9} {r['direction']:<12} {r['snrna_celltype']:<16} {r['snrna_log2fc']:>7.2f} "
+            f"{r['snrna_q']:>7.3g}  {r['snrna_evidence']:<13}{r['per_cell_evidence']:<19} "
+            f"{r['tractability']:<10} {r['n_dgidb_interactions']:>7}"
         )
 
     lines += [
         "",
-        "SHAP-RANK TABLE (with deconv annotation)",
+        "SHAP-RANK TABLE",
         "-" * 80,
         f"{'Rank':<5} {'Symbol':<10} {'Dir':<14} {'LOO Δ':<10} "
         f"{'Tract.':<12} {'DGIdb n':<9} {'Approved drugs':<35} {'OT phase3'}",
         "-" * 80,
     ]
-
     for _, r in summary_df.iterrows():
         approved = r["approved_drugs_dgidb"] or r["phase3_drugs_ot"] or "—"
         if len(approved) > 34:
@@ -425,93 +459,47 @@ def main() -> None:
             f"{r['phase3_drugs_ot'] or '—'}"
         )
 
-    lines += [
-        "",
-        "TIER 1 — SIGN REVERSAL (per-cell signal confirmed by deconvolution)",
-        "-" * 70,
-        "  Gene direction contradicts dominant cell-type ALS shift →",
-        "  composition change cannot explain the expression difference.",
-        "",
+    tiers = [
+        ("TIER 1 — PER-CELL CHANGE CONFIRMED (snRNA q < 0.05, same direction as bulk)", ("confirmed",)),
+        ("TIER 2 — PER-CELL CHANGE SUGGESTIVE (snRNA p < 0.05, q >= 0.05)", ("suggestive",)),
+        ("TIER 3 — NO PER-CELL CHANGE DETECTED (or not measured, or opposite to bulk)",
+         ("none", "not_measured", "opposite")),
     ]
-    tier1 = deconv_sorted[deconv_sorted["per_cell_evidence"] == "sign_reversal"]
-    if tier1.empty:
-        lines.append("  None.")
-    else:
-        for _, r in tier1.iterrows():
+    tier_genes: dict[str, list[str]] = {}
+    for title, grades in tiers:
+        lines += ["", title, "-" * 70]
+        sub = ranked[ranked.snrna_evidence.isin(grades)]
+        tier_genes[title] = sub.symbol.tolist()
+        if sub.empty:
+            lines.append("  None.")
+        for _, r in sub.iterrows():
+            approved = r["approved_drugs_dgidb"] or r["phase3_drugs_ot"]
             lines.append(
-                f"  {r['symbol']} ({r['direction']}, SHAP rank {r['shap_rank']}):"
+                f"  {r['symbol']} ({r['direction']}, SHAP rank {r['shap_rank']}): snRNA "
+                f"{r['snrna_celltype'] or 'n/a'} log2FC {r['snrna_log2fc']:+.2f} (p {r['snrna_p']:.3g}, "
+                f"q {r['snrna_q']:.3g}); bulk deconv {r['per_cell_evidence']} "
+                f"({r['dominant_ct']}, ρ={r['deconv_rho']:.3f}, CT {r['ct_als_dir']} in ALS)"
             )
             lines.append(
-                f"    Dominant CT: {r['dominant_ct']} (ρ={r['deconv_rho']:.3f}, "
-                f"CT is {r['ct_als_dir']} in ALS) — gene goes OPPOSITE → per-cell"
+                "    Cortex replication (log2FC, p): "
+                + "; ".join(f"{c[7:]} {r[c]}" for c in summary_df.columns if c.startswith("cortex_"))
             )
-            lines.append(
-                f"    LOO Δ={r['loo_delta']}  Tractability: {r['tractability']}"
-            )
-            if r["approved_drugs_dgidb"]:
-                lines.append(f"    DGIdb approved: {r['approved_drugs_dgidb']}")
+            lines.append(f"    Tractability: {r['tractability']}  DGIdb interactions: {r['n_dgidb_interactions']}")
+            if approved:
+                lines.append(f"    Approved / phase>=3: {approved}")
             if r["inhibitors_dgidb"]:
                 lines.append(f"    Inhibitors: {r['inhibitors_dgidb']}")
-            if r["phase3_drugs_ot"]:
-                lines.append(f"    OT phase≥3: {r['phase3_drugs_ot']}")
-            lines.append("")
-
-    lines += [
-        "TIER 2 — AMBIGUOUS CT (dominant cell type not significantly changed)",
-        "-" * 70,
-        "  Cannot resolve per-cell vs composition from bulk data alone.",
-        "",
-    ]
-    tier2 = deconv_sorted[deconv_sorted["per_cell_evidence"] == "ambiguous_ct"]
-    if tier2.empty:
-        lines.append("  None.")
-    else:
-        for _, r in tier2.iterrows():
-            lines.append(
-                f"  {r['symbol']} ({r['direction']}, SHAP rank {r['shap_rank']}):"
-            )
-            lines.append(
-                f"    Dominant CT: {r['dominant_ct']} (ρ={r['deconv_rho']:.3f}, "
-                f"CT not significant in ALS)"
-            )
-            lines.append(
-                f"    LOO Δ={r['loo_delta']}  Tractability: {r['tractability']}"
-            )
-            if r["approved_drugs_dgidb"]:
-                lines.append(f"    DGIdb approved: {r['approved_drugs_dgidb']}")
-            if r["phase3_drugs_ot"]:
-                lines.append(f"    OT phase≥3: {r['phase3_drugs_ot']}")
-            lines.append("")
-
-    lines += [
-        "TIER 3 — COMPOSITION DRIVEN (expression consistent with cell-type shift)",
-        "-" * 70,
-        "  Dysregulation may reflect cell-type abundance change, not per-cell effect.",
-        "  Still valid biomarkers; therapeutic interpretation requires single-cell data.",
-        "",
-    ]
-    tier3 = deconv_sorted[deconv_sorted["per_cell_evidence"] == "composition_driven"]
-    if tier3.empty:
-        lines.append("  None.")
-    else:
-        for _, r in tier3.iterrows():
-            approved = r["approved_drugs_dgidb"] or r["phase3_drugs_ot"]
-            flag = " [ACTIONABLE]" if approved else ""
-            lines.append(
-                f"  {r['symbol']:<10} CT={r['dominant_ct']:<15} "
-                f"ρ={r['deconv_rho']:.3f}  "
-                f"tract={r['tractability']}  "
-                f"DGIdb={r['n_dgidb_interactions']}{flag}"
-            )
+            if r["activators_dgidb"]:
+                lines.append(f"    Activators: {r['activators_dgidb']}")
 
     stats_path = SCRIPT_DIR / "drug_targets_statistics.txt"
     stats_path.write_text("\n".join(lines) + "\n")
 
     actionable = summary_df[summary_df["has_approved_drug"]]
-    tier1_genes = tier1["symbol"].tolist() if not tier1.empty else []
+    tier1_genes = tier_genes[tiers[0][0]]
     print("\n  Summary CSV   → drug_targets_summary.csv")
     print("  Statistics    → drug_targets_statistics.txt")
-    print(f"\n  Tier 1 (sign reversal / per-cell): {tier1_genes}")
+    print(f"\n  Tier 1 (snRNA per-cell change confirmed): {tier1_genes}")
     print(f"  Actionable (approved/phase-3 drug): {actionable['symbol'].tolist()}")
     print("\nDone.")
 

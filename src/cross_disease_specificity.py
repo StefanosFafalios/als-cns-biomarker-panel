@@ -47,7 +47,7 @@ compares the ALS z-distribution against each other disease's z-distribution
 (AUC + Mann-Whitney U).  This is batch-robust in a way the raw scores are not,
 though it still assumes the control groups are comparable across studies.
 The within-cohort equivalent already exists as Step 10 (ALS vs the held-out
-FTLD/PSP group inside GSE153960, AUC = 0.9067), which remains the cleanest
+FTD group inside GSE153960, disease_specificity_statistics.txt), which remains the cleanest
 ALS-vs-other-disease estimate because it is free of any cross-study component.
 
 Cohorts
@@ -87,7 +87,12 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import critical_panel_label, critical_panel_symbols, load_dataset
+from utils import (
+    core_panel_entrez,
+    critical_panel_label,
+    critical_panel_symbols,
+    load_dataset,
+)
 
 # Panel size is derived, so every reader-facing label must be too.
 _CRIT_LABEL = critical_panel_label()
@@ -144,23 +149,7 @@ CRITICAL_PANEL = critical_panel_symbols()
 # Entrez IDs for the protein-coding panel genes. Copied verbatim from
 # lr_vs_lgbm_zeroshot.py (_PC_ENTREZ) so Entrez-keyed cohorts are matched
 # identically to the established GSE234297 handling.
-_PC_ENTREZ: dict[str, int] = {
-    "MECOM": 2122,
-    "SERTAD1": 29950,
-    "FCN3": 8547,
-    "PROS1": 5627,
-    "ANGPT2": 285,
-    "EMP1": 2012,
-    "TINAGL1": 64129,
-    "CKMT2": 1160,
-    "VWF": 7450,
-    "CLDN5": 7122,
-    "NR4A1": 3164,
-    "SOHLH2": 54937,
-    "HEXB": 3074,
-    "MCEE": 84693,
-    "SLC37A2": 219855,
-}
+_PC_ENTREZ: dict[str, int] = core_panel_entrez()
 
 # Symbol aliases needed for microarray platforms annotated to older names
 SYMBOL_ALIASES: dict[str, list[str]] = {
@@ -573,9 +562,9 @@ def _score(
     Returns:
         ``{model: {"scores": target score per sample}}``
     """
-    from lightgbm import LGBMClassifier
     from sklearn.linear_model import LogisticRegressionCV
     from sklearn.preprocessing import StandardScaler
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     if mode not in ("canonical", "zscore"):  # pragma: no cover
         raise ValueError(mode)
@@ -1108,8 +1097,8 @@ def _write_report(
         add("AUC ~ 0.5 => the panel cannot tell ALS from that disease.")
         add("Assumes control groups are broadly comparable across studies.")
         add("The cleanest ALS-vs-other-disease estimate remains Step 10")
-        add("(ALS vs held-out FTLD/PSP INSIDE GSE153960, AUC = 0.9067), which")
-        add("has no cross-study component at all.")
+        add("(ALS vs held-out FTD INSIDE GSE153960, disease_specificity_statistics.txt),")
+        add("which has no cross-study component at all.")
         add("")
         cmp_rows = avd[avd["auc_als_vs_other"].notna()]
         add(f"{'model':<7}{'comparison':<44}{'AUC':>7}{'95% CI':>18}{'MWU p':>11}")

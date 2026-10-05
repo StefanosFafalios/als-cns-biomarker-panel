@@ -8,6 +8,7 @@ Colour : biological theme
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -18,28 +19,15 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
+from utils import core_panel_symbols  # noqa: E402
+
 BASE = Path(__file__).parent
 
 # ---------------------------------------------------------------------------
 # Biological theme assignments
 # ---------------------------------------------------------------------------
-_PC15 = {
-    "MECOM",
-    "SERTAD1",
-    "FCN3",
-    "PROS1",
-    "ANGPT2",
-    "EMP1",
-    "TINAGL1",
-    "CKMT2",
-    "VWF",
-    "CLDN5",
-    "NR4A1",
-    "SOHLH2",
-    "HEXB",
-    "MCEE",
-    "SLC37A2",
-}
+_PC15 = set(core_panel_symbols(protein_coding_only=True))
 
 THEME = {
     "MECOM": "Cell cycle / TF",
@@ -57,7 +45,12 @@ THEME = {
     "HEXB": "Lysosomal",
     "MCEE": "Mitochondria / metabolism",
     "SLC37A2": "Mitochondria / metabolism",
+    "ALDH1A2": "Vascular / BBB",  # provisional (Step 104), review with the manuscript
+    "GSTM1": "Mitochondria / metabolism",  # provisional (Step 104), review with the manuscript
 }
+# Themes are curated by hand: stop rather than draw an uncurated panel gene in grey.
+if _missing := sorted(set(_PC15) - set(THEME)):
+    raise SystemExit(f"no curated theme for panel genes {_missing}; add them to THEME")
 
 PALETTE = {
     "Vascular / BBB": "#E05C5C",  # red

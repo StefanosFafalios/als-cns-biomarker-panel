@@ -111,6 +111,14 @@ run_step "02d_core25_panel"           lgbm_core25_panel.py                  "~20
 # =============================================================================
 run_step "03_gene_profiling"          gene_profiling.py                     "~10m"
 run_step "03a_annotate_core25"        annotate_core25.py                    "<5m (MyGeneInfo)"
+# The critical panel (section E) is defined here, before any step that reads it.
+# 24a needs 03a's core25_annotations.tsv; until 2026-10-02 these two ran after
+# sections C-D, which then silently read the previous run's panel_critical.csv.
+run_step "24_iterative_panel_elim"    iterative_panel_elimination.py        "~3.5h (pooled 5x10-fold CV per candidate; resumable)"
+run_step "24a_greedy_signif_stop"     greedy_significance_stop.py           "~20m full refit / seconds cached (writes panel_critical.csv)"
+run_step "24b_cohort_validation"    cohort_validation_table.py            "unmeasured (9 cohorts x 2 panels: zero-shot + pooled leave-one-donor-out)"
+run_step "24c_pooled_cv_random_null" pooled_cv_random_null.py             "~2h (25-gene pooled 10-fold CV vs 2 x 1,000 random 25-gene sets)"
+run_step "24d_cohort_validation_fig" cohort_validation_figure.py          "<1m (forest plot of 24b)"
 run_step "03b_synergy_core25"         synergy_analysis.py                   "~15m"
 run_step "03c_synergy_top500"         synergy_top500.py                     "~30m"
 run_step "03d_pseudogene_audit"       pseudogene_artifact_check.py          "<5m"
@@ -127,8 +135,7 @@ run_step "21_multi_algorithm"         multi_algorithm_robustness.py         "~30
 # D. EXTERNAL VALIDATION — CNS COHORTS (§3.4)
 # =============================================================================
 run_step "04_external_gpl16791"       external_validation_gpl16791.py       "~10m"
-run_step "05_external_gse76220"       external_validation_gse76220.py       "~5m (with-replacement dict mirrors step 29 canonical assignment)"
-run_step "05b_additional_gse122649"   additional_cohort_gse122649.py        "~10m (with-replacement dict mirrors step 29)"
+# 05/05b run after 29 (section M): they read its adaptive_panel_assignment.json.
 
 # Step 22: SRP064478 requires prior Salmon quantification (see quantify_srp064478.sh)
 if find "$PROJ_ROOT/resources/SRP064478/quant" -name "quant.sf" 2>/dev/null | \
@@ -160,8 +167,7 @@ run_step "23b_multicohort_lr_ext"     multicohort_lr_extended.py            "~15
 # ~8h. Set GREEDY_STOP_REFIT=1 to force a full refit -- required if the model,
 # the cohorts, or the 25-gene panel change, since the cache keys on none of those.
 # =============================================================================
-run_step "24_iterative_panel_elim"    iterative_panel_elimination.py        "~25m"
-run_step "24a_greedy_signif_stop"     greedy_significance_stop.py           "~4m full refit / seconds cached (measured 2026-08-04; writes panel_critical.csv)"
+# 24/24a run right after 03a (section B): every later step reads panel_critical.csv.
 run_step "25_panel_loo_zeroshot"      panel_loo_zeroshot.py                 "~22m on an idle box (measured 2026-08-05). A 65h wall was observed once under heavy external memory/CPU contention -- that figure is contention, not cost."
 run_step "26_panel_critical_eval"     panel_critical_eval.py                  "~5m"
 run_step "26a_cross_cohort_loo_sens"  cross_cohort_loo_sensitivity.py       "~10m"
@@ -185,7 +191,8 @@ run_step "15b_panel_mb_postprocess"   panel_mb_postprocess.py               "<5m
 # =============================================================================
 # G. DRUG TARGET ANNOTATION (§3.13, tab:bio_evidence, tab:druggability)
 # =============================================================================
-run_step "07_drug_targets"            drug_targets.py                       "21s (DGIdb + OpenTargets; network-bound)"
+# 07 runs after 41 (section P): it ranks candidates by snrna_spinal_cord_percell.csv
+# first and cell_type_deconvolution_genes.csv (11) second.
 # 07ab runs after step 27 (section K): it reads gene_replacement_results.csv.
 run_step "07a_gtex_specificity"       gtex_tissue_specificity.py            "~10m (GTEx API)"
 
@@ -251,11 +258,13 @@ run_step "28d_small_cohort_loo"       small_cohort_loo_refit.py             "~5m
 # Canonical derivation of the de-duplicated clean replacement assignment
 # (confirmed artifacts AND artifact gene families excluded -- olfactory/taste/
 # keratin/KRTAP/defensin/LCE/SPRR/VN1R, aligned with cross_cohort_substitution
-# and druggable_replacement_targets). The hardcoded dicts in steps 05/05b
-# mirror this output; the A->B zero-shot deltas are the §3.8 negative control.
+# and druggable_replacement_targets), written to adaptive_panel_assignment.json,
+# which steps 05/05b read; the A->B zero-shot deltas are the §3.8 negative control.
 # Depends on 27 (gene_replacement) + 03e (shap500 artifact audit).
 # =============================================================================
 run_step "29_adaptive_panel"          adaptive_panel_validation.py          "30s (canonical KRTAP/family-filtered replacement assignment)"
+run_step "05_external_gse76220"       external_validation_gse76220.py       "~5m (reads step 29 assignment)"
+run_step "05b_additional_gse122649"   additional_cohort_gse122649.py        "~10m (reads step 29 assignment)"
 
 # =============================================================================
 # N. CASE-STRENGTHENING / ROBUSTNESS (in-silico)
@@ -337,12 +346,19 @@ else
 fi
 # =============================================================================
 # P. INDEPENDENT SPINAL-CORD / MOTOR-CORTEX VALIDATION (Step 101)
-# Five cohorts no panel-selection step saw (GSE255683, GSE287256, GSE26927,
-# E-MTAB-8635, E-MTAB-2325), plus GSE26927's other disease arms, and the
-# single-nucleus localisation of the panel in spinal cord (GSE287257).
+# Five cohorts the 25-gene discovery never saw (GSE255683, GSE287256, GSE26927,
+# E-MTAB-8635, E-MTAB-2325; since Step 105 they are trimming cohorts, so the
+# critical-panel rows are in-sample), plus GSE26927's other disease arms, and the
+# single-nucleus localisation of the panel in spinal cord (GSE287257), whose per-cell
+# test then ranks the drug candidates (07).
 # =============================================================================
 run_step "40_new_cohort_validation"   new_cohort_validation.py              "~35m (5 cohorts x 2 panels x 1,000 random sets)"
 run_step "41_snrna_spinal_cord"       snrna_spinal_cord.py                  "~5m (12 CellRanger .h5; extracts GSE287257_RAW.tar)"
+run_step "41a_snrna_cortex_percell"   snrna_cortex_percell.py               "~10m (GSE219280 + GSE212630 .h5; per-cell replication of 41 in independent donors)"
+run_step "42_multicohort_meta"         multicohort_meta_analysis.py          "unmeasured (random-effects Hedges' g over 9 donor-level units, raw + composition-adjusted)"
+run_step "07_drug_targets"            drug_targets.py                       "21s (needs 11, 41 and 41a; DGIdb + OpenTargets; network-bound)"
+run_step "07b_gstm1_null_check"       gstm1_null_check.py                   "~2m (GSTM1 deletion vs disease effect, donor level)"
+run_step "07c_drug_direction_fig"      drug_direction_figure.py              "<1m (needs 07, 41, 41a and 42)"
 # =============================================================================
 # Final check. Not an analysis: it reports any output that is older than the
 # panel_critical.csv it transitively depends on, which is how three separate

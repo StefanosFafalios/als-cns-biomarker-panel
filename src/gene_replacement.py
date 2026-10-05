@@ -64,7 +64,7 @@ sys.path.insert(0, str(ALS_DIR))
 
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedGroupKFold
-from utils import PanelLGBMClassifier, adjust_colsample, load_dataset
+from utils import PanelLGBMClassifier, adjust_colsample, core_panel_ensg, load_dataset
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -96,17 +96,7 @@ _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _TOP500_RANKING  = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
 _PANEL_CSV       = SCRIPT_DIR / "lgbm_core25_panel.csv"
 
-PANEL_BASES = [
-    "ENSG00000085276", "ENSG00000261599", "ENSG00000183604",
-    "ENSG00000197019", "ENSG00000213860", "ENSG00000142748",
-    "ENSG00000184500", "ENSG00000091879", "ENSG00000236682",
-    "ENSG00000134531", "ENSG00000238622", "ENSG00000142910",
-    "ENSG00000131730", "ENSG00000280893", "ENSG00000110799",
-    "ENSG00000184113", "ENSG00000123358", "ENSG00000223718",
-    "ENSG00000120669", "ENSG00000203616", "ENSG00000049860",
-    "ENSG00000279656", "ENSG00000226308", "ENSG00000124370",
-    "ENSG00000134955",
-]
+PANEL_BASES = list(core_panel_ensg().values())
 PANEL_SET = set(PANEL_BASES)
 
 

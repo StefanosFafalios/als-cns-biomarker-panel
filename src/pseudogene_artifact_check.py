@@ -33,6 +33,7 @@ import requests
 
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
+from utils import core_panel_ensg, core_panel_symbols, gene_info  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -45,15 +46,10 @@ _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 _ENSEMBL_URL = "https://rest.ensembl.org"
 _REQUEST_DELAY = 0.4
 
-# The 7 genes to audit (symbol → Ensembl base ID)
+# Panel members to audit: pseudogenes and genes with no MyGeneInfo annotation (symbol → Ensembl base ID)
+_INFO = gene_info(core_panel_symbols())
 _AUDIT_GENES: dict[str, str] = {
-    "HERC2P8":       "ENSG00000261599",
-    "SMG1P5":        "ENSG00000183604",
-    "RPL21P75":      "ENSG00000213860",
-    "RPL15P11":      "ENSG00000223718",
-    "RHOT1P2":       "ENSG00000203616",
-    "ENSG00000280893": "ENSG00000280893",
-    "ENSG00000279656": "ENSG00000279656",
+    s: e for s, e in core_panel_ensg().items() if _INFO[s]["type"] in ("pseudo", "")
 }
 
 

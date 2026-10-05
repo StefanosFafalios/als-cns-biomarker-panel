@@ -39,7 +39,7 @@ import scipy.sparse as sp
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
-from utils import critical_panel_symbols
+from utils import core_panel_symbols, critical_panel_symbols
 
 _H5_DIR = SCRIPT_DIR.parent / "resources" / "GSE219280" / "suppl"
 MIN_COUNTS = 500  # per-nucleus QC floor
@@ -198,17 +198,7 @@ def main() -> None:
         for ct in _MARKERS
     }
     gidx_ref = {g0: j for j, g0 in enumerate(genes_ref)}
-    for gname in [
-        "SLC37A2",
-        "HEXB",
-        "PROS1",
-        "EMP1",
-        "CLDN5",
-        "VWF",
-        "ANGPT2",
-        "FCN3",
-        "SERTAD1",
-    ]:
+    for gname in core_panel_symbols(protein_coding_only=True):
         if gname in gidx_ref:
             j = gidx_ref[gname]
             lines.append(

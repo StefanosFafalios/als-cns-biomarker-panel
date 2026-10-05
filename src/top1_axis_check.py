@@ -222,9 +222,9 @@ def _oof_panel_scores(X_panel: np.ndarray, y: np.ndarray, params: dict) -> np.nd
     ``cross_disease_specificity._adjust_colsample``.
     """
     from cross_disease_specificity import _adjust_colsample
-    from lightgbm import LGBMClassifier
     from sklearn.model_selection import StratifiedKFold
     from sklearn.preprocessing import StandardScaler
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     params = _adjust_colsample(params, X_panel.shape[1])
     skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=RANDOM_STATE)

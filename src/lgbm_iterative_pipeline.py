@@ -401,8 +401,8 @@ def _run_sfm_iteration(
         print(f"  Loaded {len(selected)} SFM features from cache (iter {iteration})")
         return selected
 
-    from lightgbm import LGBMClassifier
     from sklearn.feature_selection import SelectFromModel
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     print(
         f"  Running SelectFromModel (LightGBM) on {X_iter.shape[1]} features"
@@ -431,9 +431,9 @@ def _cv_auc(
     y_int: np.ndarray,
     col_mask: np.ndarray,
 ) -> tuple[float, list[float]]:
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     X_sub = X[:, col_mask]
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
@@ -451,7 +451,7 @@ def _cv_auc(
 
 
 def _train_model(X: np.ndarray, y_int: np.ndarray) -> object:
-    from lightgbm import LGBMClassifier
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     clf = LGBMClassifier(**LGBM_PARAMS)
     with warnings.catch_warnings():
@@ -498,9 +498,9 @@ def _run_incremental_cv(
     max_k: int | None = None,
 ) -> list[float]:
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     n_features = min(len(ranked_names), max_k) if max_k else len(ranked_names)
     name_to_col = {name: i for i, name in enumerate(feature_names)}

@@ -17,7 +17,8 @@ snrna_percell_validation.py, with pericyte and meningeal-fibroblast types added
 for spinal cord. The endothelial markers exclude the panel genes CLDN5 and VWF,
 so their localisation is not circular.
 
-Outputs: snrna_spinal_cord_statistics.txt, snrna_spinal_cord.png
+Outputs: snrna_spinal_cord_statistics.txt, snrna_spinal_cord.png,
+snrna_spinal_cord_percell.csv (table (c); drug_targets.py ranks candidates by it)
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from scipy.stats import mannwhitneyu  # noqa: E402
 from snrna_percell_validation import MIN_COUNTS, _read_h5_targets  # noqa: E402
 from statsmodels.stats.multitest import multipletests  # noqa: E402
-from utils import critical_panel_symbols  # noqa: E402
+from utils import core_panel_symbols  # noqa: E402
 
 _SUPPL = SCRIPT_DIR.parent / "resources" / "GSE287257" / "suppl"
 _MARKERS = {
@@ -51,8 +52,8 @@ _MARKERS = {
     "pericyte": ["PDGFRB", "RGS5", "KCNJ8", "ABCC9"],
     "fibroblast": ["DCN", "COL1A2", "LUM", "COL1A1"],
 }
-# the 15 protein-coding members of the 25-gene panel (critical members + SERTAD1, PROS1)
-_PANEL = sorted(set(critical_panel_symbols(protein_coding_only=True)) | {"SERTAD1", "PROS1"})
+# the protein-coding members of the 25-gene panel
+_PANEL = sorted(core_panel_symbols(protein_coding_only=True))
 _GENES = sorted(set(sum(_MARKERS.values(), [])) | set(_PANEL))
 _CT = list(_MARKERS)
 
@@ -135,9 +136,13 @@ def main() -> None:
     ok = ~np.isnan(ps)
     qs = np.full(len(ps), np.nan)
     qs[ok] = multipletests(ps[ok], method="fdr_bh")[1]
+    percell = []
     for (g, ct, a, c, p), q in zip(test, qs):
         lfc = np.log2((np.expm1(a) + 1e-3) / (np.expm1(c) + 1e-3))
         lines.append(f"{g:<9}{ct:<17}{a:>8.3f}{c:>9.3f}{lfc:>8.2f}{p:>9.3g}{q:>8.3g}")
+        percell.append(dict(gene=g, celltype=ct, als=a, control=c, log2fc=lfc, p=p, q=q))
+    # Read by drug_targets.py (step 07), which ranks drug candidates by this test.
+    pd.DataFrame(percell).to_csv(SCRIPT_DIR / "snrna_spinal_cord_percell.csv", index=False)
 
     (SCRIPT_DIR / "snrna_spinal_cord_statistics.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))

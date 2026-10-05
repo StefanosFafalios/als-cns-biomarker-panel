@@ -31,6 +31,7 @@ import pandas as pd
 from nested_panel_cv import (
     ALS_DIR,
     FOLDS,
+    K_CRIT,
     KNOWN_ALS_FEATURES,
     PANEL_SIZES,
     SCRIPT_DIR,
@@ -70,14 +71,14 @@ def main(
 
     published = {
         25: pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").feature.tolist(),
-        18: critical_panel_features(),
+        K_CRIT: critical_panel_features(),
     }
     pub_pool = pd.read_csv(SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv").feature.tolist()
     pool, _ = _resolve_contamination_pool({n.split(".")[0]: n for n in all_names})
     discard = KNOWN_ALS_FEATURES | pool
     keep = [i for i, n in enumerate(all_names) if n not in discard]
     if max_features:  # smoke: a slice plus the published genes and pool
-        must = set(published[25]) | set(published[18]) | set(pub_pool[:600])
+        must = set(published[25]) | set(published[K_CRIT]) | set(pub_pool[:600])
         keep = sorted(set(keep[:max_features]) | {i for i in keep if all_names[i] in must})
     names = [all_names[i] for i in keep]
     X = np.asarray(X_all[:, keep], dtype=np.float32)

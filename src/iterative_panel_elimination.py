@@ -1,19 +1,32 @@
-"""Greedy backward elimination of the 25-gene panel using equally-weighted zero-shot AUC
-across CNS validation cohorts.
+"""Greedy backward elimination of the 25-gene panel, scored by pooled cross-validation
+across every CNS cohort except the discovery cohort (blood excluded).
 
-Cohorts (blood excluded):
-  GPL16791   n=636  w=0.25  raw log1p, Ensembl base ID
-  GSE76220   n=20   w=0.25  as-is (already log2-scale), HGNC symbol
-  GSE122649  n=38   w=0.25  plain log1p, HGNC symbol
-  SRP064478  n=15   w=0.25  plain log1p, Ensembl base ID
+Units (equal weight each):
+  GPL16791   donors absent from GPL24676 (518 samples), raw log1p, Ensembl base ID
+  GSE76220   lumbar spinal cord LCM, log2 RPKM, HGNC symbol
+  GSE122649  motor cortex, log1p counts, HGNC symbol
+  SRP064478  spinal cord, log1p Salmon counts, Ensembl base ID
+  GSE255683  lumbar spinal cord, log1p counts, Ensembl base ID
+  GSE287256  cervical spinal cord, log1p normalised counts, Ensembl base ID
+  GSE26927   ALS arm, cervical spinal cord array, HGNC symbol
+  E-MTAB     E-MTAB-8635 (spinal cord) + E-MTAB-2325 (motor cortex) arrays, HGNC symbol;
+             one unit (half weight each) because the two share 35 donors
+
+Score (user decision 2026-10-04, findings.md Step 105d; it replaced the zero-shot score,
+whose 12-gene optimum did not hold up under pooled CV): the nine datasets are merged
+into one sample set (merge_cohorts) and scored by grouped 10-fold CV repeated 5 times
+(folds by donor, stratified by cohort x class, out-of-fold scores averaged over the repeats;
+the same splits for every candidate so comparisons are paired). One split proved too noisy
+for the stopping rule to choose a size (Step 105d), hence the repeats.
+Inside each fold every cohort is z-scored against its training controls (ctrl_z), genes a
+platform lacks stay NaN, and sample weights give each unit equal total weight. The score
+is the _W-weighted mean of the per-cohort AUCs of the out-of-fold predictions.
 
 Algorithm: greedy backward elimination
   At each step, for each remaining gene g, compute
-    D_ZS(g) = W.mean_AUC(panel − {g}) − W.mean_AUC(panel)
-  Drop the gene with the highest D_ZS (most improvement or least harm).
+    D_CV(g) = W.mean_AUC(panel − {g}) − W.mean_AUC(panel)
+  Drop the gene with the highest D_CV (most improvement or least harm).
   Continue until only 1 gene remains (full ranking).
-
-Weights: equal (0.25 per cohort) — each independent dataset has equal vote.
 
 Outputs:
   iterative_panel_elimination_statistics.txt
@@ -28,20 +41,25 @@ import re
 import sys
 import tarfile
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import adjust_colsample, load_dataset, zero_shot_scale  # noqa: E402
+from sklearn.metrics import roc_auc_score  # noqa: E402
+from utils import PanelLGBMClassifier, load_dataset  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _PROGRESS_LOG = SCRIPT_DIR / "iterative_panel_elimination_progress.log"
 _CKPT = SCRIPT_DIR / "iterative_panel_elimination_ckpt.json"
+# A checkpoint written under another score is never resumed.
+_CRITERION = "pooled grouped 5x10-fold CV (averaged OOF), ctrl_z, unit weights"
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
 _GSE122649_DIR = ALS_DIR / "resources" / "GSE122649"
@@ -52,6 +70,7 @@ _GSE122649_SOFT_URL = (
 )
 
 RANDOM_STATE = 42
+N_REPEATS = 5  # repeats of the grouped 10-fold split; OOF scores averaged (Step 105e)
 N_BOOTSTRAP = 2_000
 
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
@@ -79,11 +98,20 @@ _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-_N_COHORT = {"GPL16791": 636, "GSE76220": 20, "GSE122649": 38, "SRP064478": 15}
-_TOTAL_N = sum(_N_COHORT.values())  # 709
-# Equal weight per cohort: each independent dataset has equal vote on generalisability
-_W = {k: 1.0 / len(_N_COHORT) for k in _N_COHORT}
-
+# Trimming units (user design, 2026-10-03): the discovery cohort proposes the panel;
+# every other CNS cohort votes on it with equal weight. Cohort weights within a unit
+# split the unit's weight.
+_UNITS: dict[str, list[str]] = {
+    "GPL16791": ["GPL16791"],
+    "GSE76220": ["GSE76220"],
+    "GSE122649": ["GSE122649"],
+    "SRP064478": ["SRP064478"],
+    "GSE255683": ["GSE255683"],
+    "GSE287256": ["GSE287256"],
+    "GSE26927": ["GSE26927"],
+    "E-MTAB": ["E-MTAB-8635", "E-MTAB-2325"],
+}
+_W = {c: 1.0 / len(_UNITS) / len(cs) for cs in _UNITS.values() for c in cs}
 
 # ---------------------------------------------------------------------------
 # Progress logging
@@ -156,6 +184,7 @@ def _save_ckpt(
         "history": history,
         "partial": {str(k): v for k, v in partial.items()},
         "done": int(done),
+        "criterion": _CRITERION,
     }
     tmp = _CKPT.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload))
@@ -170,6 +199,12 @@ def _load_ckpt() -> dict | None:
         d = json.loads(_CKPT.read_text())
     except (json.JSONDecodeError, OSError) as exc:
         print(f"  [warn] unreadable checkpoint ({exc}); starting fresh", flush=True)
+        return None
+    if d.get("criterion") != _CRITERION:
+        print(
+            f"  [warn] checkpoint scored by {d.get('criterion', 'zero-shot')!r}; starting fresh",
+            flush=True,
+        )
         return None
     d["partial"] = {int(k): v for k, v in d.get("partial", {}).items()}
     d["active"] = [int(i) for i in d["active"]]
@@ -215,27 +250,6 @@ def _progress(msg: str, tick: bool = False) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _zero_shot_fast(
-    X_tr: np.ndarray,
-    y_tr: np.ndarray,
-    X_te: np.ndarray,
-    y_te: np.ndarray,
-    params: dict,
-) -> float:
-    """Train LightGBM on X_tr, score X_te, return AUC (no bootstrap)."""
-    from lightgbm import LGBMClassifier
-    from sklearn.metrics import roc_auc_score
-
-    # Re-express colsample_bytree for the current panel size: the tuned value
-    # encodes ~33 features/tree on 500 and would floor to 1 on a small panel,
-    # which would make every elimination step an interaction-free fit.
-    params = adjust_colsample(params, X_tr.shape[1])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        clf = LGBMClassifier(**params).fit(X_tr, y_tr)
-    return float(roc_auc_score(y_te, clf.predict_proba(X_te)[:, 1]))
-
-
 def _bootstrap_auc(
     y: np.ndarray,
     scores: np.ndarray,
@@ -260,30 +274,6 @@ def _bootstrap_auc(
         )
     a = np.array(aucs)
     return float(np.percentile(a, 2.5)), float(np.percentile(a, 97.5))
-
-
-def _zero_shot_ci(
-    X_tr: np.ndarray,
-    y_tr: np.ndarray,
-    X_te: np.ndarray,
-    y_te: np.ndarray,
-    params: dict,
-) -> tuple[float, float, float]:
-    """Zero-shot AUC with 95% bootstrap CI."""
-    from lightgbm import LGBMClassifier
-    from sklearn.metrics import roc_auc_score
-
-    # Re-express colsample_bytree for the current panel size: the tuned value
-    # encodes ~33 features/tree on 500 and would floor to 1 on a small panel,
-    # which would make every elimination step an interaction-free fit.
-    params = adjust_colsample(params, X_tr.shape[1])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        clf = LGBMClassifier(**params).fit(X_tr, y_tr)
-    scores = clf.predict_proba(X_te)[:, 1]
-    auc = float(roc_auc_score(y_te, scores))
-    lo, hi = _bootstrap_auc(y_te, scores)
-    return auc, lo, hi
 
 
 # ---------------------------------------------------------------------------
@@ -473,91 +463,179 @@ def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
 # ---------------------------------------------------------------------------
 
 
-def _wmean_auc(
-    panel_idx: list[int],
-    # GPL16791 (raw log1p) pre-extracted 25-column matrices
-    Xtr25_ctd: np.ndarray,
-    y_train: np.ndarray,
-    X16_25_ctd: np.ndarray,
-    y16: np.ndarray,
-    # log1p training 25-column matrix (for symbol/Ensembl matched cohorts)
-    Xtr25_log: np.ndarray,
-    # GSE76220
-    X76_25: np.ndarray,
-    y76: np.ndarray,
-    avail76: list[int],
-    # GSE122649
-    X122_25: np.ndarray,
-    y122: np.ndarray,
-    avail122: list[int],
-    # SRP064478
-    Xsrp_25: np.ndarray,
-    y_srp: np.ndarray,
-    avail_srp: list[int],
-    params: dict,
-) -> tuple[float, dict[str, float]]:
-    """Return (weighted_mean_auc, per_cohort_aucs) for the given panel subset.
+def _subject_ids(platform: str) -> np.ndarray:
+    (ds,) = load_dataset(
+        "GSE153960", platform=platform, resources_dir=ALS_DIR / "resources"
+    )
+    return ds.meta.loc[ds.y.index, "subject id"].astype(str).to_numpy()
 
-    panel_idx: indices into the 25-column pre-extracted matrices.
-    avail*: sorted list of panel gene indices available in that cohort;
-            X*_25[:, k] = test log1p for panel gene avail*[k].
+
+def _trim_cohorts(
+    sym25: list[str], feat25_bases: list[str], panel_train_cols: list[int]
+) -> dict[str, tuple[np.ndarray, list[int], np.ndarray, np.ndarray]]:
+    """Every trimming cohort as {name: (matrix over available panel genes, panel indices, labels, donor ids)}.
+
+    Names double as utils.zero_shot_scale keys. Shared with greedy_significance_stop.py.
     """
+    from new_cohort_validation import _emtab, _gse26927_arms, _gse255683, _gse287256
 
-    panel_set = set(panel_idx)
-    wmean = 0.0
-    cohort_aucs: dict[str, float] = {}
+    def by_key(
+        X: np.ndarray, vocab: list[str], y: np.ndarray, keys: list[str]
+    ) -> tuple:
+        vm = {k: j for j, k in enumerate(vocab)}
+        avail = [i for i, k in enumerate(keys) if k in vm]
+        M = X[:, [vm[keys[i]] for i in avail]] if avail else np.empty((len(y), 0))
+        return M.astype(np.float32), avail, np.asarray(y).astype(int)
 
-    # ---- GPL16791 (all 25 genes available, raw log1p) ----
-    Xtr = Xtr25_ctd[:, panel_idx]
-    Xte = X16_25_ctd[:, panel_idx]
-    Ztr, Zte = zero_shot_scale(Xtr, Xte, "GPL16791")
-    auc16 = _zero_shot_fast(Ztr, y_train, Zte, y16, params)
-    wmean += _W["GPL16791"] * auc16
-    cohort_aucs["GPL16791"] = auc16
+    (ds16,) = load_dataset(
+        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
+    )
+    sid16 = ds16.meta.loc[ds16.y.index, "subject id"].astype(str).to_numpy()
+    keep = ~np.isin(sid16, _subject_ids("GPL24676"))
+    X16 = np.log1p(ds16.X.values[keep][:, panel_train_cols].astype(np.float32))
+    cohorts = {
+        "GPL16791": (
+            X16,
+            list(range(len(sym25))),
+            ds16.y.values[keep].astype(int),
+            sid16[keep],
+        )
+    }
+    cohorts["GSE76220"] = by_key(*_load_gse76220(), sym25)
+    cohorts["GSE122649"] = by_key(*_load_gse122649(), sym25)
+    cohorts["SRP064478"] = by_key(*_load_srp064478(), feat25_bases)
+    for c in (
+        _gse255683(),
+        _gse287256(),
+        _gse26927_arms()["ALS"],
+        _emtab("E-MTAB-8635"),
+        _emtab("E-MTAB-2325"),
+    ):
+        cohorts[c.scale_id] = by_key(
+            c.X, c.genes, c.y, sym25 if c.by_symbol else feat25_bases
+        )
+    assert set(cohorts) == set(_W), (set(cohorts), set(_W))
+    emtab = _emtab_donors()
+    for c, v in cohorts.items():
+        if len(v) == 3:
+            cohorts[c] = (
+                *v,
+                emtab.get(c, np.array([f"{c}_{i}" for i in range(len(v[2]))])),
+            )
+        assert len(cohorts[c][3]) == len(v[2]), c
+    for c, (M, av, y, _) in cohorts.items():
+        print(
+            f"  {c}: n={len(y)} ({int(y.sum())} ALS)  {len(av)}/{len(sym25)} panel genes  w={_W[c]:.4f}"
+        )
+    return cohorts
 
-    # ---- GSE76220 (symbol-matched, as-is log2 scale) ----
-    avail76_set = set(avail76)
-    cols76_tr = [i for i in panel_idx if i in avail76_set]
-    cols76_te = [k for k, i in enumerate(avail76) if i in panel_set]
-    if cols76_tr:
-        Xtr = Xtr25_log[:, cols76_tr]
-        Xte = X76_25[:, cols76_te]
-        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE76220")
-        auc76 = _zero_shot_fast(Ztr, y_train, Zte, y76, params)
-    else:
-        auc76 = 0.5
-    wmean += _W["GSE76220"] * auc76
-    cohort_aucs["GSE76220"] = auc76
 
-    # ---- GSE122649 (symbol-matched, log1p) ----
-    avail122_set = set(avail122)
-    cols122_tr = [i for i in panel_idx if i in avail122_set]
-    cols122_te = [k for k, i in enumerate(avail122) if i in panel_set]
-    if cols122_tr:
-        Xtr = Xtr25_log[:, cols122_tr]
-        Xte = X122_25[:, cols122_te]
-        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE122649")
-        auc122 = _zero_shot_fast(Ztr, y_train, Zte, y122, params)
-    else:
-        auc122 = 0.5
-    wmean += _W["GSE122649"] * auc122
-    cohort_aucs["GSE122649"] = auc122
+def _emtab_donors() -> dict[str, np.ndarray]:
+    """Donor ids for both E-MTAB cohorts in _emtab row order (SDRF order); shared patients get one id."""
+    res = ALS_DIR / "resources"
+    s25 = pd.read_csv(res / "E-MTAB-2325" / "E-MTAB-2325.sdrf.txt", sep="\t")
+    s86 = pd.read_csv(res / "E-MTAB-8635" / "E-MTAB-8635.sdrf.txt", sep="\t")
+    code = s86["Characteristics[patient code (e-mtab-2325)]"]
+    return {
+        "E-MTAB-2325": (
+            "EM" + s25["Characteristics[Patient code]"].astype(str)
+        ).to_numpy(),
+        "E-MTAB-8635": np.where(
+            code.notna(),
+            "EM" + code.fillna(0).astype(int).astype(str),
+            "EM8635_" + s86["Characteristics[individual]"],
+        ),
+    }
 
-    # ---- SRP064478 (Ensembl base ID, log1p) ----
-    avail_srp_set = set(avail_srp)
-    cols_srp_tr = [i for i in panel_idx if i in avail_srp_set]
-    cols_srp_te = [k for k, i in enumerate(avail_srp) if i in panel_set]
-    if cols_srp_tr:
-        Xtr = Xtr25_log[:, cols_srp_tr]
-        Xte = Xsrp_25[:, cols_srp_te]
-        Ztr, Zte = zero_shot_scale(Xtr, Xte, "SRP064478")
-        auc_srp = _zero_shot_fast(Ztr, y_train, Zte, y_srp, params)
-    else:
-        auc_srp = 0.5
-    wmean += _W["SRP064478"] * auc_srp
-    cohort_aucs["SRP064478"] = auc_srp
 
-    return wmean, cohort_aucs
+@dataclass
+class Merged:
+    """The trimming cohorts stacked into one sample set over the 25 panel columns."""
+
+    X: np.ndarray  # samples x 25; NaN where the platform lacks the gene
+    y: np.ndarray
+    cid: np.ndarray  # cohort name per sample
+    donor: np.ndarray  # donor id per sample (shared E-MTAB patients share one)
+    w: np.ndarray  # equal total weight per unit (_W), mean 1
+
+
+def merge_cohorts(cohorts: dict[str, tuple], n_genes: int) -> Merged:
+    """Stack the _trim_cohorts output into one sample set."""
+    vals = list(cohorts.values())
+    X = np.full((sum(len(v[2]) for v in vals), n_genes), np.nan, np.float32)
+    i = 0
+    for M, av, y, _ in vals:
+        X[i : i + len(y), av] = M
+        i += len(y)
+    cid = np.concatenate([[c] * len(v[2]) for c, v in cohorts.items()])
+    w = np.array([_W[c] / len(cohorts[c][2]) for c in cid])
+    return Merged(
+        X,
+        np.concatenate([v[2] for v in vals]),
+        cid,
+        np.concatenate([v[3] for v in vals]),
+        w / w.mean(),
+    )
+
+
+def cv_folds(m: Merged, n_splits: int = 10, n_repeats: int = N_REPEATS) -> np.ndarray:
+    """Fold ids, shape (n_repeats, samples): grouped by donor, stratified by cohort x class."""
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    strata = np.char.add(m.cid.astype(str), m.y.astype(str))
+    fold = np.empty((n_repeats, len(m.y)), int)
+    for r in range(n_repeats):
+        cv = StratifiedGroupKFold(n_splits, shuffle=True, random_state=RANDOM_STATE + r)
+        for f, (_, te) in enumerate(cv.split(m.X, strata, m.donor)):
+            fold[r, te] = f
+    return fold
+
+
+def ctrl_z(
+    X: np.ndarray, y: np.ndarray, cid: np.ndarray, train: np.ndarray
+) -> np.ndarray:
+    """Z-score each cohort against its training controls, scaled by the pooled within-class SD."""
+    Z = np.empty_like(X)
+    for c in np.unique(cid):
+        r, t = cid == c, (cid == c) & train
+        mu0, mu1 = (
+            np.nanmean(X[t & (y == 0)], axis=0),
+            np.nanmean(X[t & (y == 1)], axis=0),
+        )
+        sd = np.nanstd(X[t] - np.where(y[t, None] == 1, mu1, mu0), axis=0, ddof=2)
+        Z[r] = (X[r] - mu0) / np.where(sd > 0, sd, 1.0)
+    return Z
+
+
+def pooled_oof(
+    m: Merged, cols: list[int], fold: np.ndarray, params: dict
+) -> np.ndarray:
+    """Out-of-fold scores on the merged cohorts, averaged over the repeats (rows) of *fold*.
+
+    The scaling is refitted on each fold's training rows. Pass ``fold=m.donor[None]``
+    for leave-one-donor-out.
+    """
+    X, s = m.X[:, cols], np.zeros(len(m.y))
+    for rep in np.atleast_2d(fold):
+        for f in np.unique(rep):
+            te = rep == f
+            Z = ctrl_z(X, m.y, m.cid, ~te)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                clf = PanelLGBMClassifier(**params).fit(
+                    Z[~te], m.y[~te], sample_weight=m.w[~te]
+                )
+            s[te] += clf.predict_proba(Z[te])[:, 1]
+    return s / len(np.atleast_2d(fold))
+
+
+def _wmean_auc(
+    panel_idx: list[int], m: Merged, fold: np.ndarray, params: dict
+) -> tuple[float, dict[str, float]]:
+    """Return (weighted mean pooled-CV AUC, per-cohort AUC) for the panel subset *panel_idx*."""
+    s = pooled_oof(m, sorted(panel_idx), fold, params)
+    aucs = {c: float(roc_auc_score(m.y[m.cid == c], s[m.cid == c])) for c in _W}
+    return sum(_W[c] * a for c, a in aucs.items()), aucs
 
 
 # ---------------------------------------------------------------------------
@@ -577,11 +655,8 @@ def main() -> None:
     _w.filterwarnings("ignore", category=UserWarning)
 
     print("=" * 70)
-    print("Iterative Panel Elimination — greedy backward, weighted zero-shot AUC")
-    print(
-        f"Weights: GPL16791={_W['GPL16791']:.3f}  GSE76220={_W['GSE76220']:.3f}  "
-        f"GSE122649={_W['GSE122649']:.3f}  SRP064478={_W['SRP064478']:.3f}"
-    )
+    print("Iterative Panel Elimination — greedy backward, weighted pooled-CV AUC")
+    print("Units: " + ", ".join(f"{u}={'+'.join(cs)}" for u, cs in _UNITS.items()))
     print("=" * 70)
 
     params_raw = json.loads(_PARAMS_PATH.read_text())
@@ -609,100 +684,14 @@ def main() -> None:
         f.split(".")[0]: j for j, f in enumerate(feat_train)
     }
 
-    # Pre-extract 25-column matrices. Cross-cohort transfer now uses raw log1p for
-    # ALL cohorts (CTD is discovery-side only); the GPL16791 arm below is fed raw
-    # log1p, so the "ctd"-named arrays hold raw log1p for uniformity.
     panel_train_cols: list[int] = [feat_train_base_map[b] for b in feat25_bases]
-    Xtr25_ctd: np.ndarray = X_train_log[:, panel_train_cols].astype(np.float32)
-    Xtr25_log: np.ndarray = X_train_log[:, panel_train_cols].astype(np.float32)
+    del X_train_ctd, X_train_log
 
-    # -----------------------------------------------------------------------
-    # Load GPL16791 (raw log1p; CTD is discovery-side only)
-    # -----------------------------------------------------------------------
-    print("Loading GPL16791 (raw log1p; CTD is discovery-side only) ...")
-    (ds16,) = load_dataset(
-        "GSE153960", platform="GPL16791", resources_dir=ALS_DIR / "resources"
-    )
-    assert list(ds16.X.columns) == feat_train
-    X16_log_full = np.log1p(ds16.X.values.astype(np.float32))
-    y16 = ds16.y.values.astype(int)
-    X16_25_ctd: np.ndarray = X16_log_full[:, panel_train_cols].astype(np.float32)
-    print(f"  GPL16791: n={len(y16)}, ALS={y16.sum()}, Ctrl={(y16 == 0).sum()}")
-
-    # -----------------------------------------------------------------------
-    # Load GSE76220 (symbol)
-    # -----------------------------------------------------------------------
-    print("Loading GSE76220 ...")
-    X76_log, vocab76, y76 = _load_gse76220()
-    vocab76_map = {s: i for i, s in enumerate(vocab76)}
-    avail76: list[int] = [i for i, s in enumerate(sym25) if s in vocab76_map]
-    if avail76:
-        X76_25 = np.column_stack(
-            [X76_log[:, vocab76_map[sym25[i]]] for i in avail76]
-        ).astype(np.float32)
-    else:
-        X76_25 = np.empty((len(y76), 0), dtype=np.float32)
-    print(
-        f"  GSE76220: n={len(y76)}, {len(avail76)}/25 panel genes matched "
-        f"({[sym25[i] for i in avail76]})"
-    )
-
-    # -----------------------------------------------------------------------
-    # Load GSE122649 (symbol)
-    # -----------------------------------------------------------------------
-    print("Loading GSE122649 ...")
-    X122_log, vocab122, y122 = _load_gse122649()
-    vocab122_map = {s: i for i, s in enumerate(vocab122)}
-    avail122: list[int] = [i for i, s in enumerate(sym25) if s in vocab122_map]
-    if avail122:
-        X122_25 = np.column_stack(
-            [X122_log[:, vocab122_map[sym25[i]]] for i in avail122]
-        ).astype(np.float32)
-    else:
-        X122_25 = np.empty((len(y122), 0), dtype=np.float32)
-    print(
-        f"  GSE122649: n={len(y122)}, {len(avail122)}/25 panel genes matched "
-        f"({[sym25[i] for i in avail122]})"
-    )
-
-    # -----------------------------------------------------------------------
-    # Load SRP064478 (Ensembl base ID)
-    # -----------------------------------------------------------------------
-    print("Loading SRP064478 ...")
-    Xsrp_log, vocab_srp, y_srp = _load_srp064478()
-    srp_vocab_map = {v: i for i, v in enumerate(vocab_srp)}
-    avail_srp: list[int] = [i for i, b in enumerate(feat25_bases) if b in srp_vocab_map]
-    if avail_srp:
-        Xsrp_25 = np.column_stack(
-            [Xsrp_log[:, srp_vocab_map[feat25_bases[i]]] for i in avail_srp]
-        ).astype(np.float32)
-    else:
-        Xsrp_25 = np.empty((len(y_srp), 0), dtype=np.float32)
-    print(
-        f"  SRP064478: n={len(y_srp)}, {len(avail_srp)}/25 panel genes matched "
-        f"({[sym25[i] for i in avail_srp]})"
-    )
-
-    # -----------------------------------------------------------------------
-    # Shared kwargs for _wmean_auc
-    # -----------------------------------------------------------------------
-    _shared = dict(
-        Xtr25_ctd=Xtr25_ctd,
-        y_train=y_train,
-        X16_25_ctd=X16_25_ctd,
-        y16=y16,
-        Xtr25_log=Xtr25_log,
-        X76_25=X76_25,
-        y76=y76,
-        avail76=avail76,
-        X122_25=X122_25,
-        y122=y122,
-        avail122=avail122,
-        Xsrp_25=Xsrp_25,
-        y_srp=y_srp,
-        avail_srp=avail_srp,
-        params=params,
-    )
+    print("Loading trimming cohorts ...")
+    cohorts = _trim_cohorts(sym25, feat25_bases, panel_train_cols)
+    merged = merge_cohorts(cohorts, len(sym25))
+    fold = cv_folds(merged)
+    _shared = dict(m=merged, fold=fold, params=params)
 
     # -----------------------------------------------------------------------
     # Baseline: all 25 genes
@@ -725,7 +714,7 @@ def main() -> None:
             "step": 0,
             "panel_size": 25,
             "dropped": None,
-            "D_ZS": None,
+            "D_CV": None,
             "wmean": baseline_wmean,
             "cohort": dict(baseline_cohort),
         }
@@ -785,7 +774,7 @@ def main() -> None:
                 partial[g] = {"wmean": wmean_trial, "cohort": dict(cohort_trial)}
                 _progress(
                     f"    drop {sym25[g]:>14s}: trial W.mean={wmean_trial:.4f}  "
-                    f"D_ZS={wmean_trial - current_wmean:+.4f}",
+                    f"D_CV={wmean_trial - current_wmean:+.4f}",
                     tick=True,
                 )
                 # Checkpoint after EVERY evaluation: losing one fit is acceptable,
@@ -806,12 +795,12 @@ def main() -> None:
                 best_cohort = cohort_trial
 
         _progress(
-            f"  Step {step} DONE -> drop {sym25[best_g]}  D_ZS={best_d:+.4f}  "
+            f"  Step {step} DONE -> drop {sym25[best_g]}  D_CV={best_d:+.4f}  "
             f"new W.mean={best_wmean:.4f}  panel k={len(active) - 1}"
         )
 
         if best_d <= 0.0:
-            _progress(f"  D_ZS <= 0 (critical threshold crossed at k={len(active)})")
+            _progress(f"  D_CV <= 0 (critical threshold crossed at k={len(active)})")
 
         # Drop the best candidate (always continue to exhaustion)
         active.remove(best_g)
@@ -821,7 +810,7 @@ def main() -> None:
                 "step": step,
                 "panel_size": len(active),
                 "dropped": sym25[best_g],
-                "D_ZS": best_d,
+                "D_CV": best_d,
                 "wmean": current_wmean,
                 "cohort": dict(best_cohort),
             }
@@ -852,113 +841,70 @@ def main() -> None:
     print(f"Final minimal panel: {len(active)} genes")
     print(f"  Symbols: {', '.join(final_genes)}")
     print(f"  ENSGs:   {', '.join([feat25[i] for i in active])}")
-    print(f"  W.mean zero-shot AUC = {current_wmean:.4f}")
+    print(f"  W.mean pooled-CV AUC = {current_wmean:.4f}")
 
     # Full evaluation with CI for final panel
-    print("\nComputing per-cohort zero-shot AUC with 95% CI for final panel ...")
-
-    final_results: dict[str, tuple[float, float, float]] = {}
-    panel_set = set(active)
-
-    # GPL16791
-    Xtr = Xtr25_ctd[:, active]
-    Xte = X16_25_ctd[:, active]
-    Ztr, Zte = zero_shot_scale(Xtr, Xte, "GPL16791")
-    auc16, lo16, hi16 = _zero_shot_ci(Ztr, y_train, Zte, y16, params)
-    final_results["GPL16791"] = (auc16, lo16, hi16)
-
-    # GSE76220
-    cols76_tr = [i for i in active if i in set(avail76)]
-    cols76_te = [k for k, i in enumerate(avail76) if i in panel_set]
-    if cols76_tr:
-        Xtr = Xtr25_log[:, cols76_tr]
-        Xte = X76_25[:, cols76_te]
-        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE76220")
-        auc76, lo76, hi76 = _zero_shot_ci(Ztr, y_train, Zte, y76, params)
-    else:
-        auc76, lo76, hi76 = 0.5, 0.5, 0.5
-    final_results["GSE76220"] = (auc76, lo76, hi76)
-
-    # GSE122649
-    cols122_tr = [i for i in active if i in set(avail122)]
-    cols122_te = [k for k, i in enumerate(avail122) if i in panel_set]
-    if cols122_tr:
-        Xtr = Xtr25_log[:, cols122_tr]
-        Xte = X122_25[:, cols122_te]
-        Ztr, Zte = zero_shot_scale(Xtr, Xte, "GSE122649")
-        auc122, lo122, hi122 = _zero_shot_ci(Ztr, y_train, Zte, y122, params)
-    else:
-        auc122, lo122, hi122 = 0.5, 0.5, 0.5
-    final_results["GSE122649"] = (auc122, lo122, hi122)
-
-    # SRP064478
-    cols_srp_tr = [i for i in active if i in set(avail_srp)]
-    cols_srp_te = [k for k, i in enumerate(avail_srp) if i in panel_set]
-    if cols_srp_tr:
-        Xtr = Xtr25_log[:, cols_srp_tr]
-        Xte = Xsrp_25[:, cols_srp_te]
-        Ztr, Zte = zero_shot_scale(Xtr, Xte, "SRP064478")
-        auc_srp, lo_srp, hi_srp = _zero_shot_ci(Ztr, y_train, Zte, y_srp, params)
-    else:
-        auc_srp, lo_srp, hi_srp = 0.5, 0.5, 0.5
-    final_results["SRP064478"] = (auc_srp, lo_srp, hi_srp)
+    print("\nComputing per-cohort pooled-CV AUC with 95% CI for final panel ...")
+    s_final = pooled_oof(merged, sorted(active), fold, params)
+    final_results: dict[str, tuple[float, float, float, int]] = {}
+    for c in cohorts:
+        r = merged.cid == c
+        lo, hi = _bootstrap_auc(merged.y[r], s_final[r])
+        n_genes = len([pi for pi in cohorts[c][1] if pi in set(active)])
+        final_results[c] = (
+            float(roc_auc_score(merged.y[r], s_final[r])),
+            lo,
+            hi,
+            n_genes,
+        )
 
     # -----------------------------------------------------------------------
     # Text output
     # -----------------------------------------------------------------------
+    names = list(cohorts)
     lines = [
-        "Iterative Panel Elimination — greedy backward, weighted zero-shot AUC",
+        "Iterative Panel Elimination — greedy backward, weighted pooled-CV AUC",
         "=" * 70,
         "",
-        "Cohort weights:",
-        f"  GPL16791  n={_N_COHORT['GPL16791']}  w={_W['GPL16791']:.4f}",
-        f"  GSE76220  n={_N_COHORT['GSE76220']}   w={_W['GSE76220']:.4f}",
-        f"  GSE122649 n={_N_COHORT['GSE122649']}   w={_W['GSE122649']:.4f}",
-        f"  SRP064478 n={_N_COHORT['SRP064478']}   w={_W['SRP064478']:.4f}",
-        f"  Total N   = {_TOTAL_N}",
-        "",
-        "Panel gene availability per cohort:",
-        "  GPL16791  : 25/25 (Ensembl base ID, all panel genes)",
-        f"  GSE76220  : {len(avail76)}/25 symbol-matched: {[sym25[i] for i in avail76]}",
-        f"  GSE122649 : {len(avail122)}/25 symbol-matched: {[sym25[i] for i in avail122]}",
-        f"  SRP064478 : {len(avail_srp)}/25 Ensembl-matched: {[sym25[i] for i in avail_srp]}",
+        "Cohort weights (equal per unit; units: "
+        + ", ".join(f"{u}={'+'.join(cs)}" for u, cs in _UNITS.items())
+        + "):",
+        *[
+            f"  {c:<12} n={len(cohorts[c][2]):>4}  w={_W[c]:.4f}  genes "
+            f"{len(cohorts[c][1])}/{len(sym25)}: {[sym25[i] for i in cohorts[c][1]]}"
+            for c in names
+        ],
         "",
         "Baseline (25-gene panel):",
         f"  W.mean AUC = {baseline_wmean:.4f}",
         *[f"  {k}: {v:.4f}" for k, v in baseline_cohort.items()],
         "",
         "Elimination log:",
-        f"  {'Step':>4}  {'Dropped':>14}  {'D_ZS':>8}  {'Panel_size':>10}  {'W.mean':>8}  "
-        + "  ".join(f"{k:>10}" for k in _N_COHORT),
-        "-" * 100,
+        f"  {'Step':>4}  {'Dropped':>14}  {'D_CV':>8}  {'Panel_size':>10}  {'W.mean':>8}  "
+        + "  ".join(f"{k:>11}" for k in names),
+        "-" * 150,
     ]
     for h in history[1:]:  # skip step 0 (baseline)
         cohort_str = "  ".join(
-            f"{h['cohort'].get(k, float('nan')):>10.4f}" for k in _N_COHORT
+            f"{h['cohort'].get(k, float('nan')):>11.4f}" for k in names
         )
         lines.append(
-            f"  {h['step']:>4}  {h['dropped']:>14}  {h['D_ZS']:>+8.4f}  "
+            f"  {h['step']:>4}  {h['dropped']:>14}  {h['D_CV']:>+8.4f}  "
             f"{h['panel_size']:>10}  {h['wmean']:>8.4f}  {cohort_str}"
         )
-
     lines += [
         "",
         f"Final minimal panel: {len(active)} genes",
         f"  Symbols: {', '.join(final_genes)}",
         f"  ENSGs  : {', '.join(final_feats)}",
-        f"  W.mean zero-shot AUC = {current_wmean:.4f}",
+        f"  W.mean pooled-CV AUC = {current_wmean:.4f}",
         "",
-        "Per-cohort zero-shot AUC for final panel (95% CI):",
+        "Per-cohort pooled-CV AUC for final panel (95% CI):",
         f"  {'Cohort':<12} {'n':>5}  {'Genes':>6}  {'AUC':>6}  95% CI",
-    ]
-    n_final_76 = len(cols76_tr)
-    n_final_122 = len(cols122_tr)
-    n_final_srp = len(cols_srp_tr)
-    lines += [
-        f"  {'GPL16791':<12} {len(y16):>5}  {len(active):>6}  {auc16:.4f}  [{lo16:.3f}, {hi16:.3f}]",
-        f"  {'GSE76220':<12} {len(y76):>5}  {n_final_76:>6}  {auc76:.4f}  [{lo76:.3f}, {hi76:.3f}]",
-        f"  {'GSE122649':<12} {len(y122):>5}  {n_final_122:>6}  {auc122:.4f}  [{lo122:.3f}, {hi122:.3f}]",
-        f"  {'SRP064478':<12} {len(y_srp):>5}  {n_final_srp:>6}  {auc_srp:.4f}  [{lo_srp:.3f}, {hi_srp:.3f}]",
+        *[
+            f"  {c:<12} {len(cohorts[c][2]):>5}  {r[3]:>6}  {r[0]:.4f}  [{r[1]:.3f}, {r[2]:.3f}]"
+            for c, r in final_results.items()
+        ],
     ]
 
     stat_out = SCRIPT_DIR / "iterative_panel_elimination_statistics.txt"
@@ -973,7 +919,7 @@ def main() -> None:
     panel_sizes = [h["panel_size"] for h in history]
     wmeans = [h["wmean"] for h in history]
     dropped_names = [h["dropped"] for h in steps_recorded]
-    d_values = [h["D_ZS"] for h in steps_recorded]
+    d_values = [h["D_CV"] for h in steps_recorded]
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
@@ -988,21 +934,21 @@ def main() -> None:
         label=f"Final panel (k={len(active)})",
     )
     ax.set_xlabel("Panel size (k genes)")
-    ax.set_ylabel("Weighted mean zero-shot AUC")
-    ax.set_title("Panel size vs. weighted zero-shot AUC")
+    ax.set_ylabel("Weighted mean pooled-CV AUC")
+    ax.set_title("Panel size vs. weighted pooled-CV AUC")
     ax.set_xticks(range(len(active) - 1, 26))
     ax.invert_xaxis()
     ax.grid(alpha=0.3)
     ax.legend(fontsize=9)
 
-    # Right: D_ZS per dropped gene (in order of elimination)
+    # Right: D_CV per dropped gene (in order of elimination)
     ax = axes[1]
     colors_bar = ["#388E3C" if d > 0 else "#C62828" for d in d_values]
     ax.barh(range(len(dropped_names)), d_values, color=colors_bar, alpha=0.85)
     ax.set_yticks(range(len(dropped_names)))
     ax.set_yticklabels(dropped_names, fontsize=8)
     ax.axvline(0, color="black", lw=0.8)
-    ax.set_xlabel("D_ZS (W.mean AUC improvement from dropping gene)")
+    ax.set_xlabel("D_CV (W.mean AUC improvement from dropping gene)")
     ax.set_title("Genes dropped (order of elimination)")
     ax.invert_yaxis()
     ax.grid(axis="x", alpha=0.3)
@@ -1010,8 +956,7 @@ def main() -> None:
     plt.suptitle(
         f"Greedy backward elimination — 25→{len(active)}-gene minimal panel\n"
         f"W.mean AUC: {baseline_wmean:.4f} → {current_wmean:.4f}  "
-        f"(GPL16791×{_W['GPL16791']:.2f} + GSE76220×{_W['GSE76220']:.2f} + "
-        f"GSE122649×{_W['GSE122649']:.2f} + SRP064478×{_W['SRP064478']:.2f})",
+        f"({len(_UNITS)} cohort units, equal weight)",
         fontsize=9,
     )
     plt.tight_layout()

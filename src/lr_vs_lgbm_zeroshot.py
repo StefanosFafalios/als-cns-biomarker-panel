@@ -44,6 +44,7 @@ sys.path.insert(0, str(ALS_DIR))
 
 import pandas as pd  # noqa: E402
 from utils import (  # noqa: E402
+    core_panel_entrez,
     critical_panel_label,
     critical_panel_size,
     critical_panel_symbols,
@@ -73,23 +74,7 @@ RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 
 # Entrez IDs for protein-coding panel genes — used for GSE234297 (Entrez-keyed counts)
-_PC_ENTREZ: dict[str, int] = {
-    "MECOM": 2122,
-    "SERTAD1": 29950,
-    "FCN3": 8547,
-    "PROS1": 5627,
-    "ANGPT2": 285,
-    "EMP1": 2012,
-    "TINAGL1": 64129,
-    "CKMT2": 1160,
-    "VWF": 7450,
-    "CLDN5": 7122,
-    "NR4A1": 3164,
-    "SOHLH2": 54937,
-    "HEXB": 3074,
-    "MCEE": 84693,
-    "SLC37A2": 219855,
-}
+_PC_ENTREZ: dict[str, int] = core_panel_entrez()
 
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     "erythrocyte": (

@@ -90,6 +90,10 @@ def _load_surrogates() -> list[tuple[str, str, str, str]]:
         if m:
             rows.append((float(m.group(3)), m.group(2), m.group(1)))
     if not rows:
+        # A header with an empty table means the critical panel has no vocabulary gaps
+        # in any cohort (e.g. the 8 protein-coding members, Step 105e): nothing to replace.
+        if re.search(r"^Cohort\s+Missing", _SUBSTITUTION_STATS.read_text(), re.M):
+            return []
         raise SystemExit(f"no substitution rows parsed from {_SUBSTITUTION_STATS.name}")
 
     best: dict[str, tuple[float, str]] = {}
@@ -123,6 +127,11 @@ def _ensg_for(symbols: list[str]) -> dict[str, str]:
 
 def main() -> None:
     surrogates = _load_surrogates()
+    if not surrogates:
+        msg = "No surrogates: every critical-panel member is measured in every cohort."
+        (SCRIPT_DIR / "drug_targets_surrogates.txt").write_text(msg + "\n")
+        print(msg)
+        return
     _check_biology_coverage(surrogates)
     symbols = [s[0] for s in surrogates]
     print(f"Querying DGIdb for surrogates: {symbols}")

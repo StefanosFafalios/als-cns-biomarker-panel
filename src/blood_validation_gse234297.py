@@ -8,8 +8,10 @@ Strategy
 --------
 1. Map the 15 protein-coding panel genes (ENSG IDs → Entrez IDs).
 2. Load GPL24676 RSEM raw counts; apply log1p; extract matched genes.
-3. Load GSE234297 raw counts; apply log1p; extract same genes by Entrez ID.
-4. Fit StandardScaler on GPL24676 training set; apply to both.
+3. Load GSE234297 raw counts; normalise to CPM (ALS libraries are shallower, so raw
+   counts would confound depth with disease); apply log1p; extract genes by Entrez ID.
+4. Standardise each cohort within itself (blood barely expresses most CNS panel genes,
+   so the CNS scaler would place every blood sample far outside the training range).
 5. Train LightGBM (top-500 best params, colsample_bytree=1.0) on all 874
    GPL24676 samples with the matched genes.
 6. Zero-shot predict on 144 GSE234297 samples; report AUC + bootstrap CI.
@@ -36,7 +38,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import core_panel_entrez, load_dataset  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -50,23 +52,7 @@ RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 
 # Protein-coding panel genes: symbol → Entrez ID (resolved via MyGeneInfo)
-_ENTREZ: dict[str, int] = {
-    "MECOM": 2122,
-    "SERTAD1": 29950,
-    "FCN3": 8547,
-    "PROS1": 5627,
-    "ANGPT2": 285,
-    "EMP1": 2012,
-    "TINAGL1": 64129,
-    "CKMT2": 1160,
-    "VWF": 7450,
-    "CLDN5": 7122,
-    "NR4A1": 3164,
-    "SOHLH2": 54937,
-    "HEXB": 3074,
-    "MCEE": 84693,
-    "SLC37A2": 219855,
-}
+_ENTREZ: dict[str, int] = core_panel_entrez()
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +89,7 @@ def _load_train_panel(
 def _load_blood(
     matched_syms: list[str],
 ) -> tuple[np.ndarray, np.ndarray]:
-    """GSE234297 raw counts → log1p, return (X_matched, y).
+    """GSE234297 raw counts → log1p(CPM), return (X_matched, y, matched_syms, library sizes).
 
     Columns: Case01..Case96 → ALS (y=1), Control01..Control48 → Control (y=0).
     Rows: EntrezGeneID.  Filter to Entrez IDs of matched_syms.
@@ -123,15 +109,16 @@ def _load_blood(
     if missing_entrez:
         print(f"  WARNING: {len(missing_entrez)} Entrez IDs not found in blood matrix")
 
+    lib = counts.sum(axis=0).to_numpy(dtype=float)
     X = np.log1p(
-        counts.loc[available].values.T.astype(np.float32)
-    )  # (n_samples, n_matched)
+        (counts.loc[available].values / lib * 1e6).T.astype(np.float32)
+    )  # (n_samples, n_matched), log1p CPM
 
     # Return only matched symbols in the order they appear
     matched_final = [
         s for s, eid in zip(matched_syms, entrez_ids) if eid in counts.index
     ]
-    return X, y, matched_final
+    return X, y, matched_final, lib
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +271,9 @@ def main() -> None:
     print(f"  Training genes matched: {len(matched_syms)}")
 
     print("\nLoading GSE234297 blood data ...")
-    X_blood_raw, y_test, matched_syms = _load_blood(matched_syms)
+    X_blood_raw, y_test, matched_syms, lib = _load_blood(matched_syms)
+    auc_lib = float(roc_auc_score(y_test, lib))
+    print(f"  Library size AUC (ALS vs control): {auc_lib:.4f}")
     print(
         f"  GSE234297: n={len(y_test)}  ALS={y_test.sum()}  Ctrl={(y_test == 0).sum()}"
     )
@@ -299,7 +288,6 @@ def main() -> None:
         return
 
     # Subset training matrix to the genes that were also found in blood
-    train_sym_order = {s: i for i, s in enumerate(matched_syms)}
     # X_tr was built in the order of panel_syms; rebuild for blood-matched only
     print("\nRealigning training matrix to blood-matched genes ...")
     (ds,) = load_dataset(
@@ -319,10 +307,9 @@ def main() -> None:
 
     X_tr_final = X_log_full[:, train_cols_final]
 
-    # Standardise: fit on training, apply to blood
-    scaler = StandardScaler()
-    X_tr_sc = scaler.fit_transform(X_tr_final).astype(np.float32)
-    X_blood_sc = scaler.transform(X_blood_raw).astype(np.float32)
+    # Standardise each cohort within itself, as for the cross-disease cohorts
+    X_tr_sc = StandardScaler().fit_transform(X_tr_final).astype(np.float32)
+    X_blood_sc = StandardScaler().fit_transform(X_blood_raw).astype(np.float32)
 
     params = json.loads(_PARAMS_PATH.read_text())
     params["colsample_bytree"] = 1.0
@@ -351,12 +338,12 @@ def main() -> None:
     print(f"  Bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]")
 
     # -----------------------------------------------------------------------
-    # Within-cohort LOO-CV on blood alone (min_child_samples=1, full params),
+    # Within-cohort LOO-CV on blood alone (tuned leaf fraction, full params),
     # matching the leave-one-out methodology used for the other validation
     # cohorts (GSE76220, GSE122649) and the cross-cohort panel LOO.
     # -----------------------------------------------------------------------
     print("\nWithin-cohort LOO-CV on GSE234297 blood ...")
-    loo_params = {**params, "min_child_samples": 1}
+    loo_params = dict(params)  # leaf size: utils.scale_min_child
     cv_scores = np.zeros(len(y_test))
     for i in range(len(y_test)):
         tr_idx = [j for j in range(len(y_test)) if j != i]
@@ -380,18 +367,19 @@ def main() -> None:
     print("\nPer-gene Mann-Whitney U (ALS vs Control in blood) ...")
     als_mask = y_test == 1
     ctrl_mask = y_test == 0
-    mwu_results: list[tuple[str, float, float]] = []
+    mwu_results: list[tuple[str, float, float, float]] = []  # sym, rb, p, median CPM
     for i, sym in enumerate(matched_syms):
         als_vals = X_blood_raw[als_mask, i]
         ctrl_vals = X_blood_raw[ctrl_mask, i]
         stat, p = mannwhitneyu(als_vals, ctrl_vals, alternative="two-sided")
         n1, n2 = len(als_vals), len(ctrl_vals)
         rb = float(2 * stat / (n1 * n2) - 1)  # rank-biserial r
-        mwu_results.append((sym, rb, float(p)))
+        mwu_results.append((sym, rb, float(p), float(np.median(np.expm1(X_blood_raw[:, i])))))
         sig = "*" if p < 0.05 else ""
         print(f"  {sym:<10} rb={rb:+.3f}  p={p:.3e} {sig}")
 
     mwu_results.sort(key=lambda x: abs(x[1]), reverse=True)
+    n_undetected = sum(r[3] < 1.0 for r in mwu_results)
 
     print("\nGenerating plot ...")
     _plot(
@@ -404,7 +392,7 @@ def main() -> None:
         auc_cv,
         matched_syms,
         missing_syms,
-        mwu_results,
+        [r[:3] for r in mwu_results],
     )
 
     # -----------------------------------------------------------------------
@@ -420,25 +408,28 @@ def main() -> None:
         f"Panel genes used: {len(matched_syms)}/15 protein-coding",
         f"  Matched : {', '.join(matched_syms)}",
         f"  Missing : {', '.join(missing_syms) if missing_syms else 'none'}",
+        f"Undetected in blood (median CPM < 1): {n_undetected}/{len(matched_syms)}",
+        f"Library size AUC (ALS vs control; counts are CPM-normalised): {auc_lib:.4f}",
+        "Scaling: log1p RSEM (CNS) and log1p CPM (blood), each standardised within its cohort",
         "",
         "ZERO-SHOT VALIDATION (CNS-trained model → blood)",
         "-" * 65,
         f"AUC:           {auc_zero:.4f}",
         f"Bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]  (n={N_BOOTSTRAP} iterations)",
         "",
-        "WITHIN-COHORT LOO-CV (blood only; min_child_samples=1, full params)",
+        "WITHIN-COHORT LOO-CV (blood only; tuned leaf fraction, full params)",
         "-" * 65,
         f"AUC:           {auc_cv:.4f}",
         f"Bootstrap 95% CI: [{cv_ci_lo:.4f}, {cv_ci_hi:.4f}]  (n={N_BOOTSTRAP} iterations)",
         "",
         "PER-GENE BLOOD DIFFERENTIAL EXPRESSION (ALS vs Control)",
         "rank-biserial r: positive = higher in ALS",
-        f"{'Symbol':<12} {'rb':>7} {'MWU p':>12} {'Sig':>4}",
-        "-" * 40,
+        f"{'Symbol':<12} {'rb':>7} {'MWU p':>12} {'Sig':>4} {'med CPM':>8}",
+        "-" * 49,
     ]
-    for sym, rb, p in mwu_results:
+    for sym, rb, p, med in mwu_results:
         sig = "*" if p < 0.05 else ""
-        lines.append(f"{sym:<12} {rb:>+7.3f} {p:>12.3e} {sig:>4}")
+        lines.append(f"{sym:<12} {rb:>+7.3f} {p:>12.3e} {sig:>4} {med:>8.2f}")
 
     out_txt = SCRIPT_DIR / "blood_validation_gse234297_statistics.txt"
     out_txt.write_text("\n".join(lines) + "\n")

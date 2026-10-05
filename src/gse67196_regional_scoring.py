@@ -39,7 +39,7 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import core_panel_symbols, load_dataset  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -52,23 +52,7 @@ RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 PLATFORM = "GPL24676"
 
-_PC_SYMS: set[str] = {
-    "MECOM",
-    "SERTAD1",
-    "FCN3",
-    "PROS1",
-    "ANGPT2",
-    "EMP1",
-    "TINAGL1",
-    "CKMT2",
-    "VWF",
-    "CLDN5",
-    "NR4A1",
-    "SOHLH2",
-    "HEXB",
-    "MCEE",
-    "SLC37A2",
-}
+_PC_SYMS: set[str] = set(core_panel_symbols(protein_coding_only=True))
 
 
 # ---------------------------------------------------------------------------

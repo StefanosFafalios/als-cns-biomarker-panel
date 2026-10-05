@@ -1,7 +1,7 @@
 """Small-cohort within-cohort LOO with sane hyperparameters.
 
 Reviewer M6: the within-cohort LOO numbers in the manuscript were computed
-with n_estimators=1500, min_child_samples=105 (tuned for n=874). Applied to
+with the tuned top-500 parameters, min_child_samples rescaled to the training size (utils.scale_min_child). Applied to
 n=20 (GSE76220) and n=38 (GSE122649) cohorts, this regime overfits — each
 fold trains 1500 trees on 19/37 samples respectively.
 
@@ -17,6 +17,7 @@ Outputs: small_cohort_loo_refit.csv, .txt
 
 from __future__ import annotations
 
+import json
 import sys
 import warnings
 from pathlib import Path
@@ -28,14 +29,14 @@ ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import TOP500_MIN_CHILD, load_dataset, scale_min_child  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 
 
 def _loo_auc(X: np.ndarray, y: np.ndarray, params: dict) -> float:
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     n = len(y)
     scores = np.zeros(n)
@@ -89,15 +90,9 @@ def main() -> None:
     panel_symbols = panel["symbol"].tolist()
 
     # Two hyperparameter regimes
-    paranoid = {  # tuned for n=874 — what the manuscript currently uses
-        "n_estimators": 1500,
-        "learning_rate": 0.04046,
-        "num_leaves": 21,
-        "min_child_samples": 1,  # paper says min_child_samples=1 for within-cohort LOO
+    paranoid = {  # the tuned model; min_child_samples follows utils.scale_min_child
+        **json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text()),
         "colsample_bytree": 1.0,
-        "subsample": 0.454,
-        "reg_alpha": 0.0005,
-        "reg_lambda": 0.0001,
         "objective": "binary",
         "random_state": 42,
         "verbosity": -1,
@@ -135,7 +130,7 @@ def main() -> None:
                     "n_pos": int(y.sum()),
                     "regime": label,
                     "n_estimators": params["n_estimators"],
-                    "min_child_samples": params["min_child_samples"],
+                    "min_child_samples": scale_min_child(len(y) - 1) if params["min_child_samples"] == TOP500_MIN_CHILD else params["min_child_samples"],
                     "AUC_LOO": round(auc, 4),
                 }
             )

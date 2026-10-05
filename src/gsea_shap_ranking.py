@@ -1,4 +1,4 @@
-"""GSEA on 3,704-gene SHAP-ranked list (Step 13).
+"""GSEA on the SFM-pool SHAP-ranked list (Step 13).
 
 Preranked GSEA using signed mean SHAP values from the final iterative
 LightGBM model as the ranking metric.  Signed SHAP (positive → ALS,
@@ -50,21 +50,21 @@ TOP_N_PER_SET = 15  # pathways to report per gene set
 def _load_signed_shap() -> pd.Series:
     """Return pd.Series(mean signed SHAP, index=versioned ENSG feature names).
 
-    The .npy matrix has shape (n_samples, 3704) with columns in SHAP rank order
+    The .npy matrix has shape (n_samples, n_sfm) with columns in SHAP rank order
     (rank 1 = highest mean |SHAP|).  The CSV feature column gives the same order.
     """
     shap_df = pd.read_csv(SHAP_CSV)
     features: list[str] = shap_df["feature"].tolist()
 
     # Raw signed SHAP matrix — columns align with feature order in CSV
-    shap_matrix: np.ndarray = np.load(SHAP_NPY)  # (n_samples, 3704)
+    shap_matrix: np.ndarray = np.load(SHAP_NPY)  # (n_samples, n_sfm)
     if shap_matrix.shape[1] != len(features):
         raise ValueError(
             f"Shape mismatch: npy has {shap_matrix.shape[1]} features, "
             f"CSV has {len(features)}"
         )
 
-    mean_signed = shap_matrix.mean(axis=0)  # (3704,)
+    mean_signed = shap_matrix.mean(axis=0)  # (n_sfm,)
     return pd.Series(mean_signed, index=features)
 
 
@@ -216,7 +216,7 @@ def _write_statistics(results: pd.DataFrame, rnk: pd.Series, lines: list[str]) -
 
 
 def main() -> None:
-    """Run preranked GSEA on 3,704 SHAP-ranked genes."""
+    """Run preranked GSEA on the SHAP-ranked SFM pool."""
     print("Loading signed SHAP values ...")
     signed_shap = _load_signed_shap()
     print(f"  Features loaded: {len(signed_shap)}")
@@ -240,9 +240,9 @@ def main() -> None:
     print(f"  Full results saved: {OUT_CSV}")
 
     lines: list[str] = [
-        "GSEA Prerank — 3,704 SHAP-Ranked Genes (Step 13)",
+        f"GSEA Prerank — {len(signed_shap):,} SHAP-Ranked Genes (Step 13)",
         "=" * 70,
-        f"Prerank list: {len(rnk)} HGNC symbols (3,704 ENSG → {n_mapped} mapped)",
+        f"Prerank list: {len(rnk)} HGNC symbols ({len(signed_shap):,} ENSG → {n_mapped} mapped)",
         f"Ranking metric: signed mean SHAP (positive = ALS, negative = control)",
         f"Gene set libraries: {', '.join(GENE_SETS)}",
         f"Permutations: 1000 | Min gene-set size: 10 | Max: 500",

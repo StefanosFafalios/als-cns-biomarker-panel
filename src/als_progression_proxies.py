@@ -41,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -49,6 +50,7 @@ from scipy import stats
 
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
+from utils import core_panel_ensg  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
@@ -85,23 +87,7 @@ _VULN: dict[str, int] = {
 # 15 protein-coding panel genes (Ensembl base IDs, no version suffix)
 # ---------------------------------------------------------------------------
 
-_PANEL_GENES: list[dict[str, str]] = [
-    {"symbol": "MECOM",   "ensg": "ENSG00000085276"},
-    {"symbol": "SERTAD1", "ensg": "ENSG00000197019"},
-    {"symbol": "FCN3",    "ensg": "ENSG00000142748"},
-    {"symbol": "PROS1",   "ensg": "ENSG00000184500"},
-    {"symbol": "ANGPT2",  "ensg": "ENSG00000091879"},
-    {"symbol": "EMP1",    "ensg": "ENSG00000134531"},
-    {"symbol": "TINAGL1", "ensg": "ENSG00000142910"},
-    {"symbol": "CKMT2",   "ensg": "ENSG00000131730"},
-    {"symbol": "VWF",     "ensg": "ENSG00000110799"},
-    {"symbol": "CLDN5",   "ensg": "ENSG00000184113"},
-    {"symbol": "NR4A1",   "ensg": "ENSG00000123358"},
-    {"symbol": "SOHLH2",  "ensg": "ENSG00000120669"},
-    {"symbol": "HEXB",    "ensg": "ENSG00000049860"},
-    {"symbol": "MCEE",    "ensg": "ENSG00000124370"},
-    {"symbol": "SLC37A2", "ensg": "ENSG00000134955"},
-]
+_PANEL_GENES: list[dict[str, str]] = [{"symbol": s, "ensg": e} for s, e in core_panel_ensg(protein_coding_only=True).items()]
 
 
 # ---------------------------------------------------------------------------

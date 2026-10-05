@@ -34,7 +34,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import load_dataset  # noqa: E402
+from utils import critical_panel_symbols, load_dataset  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -152,12 +152,19 @@ def main() -> None:
     auc_panel = _auc_ci(y, _cv_oof(genes, y, groups, params))
     auc_both = _auc_ci(y, _cv_oof(np.column_stack([genes, comp]), y, groups, params))
     auc_resid = _auc_ci(y, _cv_oof_residualised(genes, comp, y, groups, params))
+    # The critical panel, the subset the drug-target analyses rest on (Step 105g).
+    crit = set(critical_panel_symbols())
+    cgenes = genes[:, [i for i, s in enumerate(psyms) if s in crit]]
+    auc_cpanel = _auc_ci(y, _cv_oof(cgenes, y, groups, params))
+    auc_cresid = _auc_ci(y, _cv_oof_residualised(cgenes, comp, y, groups, params))
 
     rows = [
         ("A. Composition only (6 cell types)", auc_comp),
         ("B. Panel only (25 genes)", auc_panel),
         ("C. Panel + composition", auc_both),
         ("D. Panel residualised on composition", auc_resid),
+        (f"E. Critical panel only ({cgenes.shape[1]} genes)", auc_cpanel),
+        ("F. Critical panel residualised", auc_cresid),
     ]
     lines = [
         "Incremental value of panel over cell-type composition — experiment #2",
@@ -174,6 +181,8 @@ def main() -> None:
         "",
         f"Panel-only minus composition-only : {auc_panel[0] - auc_comp[0]:+.4f}",
         f"Residualised panel (composition removed): {auc_resid[0]:.4f}",
+        f"Critical panel minus composition-only : {auc_cpanel[0] - auc_comp[0]:+.4f}",
+        f"Residualised critical panel (composition removed): {auc_cresid[0]:.4f}",
         "",
         "Interpretation:",
         f"  - Panel ({auc_panel[0]:.3f}) >> composition alone ({auc_comp[0]:.3f}): "
@@ -190,22 +199,25 @@ def main() -> None:
     print("\n".join(lines))
 
     # figure
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(10, 5))
     aucs = [r[1][0] for r in rows]
     los = [r[1][0] - r[1][1] for r in rows]
     his = [r[1][2] - r[1][0] for r in rows]
     colours = ["#9467bd", "#1f77b4", "#2ca02c", "#d62728"]
-    ax.bar(range(4), aucs, yerr=[los, his], color=colours, alpha=0.85, capsize=4)
+    colours += ["#ff7f0e", "#8c564b"]
+    ax.bar(range(len(rows)), aucs, yerr=[los, his], color=colours, alpha=0.85, capsize=4)
     ax.axhline(0.5, ls="--", c="grey", lw=0.8, label="chance")
     for i, a in enumerate(aucs):
         ax.text(i, a + 0.02, f"{a:.3f}", ha="center", fontsize=9)
-    ax.set_xticks(range(4))
+    ax.set_xticks(range(len(rows)))
     ax.set_xticklabels(
         [
             "Composition\nonly",
             "Panel\nonly",
             "Panel +\ncomposition",
             "Panel\n(comp. removed)",
+            "Critical\nonly",
+            "Critical\n(comp. removed)",
         ],
         fontsize=9,
     )

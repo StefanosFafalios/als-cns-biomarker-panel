@@ -22,6 +22,7 @@ Outputs
 
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
 
@@ -29,22 +30,14 @@ import pandas as pd
 import requests
 
 SCRIPT_DIR = Path(__file__).parent
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+from utils import core_panel_ensg  # noqa: E402
 
 _SHAP_CSV   = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
 _REPL_CSV   = SCRIPT_DIR / "gene_replacement_results.csv"
 
 # Core panel ENSG bases (version-stripped) — excluded from audit
-PANEL_BASES = {
-    "ENSG00000085276", "ENSG00000261599", "ENSG00000183604",
-    "ENSG00000197019", "ENSG00000213860", "ENSG00000142748",
-    "ENSG00000184500", "ENSG00000091879", "ENSG00000236682",
-    "ENSG00000134531", "ENSG00000238622", "ENSG00000142910",
-    "ENSG00000131730", "ENSG00000280893", "ENSG00000110799",
-    "ENSG00000184113", "ENSG00000123358", "ENSG00000223718",
-    "ENSG00000120669", "ENSG00000203616", "ENSG00000049860",
-    "ENSG00000279656", "ENSG00000226308", "ENSG00000124370",
-    "ENSG00000134955",
-}
+PANEL_BASES = set(core_panel_ensg().values())
 
 # Olfactory receptor + testis/sperm-specific symbol prefix patterns
 _ARTIFACT_PREFIXES = (

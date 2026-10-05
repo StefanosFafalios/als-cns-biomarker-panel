@@ -49,27 +49,18 @@ _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 
-# De-duplicated replacement genes for panel genes missing from GSE76220.
-# Selected from gene_replacement_results.csv (clean pool, artifacts excluded).
-# Assignment sorted by |Pearson r| descending, then replacement AUC; each
-# replacement gene used at most once across all missing panel positions.
-# De-duplicated clean surrogates (confirmed artifacts AND artifact gene
-# families excluded), matching the canonical assignment in
-# adaptive_panel_validation.py. The keratin-associated artifact KRTAP6-2 is
-# filtered, so MAP3K2-DT takes its next clean candidate (C1orf185) and
-# RPL15P11 cascades to MAGEB2.
-REPLACEMENTS_76220: dict[str, tuple[str, str]] = {
-    "MECOM": ("MYCT1", "ENSG00000120279"),  # |r|=0.576
-    "HERC2P8": ("HERC2P4", "ENSG00000230267"),  # |r|=0.872
-    "SMG1P5": ("SMG1", "ENSG00000157106"),  # |r|=0.606
-    "RPL21P75": ("SLC6A18", "ENSG00000164363"),
-    "MAP3K2-DT": ("C1orf185", "ENSG00000204006"),
-    "ENSG00000280893": ("INSL6", "ENSG00000120210"),
-    "RPL15P11": ("MAGEB2", "ENSG00000099399"),
-    "RHOT1P2": ("DHCR24", "ENSG00000116133"),
-    "ENSG00000279656": ("OAS2", "ENSG00000111335"),
-    "LOC112268270": ("PPP1R1B", "ENSG00000131771"),  # |r|=0.573
-}
+_ASSIGN_JSON = SCRIPT_DIR / "adaptive_panel_assignment.json"
+
+
+def _replacements() -> dict[str, tuple[str, str]]:
+    """Clean surrogates for panel genes missing from GSE76220: step 29's canonical assignment.
+
+    adaptive_panel_validation.py (artifacts and artifact gene families excluded,
+    each surrogate used once) writes it; this step runs after it.
+    """
+    import json
+
+    return {k: tuple(v) for k, v in json.loads(_ASSIGN_JSON.read_text())["GSE76220"].items()}
 
 
 # ---------------------------------------------------------------------------
@@ -141,12 +132,12 @@ def _bootstrap_auc(
 def _loo_auc(X: np.ndarray, y: np.ndarray, params: dict) -> tuple[float, np.ndarray]:
     """Leave-one-out AUC within the GSE76220 cohort (n=20).
 
-    Overrides min_child_samples=1 so LightGBM can split on n_train=19.
+    min_child_samples follows the tuned leaf fraction (3 on n_train=19).
     """
     from sklearn.metrics import roc_auc_score
     from utils import PanelLGBMClassifier as LGBMClassifier
 
-    loo_params = {**params, "min_child_samples": 1, "verbose": -1}
+    loo_params = {**params, "verbose": -1}
     scores = np.zeros(len(y))
     for i in range(len(y)):
         tr = [j for j in range(len(y)) if j != i]
@@ -319,6 +310,7 @@ def main() -> None:
     # Condition B: native + replacements for missing genes
     # -----------------------------------------------------------------------
     train_ensg_base_to_col = {n.split(".")[0]: i for i, n in enumerate(feat_train)}
+    REPLACEMENTS_76220 = _replacements()
     ext_matched = list(matched)  # copy
     repl_pairs: list[str] = []
     for sym in missing:

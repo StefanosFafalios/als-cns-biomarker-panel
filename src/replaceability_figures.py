@@ -43,7 +43,11 @@ from cross_cohort_substitution import (  # noqa: E402
     _load_gse76220,
     _load_gse122649,
 )
-from utils import critical_panel_symbols, zero_shot_scale  # noqa: E402
+from utils import (  # noqa: E402
+    core_panel_symbols,
+    critical_panel_symbols,
+    zero_shot_scale,
+)
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
@@ -118,23 +122,7 @@ def fig_repl_vs_greedy() -> tuple[Path, dict]:
     repl = _parse_clean_repl(_REPL_CLEAN.read_text())
 
     # PC subset of the 25 panel
-    pc_genes = [
-        "MECOM",
-        "SERTAD1",
-        "FCN3",
-        "PROS1",
-        "ANGPT2",
-        "EMP1",
-        "TINAGL1",
-        "CKMT2",
-        "VWF",
-        "CLDN5",
-        "NR4A1",
-        "SOHLH2",
-        "HEXB",
-        "MCEE",
-        "SLC37A2",
-    ]
+    pc_genes = core_panel_symbols(protein_coding_only=True)
     critical_pc = set(critical_panel_symbols(protein_coding_only=True))
 
     points = []
@@ -227,23 +215,7 @@ def fig_repl_vs_greedy() -> tuple[Path, dict]:
 
 def fig_candidate_boxplot() -> tuple[Path, dict]:
     df = pd.read_csv(_REPL_CSV)
-    pc_genes = [
-        "MECOM",
-        "SERTAD1",
-        "FCN3",
-        "PROS1",
-        "ANGPT2",
-        "EMP1",
-        "TINAGL1",
-        "CKMT2",
-        "VWF",
-        "CLDN5",
-        "NR4A1",
-        "SOHLH2",
-        "HEXB",
-        "MCEE",
-        "SLC37A2",
-    ]
+    pc_genes = core_panel_symbols(protein_coding_only=True)
     critical_pc = set(critical_panel_symbols(protein_coding_only=True))
 
     # Use only candidate AUCs (column "replacement_auc"); no baseline shift here.
@@ -375,23 +347,7 @@ def fig_substitution_roc() -> tuple[Path, dict]:
 def fig_module_heatmap() -> tuple[Path, dict]:
     df = pd.read_csv(_REPL_CSV)
     df = df[df["is_replacement"]]
-    pc_genes = [
-        "MECOM",
-        "SERTAD1",
-        "FCN3",
-        "PROS1",
-        "ANGPT2",
-        "EMP1",
-        "TINAGL1",
-        "CKMT2",
-        "VWF",
-        "CLDN5",
-        "NR4A1",
-        "SOHLH2",
-        "HEXB",
-        "MCEE",
-        "SLC37A2",
-    ]
+    pc_genes = core_panel_symbols(protein_coding_only=True)
     critical_pc = set(critical_panel_symbols(protein_coding_only=True))
 
     # Pre-resolve biotypes

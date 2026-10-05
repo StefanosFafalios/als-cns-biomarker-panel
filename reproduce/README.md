@@ -157,7 +157,7 @@ done
 Then export the submission figures:
 
 ```bash
-python export_plos_figures.py     # -> plos_submission/Fig1.tif ... Fig10.tif
+python export_plos_figures.py     # -> plos_submission/Fig1.tif ... Fig4.tif
 ```
 
 PLOS is the submission target. `manuscript_plos.pdf` is deliberately
@@ -184,26 +184,19 @@ the `xr` LaTeX package (`\externaldocument{...}` in each preamble).
 
 ## Step layout
 
-`run_all.sh` is grouped into 15 sections (A–O) by manuscript role:
+`run_all.sh` is grouped into sections A–P by pipeline stage. The manuscript
+(2026-10-05 rewrite) draws on these steps:
 
-| Group | Manuscript section | Scripts |
-|---|---|---|
-| A | Core model development (Methods, §3.1) | decontamination and panel definition (the 2 Bayesian searches are not in this repository) |
-| B | Gene-level annotation + artifact auditing (§3.3, §3.8) | 6 scripts |
-| C | Stability + multi-algorithm robustness (§3.1, S19) | 3 scripts |
-| D | External CNS validation (§3.4) | 6 scripts (+SRP gated on Salmon) |
-| E | Cross-cohort LOO + critical panel (§3.4.2) | 5 scripts (greedy elim, **stopping rule**, bootstrap CI, eval) |
-| F | Pathway / network / upstream (§3.6, §3.11, S5, S12, S15) | 8 scripts |
-| G | Drug target annotation (§3.13) | 3 scripts |
-| H | Cell-type deconvolution + progression (§3.9, S7, deconv-robustness) | 3 scripts (incl. cell-type-assignment bootstrap) |
-| I | Disease specificity + subtype (§3.10, §3.7, S6) | 4 scripts |
-| J | Regional scoring + blood validation (§3.4.3, §3.4.4) | 2 scripts |
-| K | Gene replacement, held-out test of the replacement panel, cross-cohort substitution, stability selection (§3.8) | 13 scripts |
-| L | Calibration + linear-model sensitivity (S17, S18, ComBat) | 6 scripts (incl. ComBat batch correction) |
-| M | With-replacement validation — §3.8 negative control (canonical KRTAP/family-filtered replacement assignment; steps 05/05b mirror it) | 1 script |
-| N | Case-strengthening / robustness (S7 reference deconvolution, incremental-over-composition, random-panel null, OpenTargets genetic support, single-nucleus per-cell) | 6 scripts (BRETIGEA deconv, incremental composition, random null, genetic support, snRNA ×2) |
-| O | Shared-mechanism appraisal + cross-disease specificity (§3.10) | 3 scripts (cross-disease specificity, covariates, explainability panels) |
-| P | Independent spinal-cord / motor-cortex validation + spinal-cord single-nucleus localisation | 2 scripts |
+| Manuscript section | Steps |
+|---|---|
+| 3.1 Discovery and the 25-gene panel | 02, 02c, 02d, 03, 30b, 30c (the Bayesian searches, 01 and 02b, are not in this repository) |
+| 3.2 Validation in nine external datasets | 04, 05, 05b, 22, 30a, 40, 24b, 24c, 24d |
+| 3.3 Trimming to the critical panel | 24, 24a |
+| 3.4 Composition, per-cell change, bulk direction | 11, 11a, 11b, 11c, 41, 41a, 42 |
+| 3.5 GSTM1 deletion | 07b |
+| 3.6 Specificity and clinical correlates | 10, 35, 38 (gated) |
+| 3.7 Drug direction | 07, 07ac, 07c |
+| Supplement: robustness, blood, context | 21a, 27, 27a, 28, 28aa, 28c, 14, 06, 07a, 08, 15a, 15b |
 
 See `FIGURE_MANIFEST.md` for a per-figure / per-table lookup table mapping
 manuscript artifacts to producing scripts.

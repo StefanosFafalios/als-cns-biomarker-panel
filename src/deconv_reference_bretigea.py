@@ -101,10 +101,13 @@ def _load_markers_by_ensembl(map_fn) -> dict[str, list[str]]:
     md = pd.read_csv(_MARKERS_CSV)  # columns: markers, cell  (ranked best-first)
     by_ct: dict[str, list[str]] = {}
     # map only the top ~120 symbols per cell type to limit MyGeneInfo calls
+    # 25-gene panel members (CLDN5, MECOM, VWF rank in the top 20 endothelial markers)
+    # are excluded so composition is never estimated from the genes it is used to explain.
+    panel = set(pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").symbol.astype(str))
     top_syms: set[str] = set()
     ranked: dict[str, list[str]] = {}
     for ct in _CT_NAME:
-        syms = md.loc[md["cell"] == ct, "markers"].astype(str).tolist()[:120]
+        syms = [s for s in md.loc[md["cell"] == ct, "markers"].astype(str) if s not in panel][:120]
         ranked[ct] = syms
         top_syms.update(syms)
     sym2ensg = map_fn(sorted(top_syms))

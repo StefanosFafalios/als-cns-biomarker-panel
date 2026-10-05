@@ -18,29 +18,13 @@ import matplotlib.pyplot as plt  # noqa: E402
 BASE = Path(__file__).parent
 sys.path.insert(0, str(BASE.parent))
 
-from utils import critical_panel_symbols  # noqa: E402
+from utils import core_panel_symbols, critical_panel_symbols  # noqa: E402
 
 # The 15 protein-coding members of the *25-gene* panel. This is the plot's x-axis
 # universe and is deliberately NOT the critical panel: the grey bars are exactly
 # the genes greedy elimination dropped. The 25-gene panel is the greedy's input
 # and does not change when the critical panel does.
-_PC15 = {
-    "MECOM",
-    "SERTAD1",
-    "FCN3",
-    "PROS1",
-    "ANGPT2",
-    "EMP1",
-    "TINAGL1",
-    "CKMT2",
-    "VWF",
-    "CLDN5",
-    "NR4A1",
-    "SOHLH2",
-    "HEXB",
-    "MCEE",
-    "SLC37A2",
-}
+_PC15 = set(core_panel_symbols(protein_coding_only=True))
 
 # Protein-coding members of the canonical critical panel (panel_critical.csv)
 _CRITICAL_PC = set(critical_panel_symbols(protein_coding_only=True))

@@ -96,7 +96,7 @@ def _loo_predict(
     params: dict,
 ) -> np.ndarray:
     """Within-cohort LOO — new StandardScaler per fold."""
-    loo_params = {**params, "min_child_samples": 1, "verbose": -1, "n_jobs": 1}
+    loo_params = {**params, "verbose": -1, "n_jobs": 1}
     scores = np.zeros(len(y))
     for i in range(len(y)):
         tr = [j for j in range(len(y)) if j != i]
@@ -763,6 +763,13 @@ def main() -> None:
         train_ensg,
         "GSE122649",
     )
+
+    # The canonical assignment, read by external_validation_gse76220.py and
+    # additional_cohort_gse122649.py (steps 05/05b run after this step).
+    (SCRIPT_DIR / "adaptive_panel_assignment.json").write_text(json.dumps({
+        c: {s["replaces"]: [s["symbol"], s["ensg_base"]] for s in m["substitutes"]}
+        for c, m in (("GSE76220", match76220), ("GSE122649", match122649))
+    }, indent=1))
 
     print("\n  Running GSE122649 validation ...")
     results122649 = _run_cohort(

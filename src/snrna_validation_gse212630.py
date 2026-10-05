@@ -21,12 +21,16 @@ from __future__ import annotations
 
 import glob
 import re
+import sys
 import warnings
 from pathlib import Path
 
 import numpy as np
 
 SCRIPT_DIR = Path(__file__).parent
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+from utils import core_panel_symbols  # noqa: E402
+
 _H5_DIR = SCRIPT_DIR.parent / "resources" / "GSE212630" / "suppl"
 MIN_COUNTS = 500
 _DIS = "TDPhigh"  # disease group (vs Control)
@@ -125,17 +129,7 @@ def main() -> None:
         for ct in _MARKERS
     }
     gref = {g: j for j, g in enumerate(genes_ref)}
-    for g in [
-        "SLC37A2",
-        "HEXB",
-        "PROS1",
-        "EMP1",
-        "CLDN5",
-        "VWF",
-        "ANGPT2",
-        "FCN3",
-        "SERTAD1",
-    ]:
+    for g in core_panel_symbols(protein_coding_only=True):
         if g in gref:
             lines.append(
                 f"{g:<10}" + "".join(f"{spec[ct][gref[g]]:>9.2f}" for ct in _MARKERS)

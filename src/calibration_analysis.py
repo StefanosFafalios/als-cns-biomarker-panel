@@ -283,14 +283,16 @@ def main() -> None:
     plt.close("all")
     print("\nSaved -> calibration_reliability.png")
 
+    from utils import critical_panel_size
+
     # Statistics file
     lines = [
         "Calibration analysis (25-gene panel + critical panel)",
         "=" * 60,
         "Discrimination + calibration on training and primary external cohort.",
         "Both panels use the same LightGBM model (top-500 hyperparameters) on",
-        "raw log1p data (CTD is discovery-side only); the critical panel is the 15-gene greedy-elimination",
-        "subset of the 25-gene panel.",
+        "raw log1p data (CTD is discovery-side only); the critical panel is the "
+        f"{critical_panel_size()}-gene greedy-elimination subset of the 25-gene panel.",
         "",
         "Brier score (smaller is better; 0 = perfect, 0.25 = uninformative).",
         "Expected Calibration Error (ECE; 10 equal-width bins).",

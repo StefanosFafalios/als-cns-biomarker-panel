@@ -122,9 +122,9 @@ _MARKERS: dict[str, list[str]] = {
         "SALL1",
         "FCRLS",
     ],
+    # CLDN5 and VWF are 25-gene panel members: as markers they would be correlated
+    # with, and residualised on, themselves (excluded as in snrna_spinal_cord.py).
     "Endothelial": [
-        "CLDN5",
-        "VWF",
         "PECAM1",
         "CDH5",
         "FLT1",
@@ -392,6 +392,21 @@ def main() -> None:
             )
 
     corr_df = pd.DataFrame(corr_rows)
+
+    # Per-gene label read by drug_targets.py: the most positively correlated cell type,
+    # and that cell type's ALS-vs-control shift ("ns" when the MWU p >= 0.05).
+    dom = corr_df.loc[corr_df.groupby("symbol")["rho"].idxmax()]
+    pd.DataFrame(
+        {
+            "symbol": dom["symbol"],
+            "dominant_ct": dom["cell_type"],
+            "rho": dom["rho"].round(3),
+            "ct_als_dir": [
+                "ns" if mwu_results[ct]["p"] >= 0.05 else ("up" if mwu_results[ct]["delta"] > 0 else "down")
+                for ct in dom["cell_type"]
+            ],
+        }
+    ).to_csv(SCRIPT_DIR / "cell_type_deconvolution_genes.csv", index=False)
 
     # Pivot for heatmap
     pivot = corr_df.pivot(index="symbol", columns="cell_type", values="rho")

@@ -188,7 +188,7 @@ def main() -> None:
         f"Method: LASSO neighbourhood selection (Meinshausen & Bühlmann 2006)",
         f"Primary cohort  : GPL24676  n=874",
         f"Replicate cohort: GPL16791  n=636",
-        f"SFM search space: 3704 genes",
+        f"SFM search space: {len(pd.read_csv(SCRIPT_DIR / 'lgbm_iter_final_shap_ranking.csv'))} genes",
         f"Primary threshold: |Pearson r| >= {PRIMARY_R_THRESHOLD} in GPL24676",
         f"Replication threshold: |Pearson r| >= 0.10, same sign in GPL16791",
         f"All {len(filtered)} reported edges satisfy BOTH thresholds (100% replication).",

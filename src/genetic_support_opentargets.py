@@ -14,8 +14,8 @@ van Rheenen 2021 + GTEx summary stats (heavier; not run here). A SOD1 positive
 control validates the query. Honest by construction: novel post-mortem
 transcriptomic responders may legitimately carry no genetic-risk signal.
 
-Disease IDs (Open Targets): MONDO_0004976 (ALS), EFO_0001357 (sporadic ALS),
-EFO_0003782 (motor neuron disease).
+Disease IDs (Open Targets): MONDO_0004976 (ALS; indirect scores include its subtypes),
+MONDO_0020128 (motor neuron disorder).
 
 Outputs
 -------
@@ -35,28 +35,15 @@ import requests
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
+from utils import core_panel_symbols  # noqa: E402
+
 SCRIPT_DIR = Path(__file__).parent
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _OT_URL = "https://api.platform.opentargets.org/api/v4/graphql"
-_ALS_IDS = ["MONDO_0004976", "EFO_0001357", "EFO_0003782"]  # ALS, sALS, MND
+# EFO_0001357 (sporadic ALS) and EFO_0003782 (MND) no longer exist in Open Targets.
+_ALS_IDS = ["MONDO_0004976", "MONDO_0020128"]  # ALS (incl. subtypes), motor neuron disorder
 
-_PC_SYMBOLS = {
-    "MECOM",
-    "SERTAD1",
-    "FCN3",
-    "PROS1",
-    "ANGPT2",
-    "EMP1",
-    "TINAGL1",
-    "CKMT2",
-    "VWF",
-    "CLDN5",
-    "NR4A1",
-    "SOHLH2",
-    "HEXB",
-    "MCEE",
-    "SLC37A2",
-}
+_PC_SYMBOLS = set(core_panel_symbols(protein_coding_only=True))
 _POS_CONTROLS = [("SOD1", "ENSG00000142168"), ("TARDBP", "ENSG00000120948")]
 
 _QUERY = """
@@ -164,8 +151,8 @@ def main() -> None:
     lines = [
         "Genetic causal support for panel genes (OpenTargets) — experiment #6",
         "=" * 64,
-        "Diseases (OT IDs): MONDO_0004976 ALS, EFO_0001357 sporadic ALS,",
-        "EFO_0003782 motor neuron disease. Score = OT target-disease association",
+        "Diseases (OT IDs): MONDO_0004976 ALS, MONDO_0020128 motor neuron disorder.",
+        "Score = OT target-disease association",
         "(0-1); genetic_association aggregates GWAS, GWAS-eQTL coloc, ClinVar.",
         "",
         "Positive controls (validate the query):",

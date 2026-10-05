@@ -9,6 +9,7 @@ endothelial specificity, etc.).
 
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
 
@@ -17,46 +18,17 @@ import numpy as np
 import pandas as pd
 import requests
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
+from utils import core_panel_directions, core_panel_symbols  # noqa: E402
+
 SCRIPT_DIR = Path(__file__).parent
 
 GTEX_API = "https://gtexportal.org/api/v2"
 DATASET = "gtex_v8"
 
-_PROTEIN_CODING = [
-    "MECOM",
-    "SERTAD1",
-    "FCN3",
-    "PROS1",
-    "ANGPT2",
-    "EMP1",
-    "TINAGL1",
-    "CKMT2",
-    "VWF",
-    "CLDN5",
-    "NR4A1",
-    "SOHLH2",
-    "HEXB",
-    "MCEE",
-    "SLC37A2",
-]
+_PROTEIN_CODING = core_panel_symbols(protein_coding_only=True)
 
-_DIRECTION: dict[str, str] = {
-    "MECOM": "down",
-    "SERTAD1": "up",
-    "FCN3": "up",
-    "PROS1": "up",
-    "ANGPT2": "down",
-    "EMP1": "up",
-    "TINAGL1": "down",
-    "CKMT2": "down",
-    "VWF": "down",
-    "CLDN5": "down",
-    "NR4A1": "down",
-    "SOHLH2": "up",
-    "HEXB": "up",
-    "MCEE": "up",
-    "SLC37A2": "up",
-}
+_DIRECTION: dict[str, str] = core_panel_directions(protein_coding_only=True)
 
 # Canonical CNS tissues in GTEx v8 (tissueSiteDetailId)
 _CNS_TISSUES = {
@@ -234,6 +206,8 @@ def _plot(
     # Panel C — per-gene expression across brain regions for priority targets
     ax = axes[2]
     priority = ["SERTAD1", "FCN3", "CKMT2", "CLDN5", "VWF"]
+    if stale := sorted(set(priority) - set(_PROTEIN_CODING)):
+        raise SystemExit(f"priority targets {stale} are not in the panel; re-curate panel C")
     brain_tissues = sorted([t for t in expr_df.index if "Brain" in t or "Spinal" in t])
     for i, gene in enumerate(p for p in priority if p in expr_df.columns):
         vals_gene = [all_records.get(gene, {}).get(t, np.nan) for t in brain_tissues]

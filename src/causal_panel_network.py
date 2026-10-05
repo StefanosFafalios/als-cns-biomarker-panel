@@ -14,15 +14,20 @@ Outputs
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).parents[1]))
+from utils import core_panel_directions, core_panel_symbols  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 _PREFILTER_X   = SCRIPT_DIR / "lgbm_prefilter_X.npy"
@@ -39,32 +44,32 @@ _THEME = {
     "VWF": "Vascular/BBB", "CLDN5": "Vascular/BBB",
     "NR4A1": "Neuroinflammation", "SOHLH2": "Microglial",
     "HEXB": "Microglial", "MCEE": "Microglial", "SLC37A2": "Microglial",
+    "ALDH1A2": "Vascular/BBB",  # provisional (Step 104), review with the manuscript
+    "GSTM1": "Neurodegeneration",  # provisional (Step 104), review with the manuscript
 }
-_DIRECTION = {
-    "MECOM": "down", "SERTAD1": "up", "FCN3": "up", "PROS1": "up",
-    "ANGPT2": "down", "EMP1": "up", "TINAGL1": "down", "CKMT2": "down",
-    "VWF": "down", "CLDN5": "down", "NR4A1": "down", "SOHLH2": "up",
-    "HEXB": "up", "MCEE": "up", "SLC37A2": "up",
-}
+# Themes are curated by hand: stop rather than draw an uncurated panel gene in grey.
+if _missing := sorted(set(core_panel_symbols(protein_coding_only=True)) - set(_THEME)):
+    raise SystemExit(f"no curated theme for panel genes {_missing}; add them to _THEME")
+_DIRECTION = core_panel_directions(protein_coding_only=True)
 _COLOR_THEME = {
     "Vascular/BBB": "#1565C0",
     "Neuroinflammation": "#C62828",
     "Neurodegeneration": "#6A1B9A",
     "Microglial": "#2E7D32",
 }
-# STRING medium-confidence edges (combined score >= 0.4), matching the STRING
-# network figure (string_network.py / Fig. S24).
+# STRING medium-confidence edges (combined score >= 0.4) among the panel genes, as written
+# by string_network.py (step 12a), which this step follows.
 _STRING_EDGES = {
-    ("VWF", "ANGPT2"), ("VWF", "CLDN5"), ("VWF", "PROS1"), ("ANGPT2", "CLDN5"),
+    (a, b)
+    for a, b, s in pd.read_csv(SCRIPT_DIR / "string_network_edges.csv")[["Gene_A", "Gene_B", "Score"]].itertuples(index=False)
+    if s >= 0.4
 }
 
 
 def _load_panel_expression() -> tuple[np.ndarray, list[str]]:
     """Load expression matrix for the 15 protein-coding panel genes."""
     panel_df = pd.read_csv(_PANEL_CSV)
-    protein_coding = panel_df[~panel_df["symbol"].str.startswith(
-        ("ENSG", "LOC", "RPL", "RPS", "SNORD", "MAP3K2-DT", "RHOT1P2")
-    )]
+    protein_coding = panel_df[panel_df["symbol"].isin(core_panel_symbols(protein_coding_only=True))]
     symbols = protein_coding["symbol"].tolist()
     ensg_ids = protein_coding["feature"].str.split(".").str[0].tolist()
 

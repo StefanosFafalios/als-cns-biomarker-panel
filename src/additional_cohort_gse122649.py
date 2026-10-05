@@ -63,21 +63,18 @@ _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
 
-# De-duplicated clean surrogates (confirmed artifacts AND artifact gene
-# families excluded), matching the canonical assignment in
-# adaptive_panel_validation.py for this cohort. The keratin-associated artifact
-# KRTAP6-2 is filtered, so MAP3K2-DT takes its next clean candidate (C1orf185)
-# and the de-dup cascade reassigns RPL15P11/RHOT1P2/ENSG279656 accordingly.
-REPLACEMENTS: dict[str, tuple[str, str]] = {
-    "HERC2P8": ("HERC2P4", "ENSG00000230267"),  # |r|=0.872
-    "RPL21P75": ("SLC6A18", "ENSG00000164363"),
-    "MAP3K2-DT": ("C1orf185", "ENSG00000204006"),
-    "ENSG00000280893": ("LINC01318", "ENSG00000237790"),
-    "RPL15P11": ("INSL6", "ENSG00000120210"),
-    "RHOT1P2": ("LINC02556", "ENSG00000236611"),
-    "ENSG00000279656": ("OAS2", "ENSG00000111335"),
-    "LOC112268270": ("PPP1R1B", "ENSG00000131771"),  # |r|=0.573
-}
+_ASSIGN_JSON = SCRIPT_DIR / "adaptive_panel_assignment.json"
+
+
+def _replacements() -> dict[str, tuple[str, str]]:
+    """Clean surrogates for panel genes missing from GSE122649: step 29's canonical assignment.
+
+    adaptive_panel_validation.py (artifacts and artifact gene families excluded,
+    each surrogate used once) writes it; this step runs after it.
+    """
+    import json
+
+    return {k: tuple(v) for k, v in json.loads(_ASSIGN_JSON.read_text())["GSE122649"].items()}
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +330,7 @@ def main() -> None:
     repl_train_cols: list[int] = list(native_train_cols)
     repl_test_cols: list[int] = list(native_test_cols)
     repl_genes: list[str] = list(native_genes)
+    REPLACEMENTS = _replacements()
     repl_pairs: list[str] = []
 
     for label in missing_labels:
@@ -400,7 +398,7 @@ def main() -> None:
     # ---------------------------------------------------------------------------
     from sklearn.model_selection import LeaveOneOut
 
-    loo_params = {**params, "min_child_samples": 1}
+    loo_params = dict(params)  # leaf size: utils.scale_min_child
     X_te_native_log = np.log1p(X_test_raw[:, native_test_cols].astype(np.float32))
     loo_probs = np.zeros(len(y_test))
     for lo_idx, va_idx in LeaveOneOut().split(X_te_native_log):

@@ -16,22 +16,16 @@ import numpy as np
 import pandas as pd
 import requests
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
+from utils import core_panel_directions, core_panel_symbols  # noqa: E402
+
 SCRIPT_DIR = Path(__file__).parent
 STRING_API = "https://string-db.org/api/json"
 SPECIES = 9606
 
-_PROTEIN_CODING = [
-    "MECOM", "SERTAD1", "FCN3", "PROS1", "ANGPT2", "EMP1",
-    "TINAGL1", "CKMT2", "VWF", "CLDN5", "NR4A1", "SOHLH2",
-    "HEXB", "MCEE", "SLC37A2",
-]
+_PROTEIN_CODING = core_panel_symbols(protein_coding_only=True)
 
-_DIRECTION: dict[str, str] = {
-    "MECOM": "down", "SERTAD1": "up", "FCN3": "up", "PROS1": "up",
-    "ANGPT2": "down", "EMP1": "up", "TINAGL1": "down", "CKMT2": "down",
-    "VWF": "down", "CLDN5": "down", "NR4A1": "down", "SOHLH2": "up",
-    "HEXB": "up", "MCEE": "up", "SLC37A2": "up",
-}
+_DIRECTION: dict[str, str] = core_panel_directions(protein_coding_only=True)
 
 _THEME: dict[str, str] = {
     "MECOM": "Vascular/BBB", "VWF": "Vascular/BBB", "CLDN5": "Vascular/BBB",
@@ -41,7 +35,12 @@ _THEME: dict[str, str] = {
     "SERTAD1": "Neurodegeneration", "CKMT2": "Neurodegeneration",
     "HEXB": "Microglial", "SLC37A2": "Microglial",
     "MCEE": "Microglial", "SOHLH2": "Microglial",
+    "ALDH1A2": "Vascular/BBB",  # provisional (Step 104), review with the manuscript
+    "GSTM1": "Neurodegeneration",  # provisional (Step 104), review with the manuscript
 }
+# Themes are curated by hand: stop rather than draw an uncurated panel gene in grey.
+if _missing := sorted(set(_PROTEIN_CODING) - set(_THEME)):
+    raise SystemExit(f"no curated theme for panel genes {_missing}; add them to _THEME")
 
 _COLOR_THEME = {
     "Vascular/BBB": "#1565C0",

@@ -28,9 +28,9 @@ Four analyses:
    25-gene panel as features.  AUC > 0.7 would indicate embedded FTD biology
    in the panel; near 0.5 confirms subtype-agnostic utility.
 
-4. Full 3,704-gene ALS-FTD vs pure ALS screen
+4. Full SFM-pool ALS-FTD vs pure ALS screen
    ────────────────────────────────────────────
-   Rank-biserial r and Mann-Whitney U for all 3,704 SFM-selected features.
+   Rank-biserial r and Mann-Whitney U for every SFM-selected feature.
    BH-FDR correction.  Identifies novel subtype-specific genes outside the
    discriminative panel.
 
@@ -60,7 +60,11 @@ sys.path.insert(0, str(ALS_DIR))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from nygc_clinical_association import _donor_means  # noqa: E402
-from utils import _load_suppl_expression, _parse_series_matrix  # noqa: E402
+from utils import (  # noqa: E402
+    _load_suppl_expression,
+    _parse_series_matrix,
+    core_panel_symbols,
+)
 
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
@@ -78,23 +82,7 @@ FDR_THRESH = 0.05
 N_BOOTSTRAP = 2_000
 
 # 15 protein-coding panel genes
-_CODING_GENES: list[dict[str, str]] = [
-    {"symbol": "MECOM", "ensg": "ENSG00000085276", "direction": "down_in_ALS"},
-    {"symbol": "SERTAD1", "ensg": "ENSG00000197019", "direction": "up_in_ALS"},
-    {"symbol": "FCN3", "ensg": "ENSG00000142748", "direction": "up_in_ALS"},
-    {"symbol": "PROS1", "ensg": "ENSG00000184500", "direction": "up_in_ALS"},
-    {"symbol": "ANGPT2", "ensg": "ENSG00000091879", "direction": "down_in_ALS"},
-    {"symbol": "EMP1", "ensg": "ENSG00000134531", "direction": "up_in_ALS"},
-    {"symbol": "TINAGL1", "ensg": "ENSG00000142910", "direction": "down_in_ALS"},
-    {"symbol": "CKMT2", "ensg": "ENSG00000131730", "direction": "down_in_ALS"},
-    {"symbol": "VWF", "ensg": "ENSG00000110799", "direction": "down_in_ALS"},
-    {"symbol": "CLDN5", "ensg": "ENSG00000184113", "direction": "down_in_ALS"},
-    {"symbol": "NR4A1", "ensg": "ENSG00000123358", "direction": "down_in_ALS"},
-    {"symbol": "SOHLH2", "ensg": "ENSG00000120669", "direction": "up_in_ALS"},
-    {"symbol": "HEXB", "ensg": "ENSG00000049860", "direction": "up_in_ALS"},
-    {"symbol": "MCEE", "ensg": "ENSG00000124370", "direction": "up_in_ALS"},
-    {"symbol": "SLC37A2", "ensg": "ENSG00000134955", "direction": "up_in_ALS"},
-]
+_CODING_GENES: list[str] = core_panel_symbols(protein_coding_only=True)
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +367,7 @@ def main() -> None:
         )
 
     # Subtype consistency table (coding genes only)
-    coding_syms = {g["symbol"] for g in _CODING_GENES}
+    coding_syms = set(_CODING_GENES)
     consistency_df = panel_df[panel_df["symbol"].isin(coding_syms)].copy()
 
     # -----------------------------------------------------------------------
@@ -427,9 +415,9 @@ def main() -> None:
     print(f"  Overall CV AUC: {auc_cv:.4f}  95% CI [{ci_lo:.4f}, {ci_hi:.4f}]")
 
     # -----------------------------------------------------------------------
-    # Analysis 4: Full 3,704-gene ALS-FTD vs pure ALS screen
+    # Analysis 4: Full SFM-pool ALS-FTD vs pure ALS screen
     # -----------------------------------------------------------------------
-    print("\n[4] Full 3,704-gene ALS-FTD vs pure ALS screen ...")
+    print("\n[4] Full SFM-pool ALS-FTD vs pure ALS screen ...")
     shap_df = pd.read_csv(_SHAP_CSV)
     sfm_features: list[str] = shap_df["feature"].tolist()
 
@@ -573,7 +561,7 @@ def main() -> None:
         f"Bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]",
         "",
         "─" * 70,
-        "ANALYSIS 4: Full 3,704-gene screen — ALS-FTD vs pure ALS",
+        f"ANALYSIS 4: Full {len(sfm_features):,}-gene screen — ALS-FTD vs pure ALS",
         "─" * 70,
         f"Significant at BH-FDR < {FDR_THRESH}: {n_sig} / {len(sfm_df)} genes",
         "",

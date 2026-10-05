@@ -1,8 +1,8 @@
 """Panel validation in independent spinal-cord and motor-cortex cohorts (Step 101).
 
-None of these cohorts was used to discover the 25-gene panel or to select the
-critical panel, so they give the critical panel its first external test that the
-selection never saw.
+None of these cohorts was used to discover the 25-gene panel, so the 25-gene rows
+are external tests. Since Step 105 (findings.md) all five are trimming cohorts in
+steps 24/24a, so the critical-panel rows are in-sample.
 
   GSE255683    lumbar spinal cord, RNA-seq exonic counts          ALS 10 / ctrl 10
   GSE287256    cervical spinal cord, RNA-seq DESeq2-normalised     ALS 8 / ctrl 4
@@ -22,9 +22,12 @@ Analysis fixed before the run:
   * Per cohort and panel (25-gene; critical): AUC, 95% stratified bootstrap CI
     over donors (B=2000), and the empirical p against B=1000 random gene sets of
     the same size (all candidate genes; SFM pool), as random_panel_null_cohorts.py.
-  * Pooled: inverse-variance weighted AUC over the four independent cohorts, SE
-    from the bootstrap; its null pools the i-th random set of every cohort with
-    the same weights.
+  * Pooled: AUC over the four independent cohorts weighted by 1 / null variance of
+    the AUC (case and control counts only), SE from the bootstrap SDs; its null pools
+    the i-th random set of every cohort with the same weights. Changed after the run
+    on 2026-10-05 from bootstrap inverse-variance weights, which gave a perfectly
+    separated 12-sample cohort (SD 0) most of the weight; the 25-gene estimate moved
+    0.6345 -> 0.6333.
   * GSE26927 disease arms (AD, PD, HD, MS, schizophrenia): AUC of cases against
     their own tissue-matched controls, each arm standardised within itself.
 
@@ -211,8 +214,8 @@ def _emtab(acc: str) -> Cohort:
 
 def _scores(xtr: np.ndarray, ytr: np.ndarray, xte: np.ndarray, scale_id: str, within: bool = False) -> np.ndarray:
     """Zero-shot probabilities; the same model and scaling as random_panel_null_cohorts._auc."""
-    from lightgbm import LGBMClassifier
     from sklearn.preprocessing import StandardScaler
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     if within:
         ztr, zte = StandardScaler().fit_transform(xtr), StandardScaler().fit_transform(xte)
@@ -290,9 +293,12 @@ def main() -> None:
     pooled = {}
     for pname in panels:
         sub = res[(res.panel == pname) & res.cohort.isin(POOLED)].set_index("cohort").loc[list(POOLED)]
-        w = 1 / sub.sd**2
+        # Sample-size weights: 1 / null variance of the Mann-Whitney AUC. Bootstrap
+        # inverse-variance weights depend on the observed AUC and hand a perfectly
+        # separated small cohort (SD 0) all the weight (user decision 2026-10-05).
+        w = 12 * sub.n_als * sub.n_ctl / (sub.n_als + sub.n_ctl + 1)
         est = float((w * sub.auc).sum() / w.sum())
-        se = float(1 / np.sqrt(w.sum()))
+        se = float(np.sqrt((w**2 * sub.sd**2).sum()) / w.sum())
         null = sum(w[c] * nulls[(c, pname, "broad")] for c in POOLED) / w.sum()
         pooled[pname] = dict(auc=est, lo=est - 1.96 * se, hi=est + 1.96 * se, null_mean=float(null.mean()),
                              p=(int((null >= est).sum()) + 1) / (B_NULL + 1))
@@ -332,7 +338,9 @@ def _report(res: pd.DataFrame, pooled: dict, arm_df: pd.DataFrame) -> None:
             f"{r.auc:>8.4f}  [{r.lo:.3f}, {r.hi:.3f}]{r.broad_mean:>8.4f}{r.broad_p:>8.4f}"
             f"{r.SFM_mean:>8.4f}{r.SFM_p:>8.4f}{within}"
         )
-    lines += ["", f"Pooled over {', '.join(POOLED)} (inverse-variance; null pools the i-th random set):"]
+    lines += ["", f"Pooled over {', '.join(POOLED)} (weights 1 / null variance of the AUC, i.e. by case and",
+              "control counts; SE from the bootstrap SDs; null pools the i-th random set with the same weights).",
+              "Critical rows are in-sample: these cohorts chose its genes (Step 105)."]
     for pname, p in pooled.items():
         lines.append(f"  {pname:<9} AUC {p['auc']:.4f} [{p['lo']:.3f}, {p['hi']:.3f}]  "
                      f"random-set mean {p['null_mean']:.4f}  p {p['p']:.4f}")

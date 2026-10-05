@@ -101,7 +101,7 @@ def _load_top500() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 
 def _train(X: np.ndarray, y: np.ndarray) -> object:
-    from lightgbm import LGBMClassifier
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     clf = LGBMClassifier(**adjust_colsample(LGBM_PARAMS, X.shape[1]))
     with warnings.catch_warnings():
@@ -143,9 +143,9 @@ def _run_curve(
     X: np.ndarray, y: np.ndarray, ranked_names: list[str], feature_names: list[str]
 ) -> list[float]:
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     name_to_col = {n: i for i, n in enumerate(feature_names)}
     rank_cols = [name_to_col[n] for n in ranked_names]
@@ -200,9 +200,9 @@ def _run_loo(
     baseline_auc: float,
 ) -> list[dict]:
     import pandas as pd
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     name_to_col = {n: i for i, n in enumerate(feature_names)}
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
@@ -517,9 +517,9 @@ def main() -> None:
     shap_df = pd.read_csv(SHAP_CSV)
 
     # CV AUC baseline (full 500 features)
-    from lightgbm import LGBMClassifier
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedKFold
+    from utils import TunedLGBMClassifier as LGBMClassifier
 
     skf = StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=CV_RANDOM_STATE)
     fold_aucs = []
