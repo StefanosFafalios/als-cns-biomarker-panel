@@ -60,7 +60,6 @@ sys.path.insert(0, str(ALS_DIR))
 warnings.filterwarnings("ignore")
 
 _CKPT = SCRIPT_DIR / "iterative_panel_elimination_ckpt.json"
-_PARAMS = SCRIPT_DIR / "lgbm_top500_best_params.json"
 N_BOOT = 2000
 RANDOM_STATE = 42
 ALPHA = 0.05
@@ -179,7 +178,7 @@ def _write_panel_critical(core_panel: list[str] | set[str]) -> None:
 _SCORES_CSV = SCRIPT_DIR / "greedy_significance_stop.csv"
 
 
-def _cached_scores(ks: list[int]) -> "pd.DataFrame | None":
+def _cached_scores(ks: list[int], panels: dict[int, str], wmean_traj: dict[int, float]) -> "pd.DataFrame | None":
     """Return the per-k bootstrap table from a previous run, if it is complete.
 
     Scoring 25 panel sizes across the trimming cohorts is ~8 h under the corrected
@@ -189,8 +188,14 @@ def _cached_scores(ks: list[int]) -> "pd.DataFrame | None":
     report seconds rather than hours. Delete the CSV, or set
     ``GREEDY_STOP_REFIT=1``, to force a refit.
 
+    The table must also come from the current greedy run: the same surviving genes and
+    the same greedy W.mean at every k. Without this check a rerun of step 24 on changed
+    cohort data (array QC, 2026-10-07) was scored with the previous run's table.
+
     Args:
         ks: Panel sizes the current run expects.
+        panels: Surviving genes per k (';'-joined, as the table's "panel" column).
+        wmean_traj: The greedy's own W.mean per k (the table's "wmean_greedy" column).
 
     Returns:
         The cached table, or ``None`` if absent, incomplete, or refit is forced.
@@ -211,18 +216,25 @@ def _cached_scores(ks: list[int]) -> "pd.DataFrame | None":
     if not required.issubset(cached.columns):
         print(f"  cached table predates {sorted(required)}; refitting")
         return None
+    c = cached.set_index("k")
+    stale = [k for k in ks if c.loc[k, "panel"] != panels[k]
+             or not np.isclose(c.loc[k, "wmean_greedy"], wmean_traj[k], atol=1e-6)]
+    if stale:
+        print(f"  cached table is from another greedy run (k={stale[:5]}...); refitting")
+        return None
     print(f"Reusing cached scores for k={min(ks)}..{max(ks)} ({_SCORES_CSV.name})")
     return cached
 
 
 def main() -> None:
     full, drops, wmean_traj = _trajectory()
-    params = json.loads(_PARAMS.read_text())
+    from utils import selected_lgbm_params  # noqa: E402
+    params = selected_lgbm_params()
 
     # Panel sizes come from the greedy trajectory alone, so the cache can be
     # checked before any cohort is loaded.
     ks = sorted([k for k in wmean_traj if k >= 1], reverse=True)
-    cached = _cached_scores(ks)
+    cached = _cached_scores(ks, {k: ";".join(_panel_at(full, drops, k)) for k in ks}, wmean_traj)
     if cached is not None:
         point = dict(zip(cached.k, cached.wmean, strict=False))
         _report(cached, full, drops, point, max(point, key=point.get))
@@ -550,17 +562,13 @@ def _report(
 
     fig, ax = plt.subplots(figsize=(9, 5))
     d = df.sort_values("k")
-    ax.plot(d.k, d.wmean, "o-", color="#2c3e50", lw=1.6, ms=4, label="W.mean")
-    band = df[~df.significantly_worse]
-    ax.axvspan(
-        band.k.min(),
-        band.k.max(),
-        color="#27ae60",
-        alpha=0.12,
-        label=f"not sig. worse than k={peak}",
-    )
-    ax.axvline(core_k, color="#27ae60", ls="--", lw=1.4, label=f"core panel k={core_k}")
-    ax.axvline(peak, color="#c0392b", ls=":", lw=1.4, label=f"peak k={peak}")
+    ax.plot(d.k, d.wmean, "o-", color="#2c3e50", lw=1.6, ms=4, label="weighted mean AUC")
+    # one span per size: a single min-max span also shaded significantly worse sizes inside it
+    for i, k in enumerate(sorted(df[~df.significantly_worse].k)):
+        ax.axvspan(k - 0.5, k + 0.5, color="#27ae60", alpha=0.12, lw=0,
+                   label=f"not significantly worse than k={peak}" if i == 0 else None)
+    ax.axvline(core_k, color="#27ae60", ls="--", lw=1.4, label=f"critical panel, k={core_k}")
+    ax.axvline(peak, color="#c0392b", ls=":", lw=1.4, label=f"peak, k={peak}")
     ax.set_xlabel("panel size k")
     ax.set_ylabel("weighted mean pooled-CV AUC")
     ax.set_title("Greedy trajectory with significance-based stopping rule")

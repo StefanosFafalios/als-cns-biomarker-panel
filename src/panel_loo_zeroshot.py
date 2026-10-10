@@ -33,7 +33,6 @@ Outputs:
 from __future__ import annotations
 
 import gzip
-import json
 import re
 import sys
 import tarfile
@@ -54,12 +53,12 @@ from utils import (  # noqa: E402
 )
 
 # Panel size is derived, so every reader-facing label must be too.
+from utils import selected_lgbm_params  # noqa: E402
 _K_CRIT = critical_panel_size()
 _CRIT_LABEL = critical_panel_label()
 
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _ITER_STAT = SCRIPT_DIR / "iterative_panel_elimination_statistics.txt"
 
 
@@ -479,7 +478,7 @@ def main() -> None:
     print("Sensitivity weights (sample-size): w_c = n_c / 709")
     print("=" * 70)
 
-    params_raw = json.loads(_PARAMS_PATH.read_text())
+    params_raw = selected_lgbm_params()
     # colsample_bytree=1.0: with 24-25 features, fractional column sampling would
     # subsample to ~1.6 features per tree. n_jobs handled by LGBM internal threading.
     params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)

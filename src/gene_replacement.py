@@ -44,7 +44,6 @@ Outputs
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -65,6 +64,7 @@ sys.path.insert(0, str(ALS_DIR))
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedGroupKFold
 from utils import PanelLGBMClassifier, adjust_colsample, core_panel_ensg, load_dataset
+from utils import selected_lgbm_params  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -86,7 +86,7 @@ MAX_CORR_CANDS = 200    # take only the top-MAX_CORR_CANDS by |r| from genes
 # rescaled to the panel size) with folds grouped by donor, so the baseline is
 # the headline within-cohort AUC and every candidate is scored as the panel is.
 _LGBM_PARAMS = dict(
-    json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text()),
+    selected_lgbm_params(),
     n_jobs=1,  # single-threaded per model; the outer loop is parallel
     verbose=-1,
 )

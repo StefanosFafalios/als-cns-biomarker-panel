@@ -53,9 +53,9 @@ sys.path.insert(0, str(ALS_DIR))
 
 from sklearn.metrics import roc_auc_score  # noqa: E402
 from utils import PanelLGBMClassifier, load_dataset  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _PROGRESS_LOG = SCRIPT_DIR / "iterative_panel_elimination_progress.log"
 _CKPT = SCRIPT_DIR / "iterative_panel_elimination_ckpt.json"
 # A checkpoint written under another score is never resumed.
@@ -511,17 +511,13 @@ def _trim_cohorts(
         _emtab("E-MTAB-8635"),
         _emtab("E-MTAB-2325"),
     ):
-        cohorts[c.scale_id] = by_key(
-            c.X, c.genes, c.y, sym25 if c.by_symbol else feat25_bases
-        )
+        v = by_key(c.X, c.genes, c.y, sym25 if c.by_symbol else feat25_bases)
+        d = _emtab_donors(c)
+        cohorts[c.scale_id] = v if d is None else (*v, d)
     assert set(cohorts) == set(_W), (set(cohorts), set(_W))
-    emtab = _emtab_donors()
     for c, v in cohorts.items():
         if len(v) == 3:
-            cohorts[c] = (
-                *v,
-                emtab.get(c, np.array([f"{c}_{i}" for i in range(len(v[2]))])),
-            )
+            cohorts[c] = (*v, np.array([f"{c}_{i}" for i in range(len(v[2]))]))
         assert len(cohorts[c][3]) == len(v[2]), c
     for c, (M, av, y, _) in cohorts.items():
         print(
@@ -530,22 +526,24 @@ def _trim_cohorts(
     return cohorts
 
 
-def _emtab_donors() -> dict[str, np.ndarray]:
-    """Donor ids for both E-MTAB cohorts in _emtab row order (SDRF order); shared patients get one id."""
-    res = ALS_DIR / "resources"
-    s25 = pd.read_csv(res / "E-MTAB-2325" / "E-MTAB-2325.sdrf.txt", sep="\t")
-    s86 = pd.read_csv(res / "E-MTAB-8635" / "E-MTAB-8635.sdrf.txt", sep="\t")
-    code = s86["Characteristics[patient code (e-mtab-2325)]"]
-    return {
-        "E-MTAB-2325": (
-            "EM" + s25["Characteristics[Patient code]"].astype(str)
-        ).to_numpy(),
-        "E-MTAB-8635": np.where(
-            code.notna(),
-            "EM" + code.fillna(0).astype(int).astype(str),
-            "EM8635_" + s86["Characteristics[individual]"],
-        ),
-    }
+def _emtab_donors(c) -> np.ndarray | None:
+    """Donor id per row of an E-MTAB cohort, looked up by array name (shared patients get one id).
+
+    Returns None for any other cohort. Rows follow c.samples, so arrays dropped by the
+    array QC (new_cohort_validation.QC_MIN_R) cannot misalign donors.
+    """
+    if not c.scale_id.startswith("E-MTAB"):
+        return None
+    s = pd.read_csv(ALS_DIR / "resources" / c.scale_id / f"{c.scale_id}.sdrf.txt", sep="	")
+    if c.scale_id == "E-MTAB-2325":
+        ids = ("EM" + s["Characteristics[Patient code]"].astype(str)).to_numpy()
+        names = s["Scan Name"].str.strip()
+    else:
+        code = s["Characteristics[patient code (e-mtab-2325)]"]
+        ids = np.where(code.notna(), "EM" + code.fillna(0).astype(int).astype(str),
+                       "EM8635_" + s["Characteristics[individual]"])
+        names = s["Array Data File"].str.strip()
+    return pd.Series(ids, index=names.to_numpy())[c.samples].to_numpy()
 
 
 @dataclass
@@ -659,7 +657,7 @@ def main() -> None:
     print("Units: " + ", ".join(f"{u}={'+'.join(cs)}" for u, cs in _UNITS.items()))
     print("=" * 70)
 
-    params_raw = json.loads(_PARAMS_PATH.read_text())
+    params_raw = selected_lgbm_params()
     params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
 
     # -----------------------------------------------------------------------

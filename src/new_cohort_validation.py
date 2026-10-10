@@ -13,6 +13,13 @@ steps 24/24a, so the critical-panel rows are in-sample.
 E-MTAB-2325 shares 35 donors with E-MTAB-8635 (SDRF patient codes), so it is
 reported but left out of the pooled estimate.
 
+Array QC (added 2026-10-07, rule fixed before any AUC was computed with it): within each
+array dataset (each GSE26927 arm), an array whose Pearson r to the dataset's median
+profile (log2, quantile-normalised, the more-expressed half of probes) is below
+QC_MIN_R is excluded before normalisation and replicate averaging. It removes failed
+hybridisations: E-MTAB-8635 #64/#66 and E-MTAB-2325 #51bis/#59/#71 (r 0.05-0.22,
+against ~0.9 for the rest; all ALS).
+
 Analysis fixed before the run:
   * Model: the manuscript's zero-shot LightGBM (random_panel_null_cohorts._auc),
     trained on all GPL24676 samples.
@@ -89,6 +96,7 @@ class Cohort:
     by_symbol: bool
     y: np.ndarray
     scale_id: str  # zero_shot_scale key: GEO/AE accession
+    samples: list[str] | None = None  # array / scan name per row, where donors are looked up by name
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +131,30 @@ def _quantile_normalise(df: pd.DataFrame) -> pd.DataFrame:
     ref = np.sort(df.to_numpy(), axis=0).mean(axis=1)
     ranks = df.rank(method="first").to_numpy().astype(int) - 1
     return pd.DataFrame(ref[ranks], index=df.index, columns=df.columns)
+
+
+QC_MIN_R = 0.5
+
+
+def array_qc_r(log_probes: pd.DataFrame) -> pd.Series:
+    """Per array: Pearson r to the median profile (quantile-normalised, more-expressed half of probes).
+
+    Args:
+        log_probes: probes x arrays, log2 scale, no missing values.
+    """
+    qn = _quantile_normalise(log_probes)
+    m = qn.mean(axis=1)
+    qn = qn[m > m.median()]
+    return qn.corrwith(qn.median(axis=1))
+
+
+def _qc_pass(log_probes: pd.DataFrame, name: str) -> list[str]:
+    """Arrays of *log_probes* that pass QC_MIN_R, in column order; prints the excluded ones."""
+    r = array_qc_r(log_probes)
+    bad = r[r < QC_MIN_R]
+    print(f"  {name}: array QC excluded {len(bad)}/{len(r)}"
+          + (": " + ", ".join(f"{k} (r {v:.2f})" for k, v in bad.items()) if len(bad) else ""))
+    return [c for c in log_probes.columns if c not in bad.index]
 
 
 def _gse255683() -> Cohort:
@@ -171,7 +203,8 @@ def _gse26927_arms() -> dict[str, Cohort]:
     for arm in sorted({m.group(1) for m in parsed}):
         rows = [(g, m.group(2), m.group(3)) for g, m in zip(meta["Sample_geo_accession"], parsed) if m.group(1) == arm]
         donor = {g: f"{grp}_{sid}" for g, grp, sid in rows}
-        sub = genes[[g for g, _, _ in rows]].T.groupby(lambda g: donor[g]).mean()
+        ok = _qc_pass(probes[[g for g, _, _ in rows]].dropna(), f"GSE26927 {arm}")
+        sub = genes[ok].T.groupby(lambda g: donor[g]).mean()
         y = np.array([int(k.startswith("Disease")) for k in sub.index])
         print(f"  GSE26927 {arm}: {len(rows)} arrays -> {len(sub)} donors ({int(y.sum())} cases)")
         arms[arm] = Cohort(f"GSE26927 {arm}", tissue[rows[0][0]], sub.to_numpy(np.float32),
@@ -201,10 +234,12 @@ def _emtab(acc: str) -> Cohort:
         raw = raw.apply(lambda r: r.fillna(r.median()), axis=1).dropna()
         key = dict(zip(sdrf["Array Data File"].str.strip(), y_of))
         tissue = "spinal cord"
-    qn = _quantile_normalise(np.log2(raw.clip(lower=1.0)))
-    genes = _to_genes(qn, _platform_symbols("GPL6480"), acc)[list(key)]
+    lg = np.log2(raw.clip(lower=1.0))
+    ok = _qc_pass(lg.loc[lg.index.astype(str).str.startswith("A_"), list(key)], acc)
+    qn = _quantile_normalise(lg[ok])
+    genes = _to_genes(qn, _platform_symbols("GPL6480"), acc)[ok]
     return Cohort(acc, tissue, genes.T.to_numpy(np.float32), list(genes.index), True,
-                  np.array([key[c] for c in genes.columns]), acc)
+                  np.array([key[c] for c in genes.columns]), acc, samples=ok)
 
 
 # ---------------------------------------------------------------------------

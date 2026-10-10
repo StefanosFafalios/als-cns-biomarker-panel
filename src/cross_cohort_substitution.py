@@ -51,13 +51,13 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import critical_panel_label, load_dataset, zero_shot_scale  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 # Panel size is derived, so every reader-facing label must be too.
 _CRIT_LABEL = critical_panel_label()
 
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _REPL_CSV = SCRIPT_DIR / "gene_replacement_results.csv"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
@@ -362,7 +362,7 @@ def main() -> None:
     print(f"Cross-cohort surrogate substitution for the {_CRIT_LABEL} panel")
     print("=" * 70)
 
-    params_raw = json.loads(_PARAMS_PATH.read_text())
+    params_raw = selected_lgbm_params()
     params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
 
     # ---- Panel ----

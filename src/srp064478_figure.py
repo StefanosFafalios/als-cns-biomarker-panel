@@ -11,7 +11,6 @@ and produces a two-panel figure:
 from __future__ import annotations
 
 import gzip
-import json
 import re
 import sys
 from pathlib import Path
@@ -31,13 +30,13 @@ ALS_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import critical_panel_label, critical_panel_size, load_dataset  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 # Panel size is derived, so every reader-facing denominator must be too.
 _K_CRIT = critical_panel_size()
 _CRIT_LABEL = critical_panel_label()
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
 _SRP_FASTA = ALS_DIR / "resources" / "SRP064478" / "index" / "hg38_cdna.fa.gz"
@@ -144,7 +143,7 @@ def main() -> None:
     base_crit = [feat25_bases[i] for i in crit_idx]
     sym_crit = [feat25_syms[i] for i in crit_idx]
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params.update(
         {
             "colsample_bytree": 1.0,

@@ -1,7 +1,6 @@
 """Annotate panel genes and write the 25-gene panel restricted to annotated genes.
 
-Pseudogenes and unannotated loci are excluded by the rule used for the coffeeBreak-derived
-panel (findings Step 95): no symbol, a ``LOC``/Ensembl symbol, or an NCBI/Ensembl gene type
+Pseudogenes and unannotated loci are excluded by a fixed rule: no symbol, a ``LOC``/Ensembl symbol, or an NCBI/Ensembl gene type
 marking a pseudogene (MyGeneInfo, cached in ``ensg_biotype_cache.json``). Writes
 ``lgbm_core25_panel_annotated.csv`` (17 genes), the input of the annotated-panel random
 gene-set baseline in ``random_panel_null_cohorts.py``.

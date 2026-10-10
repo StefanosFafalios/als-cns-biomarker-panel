@@ -20,7 +20,6 @@ Outputs ``nygc_clinical_association.csv`` and ``_statistics.txt``.
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -42,8 +41,9 @@ from utils import (  # noqa: E402
     load_dataset,
 )
 
+from utils import selected_lgbm_params  # noqa: E402
 ST1 = ALS_DIR / "resources" / "NYGC_zenodo_20025792" / "NYGC_Flagship_ST_1_3_Metadata.xlsx"
-PARAMS = json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text())
+PARAMS = selected_lgbm_params()
 OUT_CSV = SCRIPT_DIR / "nygc_clinical_association.csv"
 OUT_TXT = SCRIPT_DIR / "nygc_clinical_association_statistics.txt"
 C9_REPEATS = 30

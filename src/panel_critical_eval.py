@@ -15,7 +15,6 @@ Outputs:
 from __future__ import annotations
 
 import gzip
-import json
 import re
 import sys
 import tarfile
@@ -34,8 +33,8 @@ from utils import (  # noqa: E402
     zero_shot_scale,
 )
 
+from utils import selected_lgbm_params  # noqa: E402
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
 _GSE122649_DIR = ALS_DIR / "resources" / "GSE122649"
@@ -303,7 +302,7 @@ def main() -> None:
     print("Weights: GPL16791=0.250  GSE76220=0.250  GSE122649=0.250  SRP064478=0.250")
     print("=" * 70)
 
-    params_raw = json.loads(_PARAMS_PATH.read_text())
+    params_raw = selected_lgbm_params()
     params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
 
     # ---- Panel ----

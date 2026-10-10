@@ -15,7 +15,6 @@ reads its surrogates.
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -47,11 +46,11 @@ from utils import (  # noqa: E402
 )
 
 # Panel size is derived, so every reader-facing denominator must be too.
+from utils import selected_lgbm_params  # noqa: E402
 _K_CRIT = critical_panel_size()
 _CRIT_LABEL = critical_panel_label()
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
@@ -140,7 +139,7 @@ def main() -> None:
 
     warnings.filterwarnings("ignore")
 
-    params_raw = json.loads(_PARAMS_PATH.read_text())
+    params_raw = selected_lgbm_params()
     params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
 
     df_panel = pd.read_csv(_PANEL_CSV)

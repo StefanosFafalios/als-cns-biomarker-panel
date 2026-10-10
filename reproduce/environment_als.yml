@@ -20,9 +20,6 @@ dependencies:
       - networkx>=3.6          # network analysis (string_network)
       - requests>=2.30         # REST APIs (DGIdb, OpenTargets — Step 7)
       - causal-learn>=0.1.4    # PC conditional-dependence network (Step 12b)
-      - optuna>=3.0            # BayesianOptimizer dependency
-      - dask[distributed]>=2024.1
-      - bokeh>=3.1
       - termcolor>=2.4
 
 # External (non-Python) prerequisite for the reference-based deconvolution

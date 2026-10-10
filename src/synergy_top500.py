@@ -35,6 +35,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -42,7 +43,6 @@ PLATFORM = "GPL24676"
 _SHAP_RANKING_CSV = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
 _PREFILTER_X_NPY = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES_TXT = SCRIPT_DIR / "lgbm_prefilter_names.txt"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 AUC_THRESHOLD = 0.60  # defines "individually weak" pool
 SHORTLIST_K = 100  # pairs/triples/quads validated with LightGBM CV
@@ -325,7 +325,6 @@ def _plot(results: list[dict], k: int, label: str) -> None:
 
 
 def main() -> None:
-    import json
 
     import matplotlib
     import pandas as pd
@@ -336,7 +335,7 @@ def main() -> None:
     print("Synergy Analysis — Top-500 SHAP Features (MI Pre-screening)")
     print("=" * 68)
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
     print("Model: top-500 params, colsample_bytree=1.0")
 

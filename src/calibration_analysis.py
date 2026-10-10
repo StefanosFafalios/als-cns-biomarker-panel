@@ -17,7 +17,6 @@ Outputs:
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -35,7 +34,6 @@ sys.path.insert(0, str(ALS_DIR))
 
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 
 
@@ -120,7 +118,8 @@ def _extract_panel(X, feat_names, panel_features):
 def _fit_lgbm(X_tr, y_train):
     from utils import PanelLGBMClassifier as LGBMClassifier
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    from utils import selected_lgbm_params  # noqa: E402
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
     with warnings.catch_warnings():

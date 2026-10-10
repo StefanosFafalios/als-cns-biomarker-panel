@@ -49,8 +49,8 @@ from utils import (  # noqa: E402
     zero_shot_scale,
 )
 
+from utils import selected_lgbm_params  # noqa: E402
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _REPL_CSV = SCRIPT_DIR / "gene_replacement_results.csv"
 _REPL_CLEAN = SCRIPT_DIR / "gene_replacement_clean_statistics.txt"
 _ITER_STAT = SCRIPT_DIR / "iterative_panel_elimination_statistics.txt"
@@ -291,7 +291,7 @@ def fig_substitution_roc() -> tuple[Path, dict]:
     """
     from sklearn.metrics import roc_auc_score, roc_curve
 
-    params = dict(json.loads(_PARAMS_PATH.read_text()), colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(selected_lgbm_params(), colsample_bytree=1.0, n_jobs=-1, verbose=-1)
     subs = json.loads(_SUB_JSON.read_text())  # {cohort: [[missing, symbol, ensg], ...]}
     panel = pd.read_csv(_PANEL_CSV)
     bases = dict(zip(panel["symbol"], panel["feature"].str.split(".").str[0]))

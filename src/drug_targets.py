@@ -107,10 +107,12 @@ _DECONV: dict[str, dict] = (
 )
 
 
-# Per-cell change in each gene's top cell type, spinal-cord snRNA (step 41; 8 ALS /
-# 4 control donors, the GSE287256 bulk donors). Read in main() so a missing file
-# fails with the step order rather than at import.
-_SNRNA_CSV = SCRIPT_DIR / "snrna_spinal_cord_percell.csv"
+# Per-cell change in each gene's top cell type, spinal-cord snRNA (GSE287257; 8 ALS / 4 control
+# donors, the GSE287256 bulk donors): the reference-typed count model of step 41c. The
+# marker-typed step 41 test is not used for tiers since 2026-10-09: its ALS "endothelial" nuclei
+# are 84% non-endothelial (snrna_typing_purity.py), which manufactured the endothelial decreases.
+# Read in main() so a missing file fails with the step order rather than at import.
+_SNRNA_CSV = SCRIPT_DIR / "snrna_percell_v2.csv"
 _SNRNA_ORDER = {"confirmed": 0, "suggestive": 1, "none": 2, "not_measured": 2, "opposite": 3}
 _DECONV_ORDER = {"sign_reversal": 0, "ambiguous_ct": 1, "composition_driven": 2}
 
@@ -279,8 +281,12 @@ def main() -> None:
 
     symbols = [g["symbol"] for g in _PROTEIN_CODING_GENES]
     if not _SNRNA_CSV.exists():
-        raise SystemExit(f"{_SNRNA_CSV.name} missing -- run snrna_spinal_cord.py (step 41) first")
-    snrna = pd.read_csv(_SNRNA_CSV).set_index("gene").to_dict("index")
+        raise SystemExit(f"{_SNRNA_CSV.name} missing -- run snrna_percell_v2.py (step 41c) first")
+    v2 = pd.read_csv(_SNRNA_CSV)
+    v2 = v2[v2.family == "panel"].set_index("gene")
+    # the count model's estimate, p and BH q (within the panel genes) feed _snrna_evidence
+    snrna = {g: {"celltype": r.celltype, "log2fc": r.glm_log2fc, "p": r.glm_p, "q": r.glm_q}
+             for g, r in v2.iterrows()}
     # Independent-donor replication in cortex snRNA (snrna_cortex_percell.py, step 41a).
     cortex_csv = SCRIPT_DIR / "snrna_cortex_percell.csv"
     if not cortex_csv.exists():
@@ -420,9 +426,9 @@ def main() -> None:
         "=" * 70,
         f"Protein-coding genes queried: {len(symbols)}",
         "Sources: DGIdb v5 GraphQL + OpenTargets Platform GraphQL",
-        "Per-cell evidence (primary): spinal-cord snRNA GSE287257, ALS vs control donor pseudobulk",
-        "  in each gene's top cell type (snrna_spinal_cord.py). 8 ALS / 4 control donors (the GSE287256",
-        "  bulk donors, a trimming cohort); the smallest attainable two-sided MWU p is 0.004.",
+        "Per-cell evidence (primary): spinal-cord snRNA GSE287257, nuclei typed against the GSE190442",
+        "  reference; quasi-Poisson donor pseudobulk in each gene's top cell type (snrna_percell_v2.py),",
+        "  BH within the panel. 8 ALS / 4 control donors (the GSE287256 bulk donors, a trimming cohort).",
         "Bulk deconvolution (secondary): z-score module scoring (cell_type_deconvolution.py)",
         "Cortex replication (reported, not used for tiers): the same cell type in two cortex snRNA",
         "  cohorts with independent donors (snrna_cortex_percell.py): " + ", ".join(sorted(cortex.cohort.unique())),

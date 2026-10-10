@@ -38,12 +38,12 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset, panel25_cv_auc, zero_shot_scale
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _ANNOT_TSV = SCRIPT_DIR / "core25_annotations.tsv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 
 RANDOM_STATE = 42
@@ -220,7 +220,6 @@ def _plot(
 
 
 def main() -> None:
-    import json
 
     import matplotlib
     import pandas as pd
@@ -288,7 +287,7 @@ def main() -> None:
     X_tr_sc = _tr.astype(np.float32)
     X_te_sc = _te.astype(np.float32)
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
 
     print(f"\nZero-shot A: {len(matched)} native genes ...")

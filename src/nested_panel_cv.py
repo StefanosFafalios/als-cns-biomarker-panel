@@ -25,7 +25,6 @@ Outputs ``nested_panel_cv.csv`` (one row per seed x fold),
 
 from __future__ import annotations
 
-import json
 import sys
 import time
 import warnings
@@ -54,7 +53,8 @@ from utils import (  # noqa: E402
     load_dataset,
 )
 
-PARAMS = json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text())
+from utils import selected_lgbm_params  # noqa: E402
+PARAMS = selected_lgbm_params()
 SEEDS = (42, 43, 44)
 FOLDS = 5
 TOP_SFM = 500

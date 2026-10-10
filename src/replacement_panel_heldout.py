@@ -59,9 +59,9 @@ from panel_variant_cv import (  # noqa: E402
 from scipy.stats import spearmanr  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
 from utils import PanelLGBMClassifier, load_dataset, zero_shot_scale  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SWAPS_JSON = SCRIPT_DIR / "panel_variant_greedy_swaps.json"
 _REFERENCE_TXT = SCRIPT_DIR / "combined_validation_roc_statistics.txt"
 _OUT = SCRIPT_DIR / "replacement_panel_heldout_statistics.txt"
@@ -114,7 +114,7 @@ def _reference_auc25() -> dict[str, float]:
 
 
 def main() -> None:
-    params = dict(json.loads(_PARAMS_PATH.read_text()), colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(selected_lgbm_params(), colsample_bytree=1.0, n_jobs=-1, verbose=-1)
     panel = pd.read_csv(_PANEL_CSV)
     base_panel = list(zip(panel["symbol"], panel["feature"].str.split(".").str[0]))
     swaps: dict[str, list[str]] = json.loads(_SWAPS_JSON.read_text())

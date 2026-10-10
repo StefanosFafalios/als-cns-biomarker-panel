@@ -38,6 +38,7 @@ sys.path.insert(0, str(ALS_DIR))
 
 import matplotlib  # noqa: E402
 from utils import load_dataset, zero_shot_scale  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -51,7 +52,6 @@ SCRIPT_DIR = Path(__file__).parent
 ALS_DIR_RES = ALS_DIR / "resources"
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _REPL_CSV = SCRIPT_DIR / "gene_replacement_results.csv"
 _AUDIT_CSV = SCRIPT_DIR / "shap500_artifact_audit.csv"
 
@@ -681,7 +681,7 @@ def main() -> None:
     print("=" * 72)
 
     panel_df = pd.read_csv(_PANEL_CSV)
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
     rng = np.random.default_rng(RANDOM_STATE)
 

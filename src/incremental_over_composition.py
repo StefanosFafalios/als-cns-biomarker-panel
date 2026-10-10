@@ -24,7 +24,6 @@ Outputs
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -35,10 +34,10 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import critical_panel_symbols, load_dataset  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS = SCRIPT_DIR / "lgbm_top500_best_params.json"
 RANDOM_STATE = 42
 N_BOOT = 2000
 
@@ -144,7 +143,7 @@ def main() -> None:
     genes = x_log[:, pcols]  # (n, n_panel)
     print(f"  panel genes matched in raw matrix: {len(pcols)}/25")
 
-    params = json.loads(_PARAMS.read_text())
+    params = selected_lgbm_params()
     params.update({"verbose": -1, "n_jobs": 4})
 
     print("\n[4] 5-fold CV models ...")

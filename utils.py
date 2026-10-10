@@ -564,9 +564,8 @@ def load_all(
 # LightGBM hyperparameter transfer across feature spaces
 # ---------------------------------------------------------------------------
 
-# `lgbm_top500_best_params.json` was produced by BayesianOptimizer on the
-# top-500 SHAP feature space (biomarker_discovery_top500.py slices to TOP_N=500
-# before optimising), where colsample_bytree = 0.0667 selects ~33 features per
+# The selected classifier (SELECTED_LGBM_PARAMS below) was chosen on the top-500
+# SHAP feature space, where its colsample_bytree selects about 25 features per
 # tree.
 #
 # colsample_bytree is a *fraction*, so reusing that file verbatim on a smaller
@@ -606,11 +605,111 @@ def adjust_colsample(params: dict, n_features: int) -> dict:
     return out
 
 
-# The exact ``colsample_bytree`` and ``min_child_samples`` produced by the top-500
-# Bayesian optimisation, read from its output so they follow any re-tuning. Used as
-# signatures so the wrappers below correct only params that actually came from that
-# search, and never a hand-set or differently-tuned value.
-_TOP500_PARAMS = json.loads((Path(__file__).parent / "GSE153960" / "lgbm_top500_best_params.json").read_text())
+# The selected configuration. A Bayesian search evaluated candidate preprocessing,
+# feature-selection and classifier configurations by five-fold cross-validation on the
+# top 500 genes of the discovery cohort (874 GPL24676 samples) and selected: remove
+# constant columns, keep the genes that carry 99.9% of a LightGBM model's cumulative
+# gain, and classify with the LightGBM below. Every analysis uses this classifier.
+SELECTED_LGBM_PARAMS: dict = {
+    "n_estimators": 2000,
+    "learning_rate": 0.05034640340553723,
+    "num_leaves": 22,
+    "max_depth": -1,
+    "min_child_samples": 69,
+    "colsample_bytree": 0.050796217674041105,
+    "subsample": 0.7549150630443756,
+    "reg_lambda": 0.06500861623031677,
+    "reg_alpha": 0.0003507191729052032,
+    "random_state": 0,
+    "verbose": -1,
+}
+SELECTOR_LGBM_PARAMS: dict = {
+    "colsample_bytree": 0.99,
+    "importance_type": "gain",
+    "learning_rate": 0.01,
+    "min_child_samples": 7,
+    "random_state": 0,
+    "reg_lambda": 1e-10,
+    "verbose": -1,
+}
+SELECTOR_GAIN_FRACTION = 0.999
+
+
+def selected_lgbm_params() -> dict:
+    """A fresh copy of the selected classifier's hyperparameters."""
+    return dict(SELECTED_LGBM_PARAMS)
+
+
+def cumulative_gain_mask(importances: np.ndarray, fraction: float) -> np.ndarray:
+    """Boolean mask of the smallest top-ranked set carrying ``fraction`` of total importance.
+
+    Args:
+        importances: Per-feature importances.
+        fraction: Share of the summed importance to keep, in (0, 1].
+
+    Returns:
+        Mask aligned with ``importances``; only the top feature when none is positive.
+    """
+    importances = np.asarray(importances, dtype=float)
+    order = np.argsort(-importances, kind="stable")
+    total = float(importances.sum())
+    n_keep = 1 if total <= 0 else int(np.searchsorted(np.cumsum(importances[order]), fraction * total, side="left")) + 1
+    mask = np.zeros(importances.size, dtype=bool)
+    mask[order[: min(n_keep, importances.size)]] = True
+    return mask
+
+
+def selected_pipeline():
+    """The selected configuration as a scikit-learn pipeline.
+
+    Constant columns are dropped (all finite values equal, or none finite), a LightGBM
+    model fitted on the remaining genes in their input order ranks them by gain, the
+    smallest top set carrying 99.9% of the total is kept, and the selected classifier is
+    fitted on that set with the genes in name order. The order matters because LightGBM
+    samples columns by position; it is the order in which the search presented them. Fit
+    and predict on a DataFrame whose columns are the gene identifiers. Built lazily so
+    importing :mod:`utils` does not require scikit-learn or lightgbm.
+
+    Returns:
+        An unfitted :class:`sklearn.pipeline.Pipeline`.
+    """
+    from lightgbm import LGBMClassifier
+    from sklearn.base import BaseEstimator, TransformerMixin
+    from sklearn.pipeline import Pipeline
+
+    class ConstantColumnRemover(TransformerMixin, BaseEstimator):
+        def fit(self, X, y=None):
+            v = X.to_numpy(dtype=float)
+            fin = np.isfinite(v)
+            lo = np.where(fin, v, np.inf).min(axis=0)
+            hi = np.where(fin, v, -np.inf).max(axis=0)
+            self.columns_ = list(X.columns[fin.any(axis=0) & (np.abs(hi - lo) > 1e-50)])
+            return self
+
+        def transform(self, X):
+            return X[self.columns_]
+
+    class CumulativeGainSelector(TransformerMixin, BaseEstimator):
+        def fit(self, X, y):
+            self.estimator_ = LGBMClassifier(**SELECTOR_LGBM_PARAMS).fit(X.to_numpy(dtype=float), y)
+            keep = cumulative_gain_mask(self.estimator_.feature_importances_, SELECTOR_GAIN_FRACTION)
+            self.columns_ = sorted(X.columns[keep])
+            return self
+
+        def transform(self, X):
+            return X[self.columns_].to_numpy(dtype=float)
+
+    return Pipeline([
+        ("constant", ConstantColumnRemover()),
+        ("select", CumulativeGainSelector()),
+        ("classify", LGBMClassifier(**SELECTED_LGBM_PARAMS)),
+    ])
+
+
+# The exact ``colsample_bytree`` and ``min_child_samples`` of the selected classifier,
+# used as signatures so the wrappers below correct only these values and never a
+# hand-set or differently-tuned one.
+_TOP500_PARAMS = SELECTED_LGBM_PARAMS
 TOP500_COLSAMPLE = _TOP500_PARAMS["colsample_bytree"]
 _COLSAMPLE_TOL = 1e-9
 

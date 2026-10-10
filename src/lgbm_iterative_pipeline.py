@@ -41,23 +41,9 @@ CV_RANDOM_STATE = 42
 TOP_N = 50
 MAX_ITERATIONS = 20
 
-_BEST_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
-if _BEST_PARAMS_PATH.exists():
-    import json as _json
+from utils import selected_lgbm_params  # noqa: E402
 
-    LGBM_PARAMS: dict = _json.loads(_BEST_PARAMS_PATH.read_text())
-    print(f"Loaded LightGBM params from {_BEST_PARAMS_PATH}")
-else:
-    LGBM_PARAMS: dict = dict(
-        n_estimators=300,
-        learning_rate=0.05,
-        num_leaves=31,
-        max_depth=-1,
-        min_child_samples=20,
-        random_state=0,
-        verbose=-1,
-    )
-    print("Using default LightGBM params (lgbm_best_params.json not found)")
+LGBM_PARAMS: dict = selected_lgbm_params()
 
 PREFIX = "lgbm_iter_"
 
@@ -65,7 +51,7 @@ ITER_LOG_CSV = SCRIPT_DIR / f"{PREFIX}log.csv"
 ITER_PLOT_PNG = SCRIPT_DIR / f"{PREFIX}performance.png"
 CONTAMINATION_POOL_JSON = SCRIPT_DIR / f"{PREFIX}contamination_pool.json"
 
-# Pre-filter cache written by biomarker_discovery_lgbm_bayesopt.py
+# Pre-filter cache, written by main() on the first run
 _PREFILTER_X_NPY = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES_TXT = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 FINAL_SHAP_CSV = SCRIPT_DIR / f"{PREFIX}final_shap_ranking.csv"
@@ -723,7 +709,14 @@ def main() -> None:
         X_decontam = _ctd_decontaminate(X_log, feature_names)
         X_std, names_cr = _apply_constant_remover(X_decontam, feature_names)
         X_std = X_std.astype(np.float32)
-        print(f"  Feature matrix: {X_std.shape}")
+        # Drop known-ALS and contamination genes and cache the result, which every later
+        # step reads. This is bit for bit the matrix the study used (874 x 47,822).
+        pool, _ = _resolve_contamination_pool({n.split(".")[0]: n for n in names_cr})
+        keep = [i for i, n in enumerate(names_cr) if n not in (KNOWN_ALS_FEATURES | pool)]
+        X_std, names_cr = X_std[:, keep], [names_cr[i] for i in keep]
+        np.save(_PREFILTER_X_NPY, X_std)
+        _PREFILTER_NAMES_TXT.write_text("\n".join(names_cr))
+        print(f"  Feature matrix: {X_std.shape} -> cached as {_PREFILTER_X_NPY.name}")
 
     base_to_full: dict[str, str] = {n.split(".")[0]: n for n in names_cr}
 

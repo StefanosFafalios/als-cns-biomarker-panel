@@ -18,7 +18,7 @@ random, is scored with the manuscript's zero-shot model: the top-500 LightGBM pa
 with ``colsample_bytree = 1.0`` (as in ``panel_critical_eval.py`` and
 ``external_validation_gpl16791.py``), trained on all GPL24676 samples (raw log1p), with
 ``zero_shot_scale``. The panel defaults to the published 25 genes; a second argument names
-another panel CSV (``feature``/``symbol`` columns), e.g. ``coffeebreak_panel.csv``. The critical panel
+another panel CSV (``feature``/``symbol`` columns), e.g. ``lgbm_core25_panel_annotated.csv``. The critical panel
 was selected on these cohorts, so a null on them is not a clean test.
 
 Empirical p = (#null AUC >= real AUC + 1) / (B + 1).
@@ -47,11 +47,12 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from adaptive_panel_validation import _resolve_mygeneinfo
 from panel_critical_eval import _load_gse76220, _load_gse122649, _load_srp064478
 from utils import load_dataset, zero_shot_scale
+from utils import selected_lgbm_params  # noqa: E402
 
 B = 1000
 # the manuscript's zero-shot model; one thread per fit, parallel across random panels
 _ZS_PARAMS = dict(
-    json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text()),
+    selected_lgbm_params(),
     colsample_bytree=1.0, verbose=-1, n_jobs=1,
 )
 RANDOM_STATE = 42

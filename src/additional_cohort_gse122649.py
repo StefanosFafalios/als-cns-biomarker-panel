@@ -43,6 +43,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 
@@ -57,7 +58,6 @@ _SOFT_URL = (
 
 _CACHE_DIR = ALS_DIR / "resources" / "GSE122649"
 _RAW_TAR = _CACHE_DIR / "GSE122649_RAW.tar"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 
 RANDOM_STATE = 42
@@ -260,7 +260,6 @@ def _zeroshot(X_tr_sc, y_tr, X_te_sc, y_te, params):
 
 
 def main() -> None:
-    import json
 
     import matplotlib.pyplot as plt
     import pandas as pd
@@ -355,7 +354,7 @@ def main() -> None:
         print("ERROR: Fewer than 5 panel genes matched.")
         return
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params.update(
         {
             "colsample_bytree": 1.0,

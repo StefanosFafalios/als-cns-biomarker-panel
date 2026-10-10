@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -17,6 +16,7 @@ sys.path.insert(0, str(ALS_DIR))
 
 from sklearn.preprocessing import StandardScaler
 from utils import PanelLGBMClassifier as LGBMClassifier
+from utils import selected_lgbm_params  # noqa: E402
 from utils import _load_suppl_expression, _parse_series_matrix
 
 matrix_path = (
@@ -52,7 +52,7 @@ scaler = StandardScaler()
 X_tr_sc = scaler.fit_transform(X_panel[tr_idx]).astype(np.float32)
 X_all_sc = scaler.transform(X_panel).astype(np.float32)
 
-params = json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text())
+params = selected_lgbm_params()
 params["colsample_bytree"] = 1.0
 clf = LGBMClassifier(**params)
 with warnings.catch_warnings():

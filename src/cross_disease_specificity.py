@@ -95,6 +95,7 @@ from utils import (
 )
 
 # Panel size is derived, so every reader-facing label must be too.
+from utils import selected_lgbm_params  # noqa: E402
 _CRIT_LABEL = critical_panel_label()
 
 
@@ -102,7 +103,6 @@ SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 PREFIX = "cross_disease_specificity"
 RANDOM_STATE = 42
@@ -111,9 +111,8 @@ N_BOOTSTRAP = 2_000
 # ---------------------------------------------------------------------------
 # colsample_bytree feature-space correction
 # ---------------------------------------------------------------------------
-# lgbm_top500_best_params.json was optimised by BayesianOptimizer on the
-# top-500 SHAP feature space (biomarker_discovery_top500.py slices to TOP_N=500
-# before optimising), where colsample_bytree = 0.0667 selects ~33 features per
+# The selected classifier (utils.SELECTED_LGBM_PARAMS) was chosen on the top-500
+# SHAP feature space, where its colsample_bytree selects about 25 features per
 # tree.  colsample_bytree is a *fraction*, so reusing it verbatim on a small
 # panel silently changes what the model does: on 25 or 15 genes it floors to
 # ONE feature per tree, removing every feature interaction and turning the
@@ -718,7 +717,6 @@ def _als_vs_disease(
 
 def main() -> None:
     """Run the cross-disease specificity analysis and write all outputs."""
-    import json
 
     import pandas as pd
     from scipy.stats import mannwhitneyu, spearmanr
@@ -728,7 +726,7 @@ def main() -> None:
     print("=" * 74)
 
     # the zero-shot model of every external validation: colsample_bytree 1.0
-    params = {**json.loads(_PARAMS_PATH.read_text()), "colsample_bytree": 1.0}
+    params = {**selected_lgbm_params(), "colsample_bytree": 1.0}
     panel = pd.read_csv(_PANEL_CSV)
     panel_feats: list[str] = panel["feature"].tolist()
     panel_syms: list[str] = panel["symbol"].tolist()

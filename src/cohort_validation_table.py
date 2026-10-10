@@ -20,7 +20,7 @@ into the greedy leave-one-gene-out trimming that yields the critical panel (step
                GPL16791 subject id; E-MTAB-8635 and E-MTAB-2325 share 35 patients (SDRF
                patient codes), held out together.
 
-Model: the presented one, PanelLGBMClassifier on lgbm_top500_best_params.json (leaf
+Model: the presented one, PanelLGBMClassifier with utils.SELECTED_LGBM_PARAMS (leaf
 size at the tuned fraction of each training set). Cohorts, loaders, merging and the
 pooled CV are step 24's own (_trim_cohorts, merge_cohorts, pooled_oof). 95% CIs: bootstrap of the scores over samples (B=2000); for
 GPL16791 this ignores donor clustering, as in step 24.
@@ -30,7 +30,6 @@ Outputs: cohort_validation_table.csv, cohort_validation_table.txt
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -49,9 +48,10 @@ from utils import (  # noqa: E402
 )
 
 
+from utils import selected_lgbm_params  # noqa: E402
 def main() -> None:
     warnings.filterwarnings("ignore")
-    params = json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text())
+    params = selected_lgbm_params()
 
     ipe = SCRIPT_DIR / "iterative_panel_elimination.py"
     ns: dict = {"__name__": "notmain", "__file__": str(ipe)}

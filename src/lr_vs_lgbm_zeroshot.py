@@ -29,7 +29,6 @@ Panels evaluated:
 from __future__ import annotations
 
 import gzip
-import json
 import re
 import sys
 import tarfile
@@ -53,11 +52,11 @@ from utils import (  # noqa: E402
 )
 
 # Panel size is derived, so every reader-facing denominator must be too.
+from utils import selected_lgbm_params  # noqa: E402
 _K_CRIT = critical_panel_size()
 _CRIT_LABEL = critical_panel_label()
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
 _SRP_FASTA = ALS_DIR / "resources" / "SRP064478" / "index" / "hg38_cdna.fa.gz"
@@ -388,7 +387,7 @@ def main() -> None:
     print("Identical preprocessing + StandardScaler for both models")
     print("=" * 72)
 
-    params_raw = json.loads(_PARAMS_PATH.read_text())
+    params_raw = selected_lgbm_params()
     params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
 
     df_panel = pd.read_csv(_PANEL_CSV)
@@ -656,7 +655,7 @@ def main() -> None:
         f"LR-L2 vs LGBM — zero-shot, 25-gene and {_CRIT_LABEL} panels",
         "=" * 72,
         "Train  : GPL24676 (n=874, 684 ALS, 190 Control)",
-        "LGBM   : lgbm_top500_best_params.json, colsample_bytree=1.0",
+        "LGBM   : utils.SELECTED_LGBM_PARAMS, colsample_bytree=1.0",
         "LR-L2  : LogisticRegressionCV(cv=5, penalty='l2', solver='liblinear')",
         "Scaler : StandardScaler fit on GPL24676 training columns (same for both models)",
         "Prepro : raw log1p for all cohorts (CTD is discovery-side only)",

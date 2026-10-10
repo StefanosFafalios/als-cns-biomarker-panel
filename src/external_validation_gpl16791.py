@@ -36,18 +36,18 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset, panel25_cv_auc, zero_shot_scale
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 TRAIN_PLATFORM = "GPL24676"
 TEST_PLATFORM = "GPL16791"
 N_BOOTSTRAP = 2_000
 RANDOM_STATE = 42
 
-# CTD compartment Ensembl base IDs (same as biomarker_discovery_lgbm_bayesopt.py)
+# CTD compartment Ensembl base IDs (same as lgbm_iterative_pipeline.py)
 _COMPARTMENTS: dict[str, tuple[str, ...]] = {
     "erythrocyte": (
         "ENSG00000206172",
@@ -271,7 +271,6 @@ def _plot(
 
 
 def main() -> None:
-    import json
 
     import matplotlib
     import pandas as pd
@@ -317,7 +316,7 @@ def main() -> None:
     X_tr, X_te = zero_shot_scale(X_tr, X_te, "GPL16791")
 
     params = dict(
-        json.loads(_PARAMS_PATH.read_text()), colsample_bytree=1.0, n_jobs=-1, verbose=-1
+        selected_lgbm_params(), colsample_bytree=1.0, n_jobs=-1, verbose=-1
     )
 
     print("\nTraining on GPL24676 (all 874 samples) ...")

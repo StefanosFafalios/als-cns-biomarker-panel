@@ -17,7 +17,6 @@ Outputs: small_cohort_loo_refit.csv, .txt
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -30,6 +29,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import TOP500_MIN_CHILD, load_dataset, scale_min_child  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 
@@ -91,7 +91,7 @@ def main() -> None:
 
     # Two hyperparameter regimes
     paranoid = {  # the tuned model; min_child_samples follows utils.scale_min_child
-        **json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text()),
+        **selected_lgbm_params(),
         "colsample_bytree": 1.0,
         "objective": "binary",
         "random_state": 42,

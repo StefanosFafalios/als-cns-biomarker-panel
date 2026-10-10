@@ -157,5 +157,19 @@ tail -n +2 "$RES/E-MTAB-8635/E-MTAB-8635.sdrf.txt" | cut -f"$col" | tr -d '\r' |
     [[ -n "$f" ]] && dl "$RES/E-MTAB-8635/gpr/$f" "$AE/635/E-MTAB-8635/Files/$f"
 done
 
+echo "[GSE288365] Visium CytAssist cervical spinal cord, 9 control / 9 ALS donors (count matrices + spot positions)"
+mkdir -p "$RES/GSE288365/suppl" "$RES/GSE288365/matrix"
+dl "$RES/GSE288365/matrix/GSE288365_series_matrix.txt.gz" \
+   "$GEO_FTP/GSE288nnn/GSE288365/matrix/GSE288365_series_matrix.txt.gz"
+wget -qO- "$GEO_FTP/GSE288nnn/GSE288365/suppl/" \
+  | grep -o 'GSE288365_[^"]*_\(matrix\.mtx\|barcodes\.tsv\|features\.tsv\|tissue_positions\.csv\)\.gz' | sort -u \
+  | while read -r f; do dl "$RES/GSE288365/suppl/$f" "$GEO_FTP/GSE288nnn/GSE288365/suppl/$f"; done
+
+echo "[GSE190442] Healthy human lumbar spinal cord snRNA atlas (Yadav 2023): cell-type reference"
+mkdir -p "$RES/GSE190442/suppl"
+for f in GSE190442_aggregated_counts_postqc.csv.gz GSE190442_aggregated_metadata_postqc.csv.gz; do
+    dl "$RES/GSE190442/suppl/$f" "$GEO_FTP/GSE190nnn/GSE190442/suppl/$f"
+done
+
 echo "Done. All GEO files downloaded to $RES"
 echo "Next: run reproduce/run_all.sh"

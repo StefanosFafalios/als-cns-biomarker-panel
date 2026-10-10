@@ -22,7 +22,6 @@ Outputs ``donor_leakage_sensitivity.csv`` and
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 import warnings
@@ -48,7 +47,8 @@ from utils import (  # noqa: E402
     zero_shot_scale,
 )
 
-PARAMS = json.loads((SCRIPT_DIR / "lgbm_top500_best_params.json").read_text())
+from utils import selected_lgbm_params  # noqa: E402
+PARAMS = selected_lgbm_params()
 SEEDS = range(42, 52)
 FOLDS = 5
 ROC_STATS = SCRIPT_DIR / "combined_validation_roc_statistics.txt"

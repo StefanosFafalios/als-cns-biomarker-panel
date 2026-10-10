@@ -10,7 +10,7 @@ Inputs (must exist)
   lgbm_top500_final_shap_ranking.csv   — SHAP-ranked features (top-25 taken)
   lgbm_top500_final_shap_values.npy    — SHAP values (874 × 500)
   lgbm_top500_final_curve.csv          — incremental curve (k=1..500)
-  lgbm_top500_best_params.json         — model hyperparameters
+  utils.SELECTED_LGBM_PARAMS           — model hyperparameters
   lgbm_prefilter_X.npy / names.txt     — pre-filtered feature matrix
 
 Outputs (prefix: lgbm_core25_)
@@ -25,7 +25,6 @@ Outputs (prefix: lgbm_core25_)
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -36,6 +35,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import adjust_colsample, gene_info, load_dataset
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -44,7 +44,6 @@ CV_RANDOM_STATE = 42
 PANEL_SIZE = 25
 PREFIX = "lgbm_core25_"
 
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SHAP_RANKING_SRC = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
 _SHAP_VALUES_NPY = SCRIPT_DIR / "lgbm_top500_final_shap_values.npy"
 _CURVE_SRC = SCRIPT_DIR / "lgbm_top500_final_curve.csv"
@@ -55,8 +54,8 @@ LOO_CSV = SCRIPT_DIR / f"{PREFIX}loo_summary.csv"
 LOO_CKPT = SCRIPT_DIR / f"{PREFIX}loo_ckpt.csv"
 PANEL_CSV = SCRIPT_DIR / f"{PREFIX}panel.csv"
 
-LGBM_PARAMS: dict = json.loads(_PARAMS_PATH.read_text())
-print(f"Loaded params from {_PARAMS_PATH}")
+LGBM_PARAMS: dict = selected_lgbm_params()
+print("Using the selected LightGBM hyperparameters (utils.SELECTED_LGBM_PARAMS)")
 
 
 # ---------------------------------------------------------------------------
@@ -330,19 +329,18 @@ def _plot_beeswarm(
     import pandas as pd
     import shap
 
-    top500_ranking = pd.read_csv(_SHAP_RANKING_SRC)
-    top500_features = top500_ranking["feature"].tolist()
-    shap_vals_500 = np.load(_SHAP_VALUES_NPY)  # (874, 500) in top-500 input order
-
-    # Map from input feature order → SHAP value columns
-    # SHAP values saved in _compute_shap are in the ORDER of feature_names (input order to model)
-    # but the ranking CSV is sorted by mean |SHAP|. We need the column index in the SHAP matrix.
-    # The SHAP matrix columns correspond to the INPUT order (feature_names passed to model),
-    # which is the top-500 SHAP-ranked order from lgbm_iter_final_shap_ranking.csv.
-    top500_col_map = {f: i for i, f in enumerate(top500_features)}
-    cols = [top500_col_map[f] for f in feature_names]
-
+    shap_vals_500 = np.load(_SHAP_VALUES_NPY)  # (874, 500) in the model's INPUT order
+    # lgbm_top500_final_analysis.py fed the model the top 500 of lgbm_iter_final_shap_ranking.csv
+    # and saved SHAP columns in that order; its own ranking CSV is re-sorted by mean |SHAP|.
+    # Indexing by the re-sorted CSV paired each gene with another gene's SHAP values (the
+    # published beeswarm until 2026-10-10), so map through the input order and check it.
+    input_order = pd.read_csv(SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv")["feature"].head(
+        shap_vals_500.shape[1]).tolist()
+    col_map = {f: i for i, f in enumerate(input_order)}
+    cols = [col_map[f] for f in feature_names]
     shap_top = shap_vals_500[:, cols]
+    ref = pd.read_csv(_SHAP_RANKING_SRC).set_index("feature").mean_abs_shap[feature_names].to_numpy()
+    assert np.allclose(np.abs(shap_top).mean(axis=0), ref), "SHAP columns do not match the ranking"
     labels = [_sym(sym_map, f) for f in feature_names]
 
     row_h = max(0.42 * PANEL_SIZE + 3, 10)
@@ -360,13 +358,6 @@ def _plot_beeswarm(
     ax.set_xlabel(
         "SHAP value  (positive → ALS Spectrum MND; negative → Control)\n"
         "Dot colour = gene expression level in that sample"
-    )
-    ax.set_title(
-        f"SHAP beeswarm — core {PANEL_SIZE}-gene panel ranked by mean |SHAP|\n"
-        "ALS Spectrum MND vs Non-Neurological Control · GSE153960 GPL24676 · n=874\n"
-        "Red dots right of zero: high expression associates with ALS; "
-        "red dots left: high expression associates with Control",
-        fontsize=9,
     )
     plt.tight_layout()
     plt.savefig(SCRIPT_DIR / f"{PREFIX}shap_beeswarm.png", dpi=150, bbox_inches="tight")

@@ -11,7 +11,6 @@ Run from the repository root:
 from __future__ import annotations
 
 import gzip
-import json
 import re
 import sys
 import tarfile
@@ -26,9 +25,9 @@ sys.path.insert(0, str(ALS_DIR))
 
 import pandas as pd
 from utils import core_panel_entrez, load_dataset
+from utils import selected_lgbm_params  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 RANDOM_STATE = 42
 
@@ -63,7 +62,7 @@ def _fit_models(X_tr: np.ndarray, y_tr: np.ndarray):
     from sklearn.preprocessing import StandardScaler
     from utils import PanelLGBMClassifier as LGBMClassifier
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
     lgbm = LGBMClassifier(**params)
     with warnings.catch_warnings():

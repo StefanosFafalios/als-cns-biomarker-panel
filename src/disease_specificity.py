@@ -43,12 +43,12 @@ sys.path.insert(0, str(ALS_DIR))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utils import _load_suppl_expression, _parse_series_matrix
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _MATRIX_PATH = (
     RESOURCES_DIR / "GSE153960" / "matrix" / "GSE153960-GPL24676_series_matrix.txt.gz"
 )
@@ -286,7 +286,6 @@ def _plot(
 
 
 def main() -> None:
-    import json
 
     import matplotlib
     import pandas as pd
@@ -338,7 +337,7 @@ def main() -> None:
 
     # the paper's within-cohort model (top-500 params; PanelLGBMClassifier rescales
     # colsample to the panel size), folds grouped by donor
-    params = {**json.loads(_PARAMS_PATH.read_text()), "verbose": -1}
+    params = {**selected_lgbm_params(), "verbose": -1}
 
     # Donor-grouped 5-fold CV: OOF scores for training groups AND fold-averaged
     # scores for the held-out FTD group. Both are scored by the same 5 fold models

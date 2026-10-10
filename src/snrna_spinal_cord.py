@@ -56,6 +56,7 @@ _MARKERS = {
 _PANEL = sorted(core_panel_symbols(protein_coding_only=True))
 _GENES = sorted(set(sum(_MARKERS.values(), [])) | set(_PANEL))
 _CT = list(_MARKERS)
+MIN_DONORS = 3  # per condition, with >= 10 nuclei of a cell type, for that type to be testable
 
 
 def _h5_files() -> list[Path]:
@@ -67,36 +68,138 @@ def _h5_files() -> list[Path]:
     return files
 
 
-def main() -> None:
+def quasi_poisson(count: np.ndarray, lib: np.ndarray, als: np.ndarray,
+                  cov: np.ndarray | None = None) -> tuple[float, float, float]:
+    """ALS effect on a donor pseudobulk count: (log2 fold change, its SE, two-sided p).
+
+    Quasi-Poisson GLM count ~ ALS (+ covariate), offset log(lib); the dispersion is the
+    Pearson chi-square over the residual df, and p comes from the t distribution.
+    """
+    import statsmodels.api as sm
+    from scipy.stats import t as t_dist
+
+    cols = [als.astype(float)] + ([cov] if cov is not None else [])
+    X = sm.add_constant(np.column_stack(cols))
+    fit = sm.GLM(count, X, family=sm.families.Poisson(), offset=np.log(lib)).fit(scale="X2")
+    b, se = fit.params[1], fit.bse[1]
+    p = float(2 * t_dist.sf(abs(b / se), fit.df_resid)) if se > 0 else np.nan
+    return float(b / np.log(2)), float(se / np.log(2)), p
+
+
+def marker_assign(sub: np.ndarray, gi: dict[str, int]) -> np.ndarray:
+    """Cell type per nucleus: argmax of the z-scored mean of each type's canonical markers.
+
+    Args:
+        sub: nuclei x genes log-normalised expression.
+        gi: Gene symbol -> column of *sub*.
+    """
+    scores = np.full((sub.shape[0], len(_CT)), -np.inf, dtype=np.float32)
+    for k, mk in enumerate(_MARKERS.values()):
+        cols = [gi[g] for g in mk if g in gi]
+        if cols:
+            block = sub[:, cols]
+            scores[:, k] = ((block - block.mean(0)) / (block.std(0) + 1e-8)).mean(1)
+    return np.array(_CT)[scores.argmax(1)]
+
+
+def _mwu(a: np.ndarray, c: np.ndarray) -> float:
+    return float(mannwhitneyu(a, c, alternative="two-sided").pvalue) if len(a) > 2 and len(c) > 2 else np.nan
+
+
+def pseudobulk(genes: list[str], typing: str = "markers") -> pd.DataFrame:
+    """Donor x cell-type rows: nucleus count, fraction and mean log-normalised expression of *genes*.
+
+    Args:
+        genes: Genes to summarise.
+        typing: "markers" (argmax of the canonical marker scores) or "reference" (best
+            correlation to the GSE190442 spinal-cord atlas subtypes, celltype_reference).
+
+    Raises:
+        FileNotFoundError: If the GSE287257 matrices are missing.
+    """
     files = _h5_files()
     if not files:
-        print(f"No .h5 in {_SUPPL}; run reproduce/download_geo_data.sh first.")
-        return
+        raise FileNotFoundError(f"No .h5 in {_SUPPL}; run reproduce/download_geo_data.sh first.")
+    if typing == "reference":
+        import celltype_reference
+
+        cent, ref_genes, ref_types = celltype_reference.build()
+        # typing must not use the genes under test or any 25-gene panel member (selection on the outcome)
+        excl = set(genes) | set(pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").symbol.astype(str))
+        use = [i for i, g in enumerate(ref_genes) if g not in excl]
+        cent, ref_genes = cent[:, use], [ref_genes[i] for i in use]
+        cts = sorted({celltype_reference.group(t) for t in ref_types})
+    else:
+        cts = _CT
     rows = []
     for path in files:
         m = re.search(r"GSM\d+_(\d+)_(ALS|control)_", path.name)
         donor, cond = m.group(1), m.group(2)
-        sub, totals, genes = _read_h5_targets(str(path), _GENES)
-        sub = sub[totals >= MIN_COUNTS]
-        gi = {g: j for j, g in enumerate(genes)}
-        scores = np.full((sub.shape[0], len(_CT)), -np.inf, dtype=np.float32)
-        for k, mk in enumerate(_MARKERS.values()):
-            cols = [gi[g] for g in mk if g in gi]
-            if cols:
-                block = sub[:, cols]
-                scores[:, k] = ((block - block.mean(0)) / (block.std(0) + 1e-8)).mean(1)
-        assign = np.array(_CT)[scores.argmax(1)]
-        for ct in _CT:
+        extra = set(ref_genes) if typing == "reference" else set()
+        sub, totals, present = _read_h5_targets(str(path), sorted(set(sum(_MARKERS.values(), [])) | set(genes) | extra))
+        keep = totals >= MIN_COUNTS
+        sub, totals = sub[keep], totals[keep]
+        gi = {g: j for j, g in enumerate(present)}
+        if typing == "reference":
+            assign = celltype_reference.assign(sub, present, cent, ref_genes, ref_types)
+        else:
+            assign = marker_assign(sub, gi)
+        for ct in cts:
             mask = assign == ct
             row = dict(donor=donor, cond=cond, celltype=ct, n=int(mask.sum()), frac=mask.mean())
             if mask.sum() >= 10:
-                row.update({g: float(sub[mask, gi[g]].mean()) for g in _PANEL if g in gi})
+                row.update({g: float(sub[mask, gi[g]].mean()) for g in genes if g in gi})
+                # summed raw counts and library size, for the count model (exact: the reader
+                # returns log1p(count / (total / 1e4)))
+                raw = np.rint(np.expm1(sub[mask]) * (totals[mask, None] / 1e4))
+                row.update({f"{g}__n": float(raw[:, gi[g]].sum()) for g in genes if g in gi})
+                row["lib"] = float(totals[mask].sum())
             rows.append(row)
         print(f"  {path.name[:40]:<42} {cond:<8} {len(assign)} nuclei", flush=True)
-    pb = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
 
-    def mwu(a: np.ndarray, c: np.ndarray) -> float:
-        return float(mannwhitneyu(a, c, alternative="two-sided").pvalue) if len(a) > 2 and len(c) > 2 else np.nan
+
+def percell_tests(pb: pd.DataFrame, genes: list[str], min_donors: int = MIN_DONORS) -> pd.DataFrame:
+    """Each gene in its top cell type (highest donor-averaged mean): ALS vs control MWU, BH across *genes*.
+
+    A cell type is a candidate only if each condition has *min_donors* donors with >= 10 of
+    its nuclei; otherwise a rare type (arterial endothelium) wins the max on a few nuclei.
+    The count model is skipped when a condition has no counts (its fold change is unbounded).
+    """
+    order = _CT if set(pb.celltype) <= set(_CT) else sorted(set(pb.celltype))
+    donors = pb[pb.n >= 10].groupby(["celltype", "cond"]).donor.nunique().unstack(fill_value=0)
+    order = [ct for ct in order if ct in donors.index and donors.loc[ct].min() >= min_donors]
+    means = pb.groupby("celltype")[[g for g in genes if g in pb]].mean().reindex(order)
+    test = []
+    for g in means.columns:
+        ct = means[g].fillna(0).idxmax()
+        s = pb[(pb.celltype == ct) & pb[g].notna()]
+        a, c = s[s.cond == "ALS"][g].to_numpy(), s[s.cond == "control"][g].to_numpy()
+        rec = dict(gene=g, celltype=ct, als=a.mean(), control=c.mean(), p=_mwu(a, c))
+        tot = s.groupby("cond")[f"{g}__n"].sum() if f"{g}__n" in s else pd.Series(dtype=float)
+        if len(tot) == 2 and (tot > 0).all():
+            rec["glm_log2fc"], se, rec["glm_p"] = quasi_poisson(
+                s[f"{g}__n"].to_numpy(float), s.lib.to_numpy(float), (s.cond == "ALS").to_numpy())
+            rec["glm_lo"], rec["glm_hi"] = rec["glm_log2fc"] - 1.96 * se, rec["glm_log2fc"] + 1.96 * se
+        test.append(rec)
+    df = pd.DataFrame(test)
+    for p_col, q_col in (("p", "q"), ("glm_p", "glm_q")):
+        df[q_col] = np.nan
+        if p_col in df:
+            ok = df[p_col].notna()
+            df.loc[ok, q_col] = multipletests(df.loc[ok, p_col], method="fdr_bh")[1]
+    df["log2fc"] = np.log2((np.expm1(df.als) + 1e-3) / (np.expm1(df.control) + 1e-3))
+    glm = [c for c in ("glm_log2fc", "glm_lo", "glm_hi", "glm_p", "glm_q") if c in df]
+    return df[["gene", "celltype", "als", "control", "log2fc", "p", "q", *glm]]
+
+
+def main() -> None:
+    try:
+        pb = pseudobulk(_PANEL)
+    except FileNotFoundError as exc:
+        print(exc)
+        return
+    mwu = _mwu
 
     n_als, n_ctl = pb[pb.cond == "ALS"].donor.nunique(), pb[pb.cond == "control"].donor.nunique()
     lines = [
@@ -127,20 +230,11 @@ def main() -> None:
 
     lines += ["", "(c) PER-CELL CHANGE in the top cell type: ALS vs control donor pseudobulk (MWU, BH)",
               f"{'gene':<9}{'cell type':<17}{'ALS':>8}{'control':>9}{'log2FC':>8}{'p':>9}{'q':>8}"]
-    test = []
-    for g, ct in top.items():
-        s = pb[(pb.celltype == ct) & pb[g].notna()]
-        a, c = s[s.cond == "ALS"][g].to_numpy(), s[s.cond == "control"][g].to_numpy()
-        test.append((g, ct, a.mean(), c.mean(), mwu(a, c)))
-    ps = np.array([t[4] for t in test])
-    ok = ~np.isnan(ps)
-    qs = np.full(len(ps), np.nan)
-    qs[ok] = multipletests(ps[ok], method="fdr_bh")[1]
-    percell = []
-    for (g, ct, a, c, p), q in zip(test, qs):
-        lfc = np.log2((np.expm1(a) + 1e-3) / (np.expm1(c) + 1e-3))
-        lines.append(f"{g:<9}{ct:<17}{a:>8.3f}{c:>9.3f}{lfc:>8.2f}{p:>9.3g}{q:>8.3g}")
-        percell.append(dict(gene=g, celltype=ct, als=a, control=c, log2fc=lfc, p=p, q=q))
+    pc = percell_tests(pb, _PANEL)
+    assert dict(zip(pc.gene, pc.celltype, strict=True)) == top
+    lines += [f"{r.gene:<9}{r.celltype:<17}{r.als:>8.3f}{r.control:>9.3f}{r.log2fc:>8.2f}{r.p:>9.3g}{r.q:>8.3g}"
+              for r in pc.itertuples()]
+    percell = pc.to_dict("records")
     # Read by drug_targets.py (step 07), which ranks drug candidates by this test.
     pd.DataFrame(percell).to_csv(SCRIPT_DIR / "snrna_spinal_cord_percell.csv", index=False)
 

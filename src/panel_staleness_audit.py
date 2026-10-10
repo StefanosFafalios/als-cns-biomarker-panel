@@ -102,6 +102,34 @@ def _artefact_reads(src: str, stems: set[str]) -> set[str]:
     return found
 
 
+_WRITE = re.compile(
+    r"""(?:to_csv|write_text|savefig|to_json|np\.save|savez)\(\s*(?:\w+\s*/\s*)*["']([\w.-]+\.\w+)["']"""
+)
+_QUOTED = re.compile(r"""["']([\w./-]+\.(?:txt|csv|tsv|json|npz))["']""")
+
+
+def _written(src: str) -> set[str]:
+    """File names the source writes (to_csv/write_text/savefig/... on a literal path)."""
+    return set(_WRITE.findall(src))
+
+
+def _reads_by_writer(srcs: dict[str, str]) -> dict[str, set[str]]:
+    """stem -> stems whose written files it names, for outputs not named after their writer.
+
+    drug_direction_figure writes drug_direction_table.csv, which cmap_direction_screen
+    reads; prefix matching (_artefact_reads) cannot see that edge, so the screen was
+    never flagged when the table changed.
+    """
+    writers: dict[str, str] = {}
+    for stem, src in srcs.items():
+        if stem.startswith("test_"):  # tests write fixtures under real artefact names
+            continue
+        for name in _written(src):
+            writers.setdefault(name, stem)
+    return {stem: {writers[n] for n in (Path(q).name for q in _QUOTED.findall(src))
+                   if n in writers and writers[n] != stem} for stem, src in srcs.items()}
+
+
 def _declared_outputs(src: str, stem: str, other_stems: set[str]) -> set[Path]:
     """Artefact paths the script names literally, excluding other scripts' outputs.
 
@@ -175,6 +203,8 @@ def main() -> None:
     imports = {s: _local_imports(t, known) for s, t in trees.items()}
     # Discard self-reads: a script naming its own output file is not a dependency.
     reads = {p.stem: _artefact_reads(p.read_text(), known) - {p.stem} for p in scripts}
+    for stem, extra in _reads_by_writer({p.stem: p.read_text() for p in scripts}).items():
+        reads[stem] |= extra
     # An edge is either "imports" or "reads the outputs of". Both propagate
     # staleness; only the first is visible to an import-based audit.
     edges = {s: imports.get(s, set()) | reads.get(s, set()) for s in trees}
@@ -211,7 +241,9 @@ def main() -> None:
             if via_read:
                 parts.append("reads " + ",".join(via_read))
             how = "; ".join(parts) or "?"
-        if stem in _TWENTYFIVE_GENE_ONLY:
+        # the exemption is a hand-kept list; a script that also reads the critical panel
+        # directly (incremental_over_composition since Step 105g) is not exempt
+        if stem in _TWENTYFIVE_GENE_ONLY and stem not in direct:
             flag, detail = "n/a  ", "keyed to lgbm_core25_panel.csv"
         elif stem not in pipeline:
             flag, detail = "expl ", "exploratory; not a run_all.sh step"

@@ -38,7 +38,6 @@ Outputs
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -56,7 +55,6 @@ from external_validation_gpl16791 import (
 )
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SHAP_RANKING = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
 
 N_BOOTSTRAP = 2_000
@@ -171,7 +169,8 @@ def combat(data: np.ndarray, batch: np.ndarray) -> np.ndarray:
 def _fit_lgbm(X_tr: np.ndarray, y_train: np.ndarray):
     from utils import PanelLGBMClassifier as LGBMClassifier
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    from utils import selected_lgbm_params  # noqa: E402
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
     with warnings.catch_warnings():

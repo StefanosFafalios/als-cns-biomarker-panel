@@ -35,7 +35,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from scipy.stats import mannwhitneyu  # noqa: E402
 from snrna_percell_validation import MIN_COUNTS, _read_h5_targets  # noqa: E402
-from snrna_spinal_cord import _MARKERS  # noqa: E402
+from snrna_spinal_cord import _MARKERS, quasi_poisson  # noqa: E402
 from statsmodels.stats.multitest import multipletests  # noqa: E402
 from utils import critical_panel_symbols  # noqa: E402
 
@@ -67,7 +67,8 @@ def _donor_pseudobulk(files: list[Path], pattern: str, genes: list[str]) -> pd.D
             continue
         cond, donor = m.group(1), f"{m.group(1)}_{m.group(2)}"
         sub, totals, present = _read_h5_targets(str(path), sorted(set(sum(_MARKERS.values(), [])) | set(genes)))
-        sub = sub[totals >= MIN_COUNTS]
+        keep = totals >= MIN_COUNTS
+        sub, totals = sub[keep], totals[keep]
         gi = {g: j for j, g in enumerate(present)}
         scores = np.full((sub.shape[0], len(_CT)), -np.inf, dtype=np.float32)
         for k, mk in enumerate(_MARKERS.values()):
@@ -79,36 +80,41 @@ def _donor_pseudobulk(files: list[Path], pattern: str, genes: list[str]) -> pd.D
         for ct in _CT:
             mask = assign == ct
             if mask.sum() >= 10:
-                rows.append(dict(donor=donor, cond=cond, celltype=ct,
-                                 **{g: float(sub[mask, gi[g]].mean()) for g in genes if g in gi}))
+                raw = np.rint(np.expm1(sub[mask]) * (totals[mask, None] / 1e4))  # exact counts
+                rows.append(dict(donor=donor, cond=cond, celltype=ct, lib=float(totals[mask].sum()),
+                                 **{g: float(sub[mask, gi[g]].mean()) for g in genes if g in gi},
+                                 **{f"{g}__n": float(raw[:, gi[g]].sum()) for g in genes if g in gi}))
         print(f"  {path.name[:50]:<52} {cond:<8} {sub.shape[0]} nuclei", flush=True)
-    return pd.DataFrame(rows).groupby(["donor", "cond", "celltype"], as_index=False).mean()
+    df = pd.DataFrame(rows)
+    keys = ["donor", "cond", "celltype"]
+    summed = [c for c in df.columns if c.endswith("__n") or c == "lib"]  # counts add over a donor's samples
+    return df.groupby(keys, as_index=False).agg({c: ("sum" if c in summed else "mean") for c in df.columns if c not in keys})
 
 
-def main() -> None:
-    crit = critical_panel_symbols(protein_coding_only=True)
-    top = pd.read_csv(SCRIPT_DIR / "snrna_spinal_cord_percell.csv").set_index("gene")["celltype"].to_dict()
-    missing = [g for g in crit if g not in top]
-    if missing:
-        raise SystemExit(f"no spinal-cord cell type for {missing}; run snrna_spinal_cord.py first")
-
+def cortex_tests(genes: list[str], top: dict[str, str]) -> pd.DataFrame:
+    """Each gene in cell type *top[gene]*: disease vs control donor pseudobulk per cortex cohort (MWU, BH)."""
     out = []
     for name, (folder, glob, pattern, dis) in _COHORTS.items():
         files = sorted(folder.glob(glob))
         if not files:
             raise SystemExit(f"No .h5 in {folder}; run reproduce/download_geo_data.sh first.")
         print(f"{name}: {len(files)} files")
-        pb = _donor_pseudobulk(files, pattern, crit)
+        pb = _donor_pseudobulk(files, pattern, genes)
         tests = []
-        for g in crit:
+        for g in genes:
             s = pb[(pb.celltype == top[g])]
-            a = s[s.cond == dis][g].dropna().to_numpy()
-            c = s[s.cond == "Control"][g].dropna().to_numpy()
+            a = s[s.cond == dis][g].dropna().to_numpy() if g in s else np.array([])
+            c = s[s.cond == "Control"][g].dropna().to_numpy() if g in s else np.array([])
             p = float(mannwhitneyu(a, c, alternative="two-sided").pvalue) if len(a) > 2 and len(c) > 2 else np.nan
             lfc = float(np.log2((np.expm1(a.mean()) + 1e-3) / (np.expm1(c.mean()) + 1e-3))) if len(a) and len(c) else np.nan
-            tests.append(dict(cohort=name, gene=g, celltype=top[g], n_dis=len(a), n_ctl=len(c),
-                              dis=a.mean() if len(a) else np.nan, ctl=c.mean() if len(c) else np.nan,
-                              log2fc=lfc, p=p))
+            rec = dict(cohort=name, gene=g, celltype=top[g], n_dis=len(a), n_ctl=len(c),
+                       dis=a.mean() if len(a) else np.nan, ctl=c.mean() if len(c) else np.nan,
+                       log2fc=lfc, p=p)
+            sc = s[s.cond.isin([dis, "Control"])]
+            if f"{g}__n" in sc and len(sc) > 3 and (sc[f"{g}__n"] > 0).any():
+                rec["glm_log2fc"], se, rec["glm_p"] = quasi_poisson(
+                    sc[f"{g}__n"].to_numpy(float), sc.lib.to_numpy(float), (sc.cond == dis).to_numpy())
+            tests.append(rec)
         ps = np.array([t["p"] for t in tests])
         q = np.full(len(ps), np.nan)
         ok = ~np.isnan(ps)
@@ -116,8 +122,19 @@ def main() -> None:
         for t, qi in zip(tests, q):
             t["q"] = qi
         out += tests
+    return pd.DataFrame(out)
 
-    df = pd.DataFrame(out)
+
+def main() -> None:
+    crit = critical_panel_symbols(protein_coding_only=True)
+    top = pd.read_csv(SCRIPT_DIR / "snrna_spinal_cord_percell.csv").set_index("gene")["celltype"].to_dict()
+    # The spinal table covers every measured 25-panel gene, so a critical gene missing from it is not in
+    # the nuclei's gene reference (ENSG00000280893 has no symbol) and cannot be localised.
+    unmeasured = [g for g in crit if g not in top]
+    if unmeasured:
+        print(f"not measured in the spinal nuclei, skipped: {', '.join(unmeasured)}")
+    crit = [g for g in crit if g in top]
+    df = cortex_tests(crit, top)
     df.to_csv(SCRIPT_DIR / "snrna_cortex_percell.csv", index=False)
     sc = pd.read_csv(SCRIPT_DIR / "snrna_spinal_cord_percell.csv").set_index("gene")
     lines = [

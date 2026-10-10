@@ -50,19 +50,24 @@ TOP_N_PER_SET = 15  # pathways to report per gene set
 def _load_signed_shap() -> pd.Series:
     """Return pd.Series(mean signed SHAP, index=versioned ENSG feature names).
 
-    The .npy matrix has shape (n_samples, n_sfm) with columns in SHAP rank order
-    (rank 1 = highest mean |SHAP|).  The CSV feature column gives the same order.
+    The .npy matrix has shape (n_samples, n_sfm) with columns in the model's input
+    order (the final SFM feature list); the CSV is sorted by mean |SHAP|.
     """
     shap_df = pd.read_csv(SHAP_CSV)
-    features: list[str] = shap_df["feature"].tolist()
-
-    # Raw signed SHAP matrix — columns align with feature order in CSV
+    # The SHAP matrix is in the model's input order (the final SFM feature list), while the
+    # CSV is re-sorted by mean |SHAP|; pairing them by position mislabels every column.
+    last = len(pd.read_csv(SCRIPT_DIR / "lgbm_iter_log.csv")) - 1  # as lgbm_iter_plots._sfm_cache
+    sfm = SCRIPT_DIR / f"lgbm_iter_{last}_sfm_features.txt"
+    features: list[str] = [s.strip() for s in sfm.read_text().splitlines() if s.strip()]
     shap_matrix: np.ndarray = np.load(SHAP_NPY)  # (n_samples, n_sfm)
     if shap_matrix.shape[1] != len(features):
         raise ValueError(
             f"Shape mismatch: npy has {shap_matrix.shape[1]} features, "
-            f"CSV has {len(features)}"
+            f"SFM list has {len(features)}"
         )
+    ref = shap_df.set_index("feature").mean_abs_shap[features].to_numpy()
+    if not np.allclose(np.abs(shap_matrix).mean(axis=0), ref):
+        raise ValueError("SHAP columns do not match the ranking CSV")
 
     mean_signed = shap_matrix.mean(axis=0)  # (n_sfm,)
     return pd.Series(mean_signed, index=features)

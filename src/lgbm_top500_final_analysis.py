@@ -5,7 +5,7 @@ Pipeline
 --------
 1. Load top-500 features from lgbm_iter_final_shap_ranking.csv
 2. Slice pre-filter cache to those 500 features
-3. Train LightGBM (lgbm_top500_best_params.json) on all 874 samples
+3. Train the selected LightGBM (utils.SELECTED_LGBM_PARAMS) on all 874 samples
 4. Compute SHAP values (TreeExplainer)
 5. 5-fold CV incremental curve (k = 1 … 500, SHAP-ranked order)
 6. LOO on top-50 SHAP features
@@ -24,7 +24,6 @@ Outputs (prefix: lgbm_top500_final_)
 
 from __future__ import annotations
 
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -35,6 +34,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import adjust_colsample, load_dataset
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -45,7 +45,6 @@ TOP_LOO = 50
 TOP_BEESWARM = 20
 PREFIX = "lgbm_top500_final_"
 
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SHAP_RANKING_SRC = SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv"
 _PREFILTER_X_NPY = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES_TXT = SCRIPT_DIR / "lgbm_prefilter_names.txt"
@@ -57,8 +56,8 @@ CURVE_CKPT = SCRIPT_DIR / f"{PREFIX}curve_ckpt.csv"
 LOO_CSV = SCRIPT_DIR / f"{PREFIX}loo_summary.csv"
 LOO_CKPT = SCRIPT_DIR / f"{PREFIX}loo_ckpt.csv"
 
-LGBM_PARAMS: dict = json.loads(_PARAMS_PATH.read_text())
-print(f"Loaded params from {_PARAMS_PATH}")
+LGBM_PARAMS: dict = selected_lgbm_params()
+print("Using the selected LightGBM hyperparameters (utils.SELECTED_LGBM_PARAMS)")
 
 
 # ---------------------------------------------------------------------------
@@ -392,12 +391,14 @@ def _plot_beeswarm(
     X: np.ndarray,
     ranked_names: list[str],
     sym_map: dict[str, str],
+    feature_names: list[str],
 ) -> None:
     import matplotlib.pyplot as plt
     import shap
 
     top = ranked_names[:TOP_BEESWARM]
-    feat_to_col = {n: i for i, n in enumerate(ranked_names)}
+    # shap_vals and X columns are in the model's input order, not the ranked order
+    feat_to_col = {n: i for i, n in enumerate(feature_names)}
     cols = [feat_to_col[n] for n in top]
     labels = [_sym(sym_map, f) for f in top]
 
@@ -573,7 +574,7 @@ def main() -> None:
     _plot_curve(curve_scores)
     _plot_curve_top50(curve_scores, ranked_names, sym_map)
     _plot_shap_bar(shap_df, sym_map)
-    _plot_beeswarm(shap_vals, X, ranked_names, sym_map)
+    _plot_beeswarm(shap_vals, X, ranked_names, sym_map, feature_names)
     _plot_loo(loo_results, sym_map, baseline_auc)
 
     print("\n" + "=" * 60)

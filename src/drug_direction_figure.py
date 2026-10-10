@@ -7,7 +7,7 @@ whether any annotated agent acts in the opposite direction:
   * bulk, all cohorts: random-effects Hedges' g over the nine donor-level units
     (multicohort_meta_analysis.csv), raw and composition-adjusted;
   * per cell, spinal cord: ALS vs control in the gene's top cell type
-    (snrna_spinal_cord_percell.csv, GSE287257);
+    (snrna_percell_v2.csv: GSE287257, reference typing, count model);
   * per cell, cortex: the same cell type in two independent snRNA cohorts
     (snrna_cortex_percell.csv);
   * agents: DGIdb interaction types from drug_targets_summary.csv. A gene down in ALS
@@ -41,12 +41,16 @@ def build() -> pd.DataFrame:
     """One row per critical-panel gene with every direction estimate and the agent match."""
     genes = critical_panel_symbols(protein_coding_only=True)
     meta = pd.read_csv(SCRIPT_DIR / "multicohort_meta_analysis.csv").set_index("gene")
-    sc = pd.read_csv(SCRIPT_DIR / "snrna_spinal_cord_percell.csv").set_index("gene")
+    # spinal per-cell: the reference-typed count model (step 41c), as drug_targets.py tiers it
+    v2 = pd.read_csv(SCRIPT_DIR / "snrna_percell_v2.csv")
+    sc = v2[v2.family == "panel"].set_index("gene").rename(columns={"glm_log2fc": "log2fc_v2", "glm_q": "q_v2"})
+    sc = sc.assign(log2fc=sc.log2fc_v2, q=sc.q_v2)
     cx = pd.read_csv(SCRIPT_DIR / "snrna_cortex_percell.csv")
     dt = pd.read_csv(SCRIPT_DIR / "drug_targets_summary.csv").set_index("symbol")
     rows = []
     for g in genes:
         d = dt.loc[g]
+        m = meta.reindex([g]).iloc[0]  # all NaN when measured in < 4 units (step 42 skips it)
         need = "raise" if d.direction == "down_in_ALS" else "lower"
         inh, act = _agents(d.inhibitors_dgidb), _agents(d.activators_dgidb)
         typed = set(inh) | set(act)
@@ -56,10 +60,12 @@ def build() -> pd.DataFrame:
         row = dict(
             gene=g, disease_direction=d.direction, therapeutic_direction=need,
             tier=_TIER.get(d.snrna_evidence, 3), snrna_evidence=d.snrna_evidence,
-            meta_g=meta.loc[g, "g"], meta_lo=meta.loc[g, "lo"], meta_hi=meta.loc[g, "hi"],
-            meta_q=meta.loc[g, "q"], meta_same_sign=f"{int(meta.loc[g, 'same_sign'])}/{int(meta.loc[g, 'k'])}",
-            adj_g=meta.loc[g, "adj_g"], adj_q=meta.loc[g, "adj_q"],
-            sc_celltype=sc.loc[g, "celltype"], sc_log2fc=sc.loc[g, "log2fc"], sc_q=sc.loc[g, "q"],
+            meta_g=m.g, meta_lo=m.lo, meta_hi=m.hi, meta_q=m.q,
+            meta_same_sign=f"{int(m.same_sign)}/{int(m.k)}" if pd.notna(m.k) else "n/a",
+            adj_g=m.adj_g, adj_q=m.adj_q,
+            # NaN for a gene not in the nuclei's gene reference (ENSG00000280893 has no symbol)
+            sc_celltype=sc.celltype.get(g, "not in nuclei"), sc_log2fc=sc.log2fc.get(g, np.nan),
+            sc_q=sc.q.get(g, np.nan),
             matched_agents="|".join(dict.fromkeys(matched)), opposed_agents="|".join(dict.fromkeys(opposed)),
             direction_unknown_agents="|".join(dict.fromkeys(other)),
         )
@@ -69,6 +75,7 @@ def build() -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values(["tier", "gene"]).reset_index(drop=True)
 
 
+
 def _plot(df: pd.DataFrame, path: Path) -> None:
     import matplotlib
 
@@ -76,8 +83,10 @@ def _plot(df: pd.DataFrame, path: Path) -> None:
     import matplotlib.pyplot as plt
 
     cohorts = [c[:-7] for c in df.columns if c.endswith("_log2fc") and c != "sc_log2fc"]
-    fig, axes = plt.subplots(1, 3, figsize=(15, 0.62 * len(df) + 1.8),
-                             gridspec_kw={"width_ratios": [1.1, 1.1, 1.6]}, sharey=True)
+    # Table 4 of the manuscript lists the agents, so the figure keeps the two estimate panels at
+    # a width that prints legibly when scaled to the text width.
+    plt.rcParams.update({"font.size": 10})
+    fig, axes = plt.subplots(1, 2, figsize=(9, 0.55 * len(df) + 2.0), sharey=True)
     y = np.arange(len(df))[::-1]
     ax = axes[0]
     for yi, r in zip(y, df.itertuples()):
@@ -85,12 +94,14 @@ def _plot(df: pd.DataFrame, path: Path) -> None:
         ax.plot([r.meta_lo, r.meta_hi], [yi, yi], color="#444", lw=1.4)
         ax.plot(r.meta_g, yi, "o", color="#444" if sig else "white", mec="#444", ms=8)
         ax.plot(r.adj_g, yi - 0.22, "D", color="#d95f02" if r.adj_q < 0.05 else "white", mec="#d95f02", ms=6)
+        if pd.isna(r.meta_g):
+            ax.text(0.05, yi, "too few datasets", va="center", fontsize=8, color="#777", style="italic")
     ax.axvline(0, color="grey", lw=0.8)
     ax.set_yticks(y)
     ax.set_yticklabels([f"{r.gene}  (tier {r.tier})" for r in df.itertuples()])
-    ax.set_xlabel("Bulk effect, Hedges' g (ALS minus control)")
+    ax.set_xlabel("Bulk Hedges' g (ALS minus control)")
     ax.set_title("A. Bulk tissue, nine cohorts\n(circle: raw, diamond: composition-adjusted;\nfilled = q < 0.05)",
-                 fontsize=9)
+                 fontsize=9.5)
     ax = axes[1]
     marks = {cohorts[0]: "^", cohorts[1]: "v"} if len(cohorts) == 2 else {c: "s" for c in cohorts}
     for yi, r in zip(y, df.itertuples()):
@@ -98,27 +109,14 @@ def _plot(df: pd.DataFrame, path: Path) -> None:
         for c in cohorts:
             v, p = getattr(r, f"{c}_log2fc"), getattr(r, f"{c}_p")
             ax.plot(v, yi - 0.2, marks[c], color="#7570b3" if p < 0.05 else "white", mec="#7570b3", ms=6)
+        if r.sc_celltype == "not in nuclei":
+            ax.text(0.05, yi, "not in the nuclei", va="center", fontsize=8, color="#777", style="italic")
+    vals = pd.concat([df.sc_log2fc] + [df[f"{c}_log2fc"] for c in cohorts]).dropna()
+    ax.set_xlim(vals.min() - 0.25, vals.max() + 0.25)  # keep edge markers inside the frame
     ax.axvline(0, color="grey", lw=0.8)
-    ax.set_xlabel("Per-cell log2 fold change in the gene's top cell type")
-    ax.set_title("B. Single nuclei (circle: spinal cord;\n" + ", ".join(f"{m} {c}" for c, m in marks.items())
-                 + " cortex; filled = significant)", fontsize=9)
-    ax = axes[2]
-    ax.set_xlim(0, 1)
-    ax.axis("off")
-    for yi, r in zip(y, df.itertuples()):
-        need = "RAISE" if r.therapeutic_direction == "raise" else "LOWER"
-        m = r.matched_agents.replace("|", ", ") or "none"
-        o = r.opposed_agents.replace("|", ", ")
-        u = ", ".join(r.direction_unknown_agents.split("|")[:3]) if r.direction_unknown_agents else ""
-        txt = f"{need} ({r.sc_celltype}). Matched: {m}"
-        if o:
-            txt += f". Opposite: {o[:48]}"
-        if u and not (r.matched_agents or o):
-            txt += f". Unknown mode: {u}"
-        ax.text(0, yi, txt, va="center", fontsize=8,
-                color="#1b9e77" if r.matched_agents else ("#d95f02" if o else "#444"))
-    ax.set_title("C. Therapeutic direction and annotated agents (DGIdb)", fontsize=9)
-    fig.suptitle("Critical-panel genes: direction of change in ALS and direction-matched agents", fontsize=11)
+    ax.set_xlabel("Per-cell log2 fold change, top cell type")
+    ax.set_title("B. Single nuclei\n(circle: spinal cord, reference typing;\ntriangles: cortex, "
+                 + ", ".join(f"{m} {c}" for c, m in marks.items()) + ";\nfilled = significant)", fontsize=9.5)
     plt.tight_layout()
     fig.savefig(path, dpi=160, bbox_inches="tight")
     plt.close(fig)

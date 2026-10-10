@@ -12,7 +12,6 @@ Outputs
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -23,8 +22,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset  # noqa: E402
-
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
+from utils import selected_lgbm_params  # noqa: E402
 _SHAP_RANK_CSV = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
@@ -98,7 +96,7 @@ def main() -> None:
     # 3. LightGBM — feature importance (already ranked by SHAP; use gain)
     # ------------------------------------------------------------------
     print("\n[3] LightGBM — fitting for gain-based importance ...")
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params.pop("feature_names", None)
     params["colsample_bytree"] = 0.0667
     params["random_state"] = RANDOM_STATE

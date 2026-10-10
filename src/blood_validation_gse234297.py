@@ -28,7 +28,6 @@ Outputs
 from __future__ import annotations
 
 import gzip
-import json
 import sys
 import warnings
 from pathlib import Path
@@ -39,10 +38,10 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import core_panel_entrez, load_dataset  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 _GSE234297_COUNTS = (
     ALS_DIR / "resources" / "GSE234297" / "suppl" / "GSE234297_gene_raw_counts.txt.gz"
@@ -311,7 +310,7 @@ def main() -> None:
     X_tr_sc = StandardScaler().fit_transform(X_tr_final).astype(np.float32)
     X_blood_sc = StandardScaler().fit_transform(X_blood_raw).astype(np.float32)
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
     params["verbose"] = -1
 

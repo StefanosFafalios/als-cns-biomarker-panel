@@ -33,6 +33,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -41,7 +42,6 @@ _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _PROFILING_CSV = SCRIPT_DIR / "gene_profiling_summary.csv"
 _PREFILTER_X_NPY = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES_TXT = SCRIPT_DIR / "lgbm_prefilter_names.txt"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 
 AUC_THRESHOLD = 0.60  # genes with univariate AUC < this form the pool
 SYNERGY_DELTA = 0.04  # min gain over best individual to count as synergistic
@@ -231,7 +231,6 @@ def _plot_combo_bar(results: list[dict], k: int, title_suffix: str) -> None:
 
 
 def main() -> None:
-    import json
 
     import matplotlib
     import pandas as pd
@@ -243,7 +242,7 @@ def main() -> None:
     print("=" * 65)
 
     # Load params — override colsample_bytree so all k features participate
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     params["colsample_bytree"] = 1.0
     print("\nModel: top-500 params with colsample_bytree=1.0")
 

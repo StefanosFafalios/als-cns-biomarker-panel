@@ -66,6 +66,7 @@ from utils import (  # noqa: E402
     core_panel_symbols,
 )
 
+from utils import selected_lgbm_params  # noqa: E402
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
 
@@ -73,7 +74,6 @@ _MATRIX_PATH = (
     RESOURCES_DIR / "GSE153960" / "matrix" / "GSE153960-GPL24676_series_matrix.txt.gz"
 )
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _SHAP_CSV = SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv"
 
 RANDOM_STATE = 42
@@ -251,7 +251,6 @@ def _plot(
 
 
 def main() -> None:
-    import json
 
     from sklearn.metrics import roc_auc_score
     from sklearn.model_selection import StratifiedGroupKFold
@@ -393,7 +392,7 @@ def main() -> None:
 
     # the paper's within-cohort model (top-500 params; PanelLGBMClassifier rescales
     # colsample to the panel size) with folds grouped by donor
-    cv_params = {**json.loads(_PARAMS_PATH.read_text()), "verbose": -1}
+    cv_params = {**selected_lgbm_params(), "verbose": -1}
     groups_als = meta_df["subject id"].astype(str)[als_any_mask].to_numpy()
 
     skf = StratifiedGroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)

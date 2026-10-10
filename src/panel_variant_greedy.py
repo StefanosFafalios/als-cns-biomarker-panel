@@ -37,6 +37,7 @@ sys.path.insert(0, str(ALS_DIR))
 
 import matplotlib  # noqa: E402
 from utils import load_dataset, zero_shot_scale  # noqa: E402
+from utils import selected_lgbm_params  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -51,7 +52,6 @@ ALS_DIR_RES = ALS_DIR / "resources"
 _PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _VARIANT_STATS = SCRIPT_DIR / "panel_variant_cv_statistics.txt"
 
 RANDOM_STATE = 42
@@ -294,7 +294,7 @@ def main() -> None:
     print("=" * 80)
 
     panel_df = pd.read_csv(_PANEL_CSV).reset_index(drop=True)
-    base_params = json.loads(_PARAMS_PATH.read_text())
+    base_params = selected_lgbm_params()
     # the paper's two models: within-cohort (top-500 params, colsample rescaled by
     # PanelLGBMClassifier, donor-grouped folds) and zero-shot (colsample 1.0)
     cv_params = {**base_params, "verbose": -1, "n_jobs": -1}

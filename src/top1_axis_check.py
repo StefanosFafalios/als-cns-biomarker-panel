@@ -44,12 +44,12 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset
+from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
-_PARAMS_PATH = SCRIPT_DIR / "lgbm_top500_best_params.json"
 _PREFILTER_X_NPY = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _PREFILTER_NAMES_TXT = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _SFM_RANKING_CSV = SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv"
@@ -217,7 +217,7 @@ def _oof_panel_scores(X_panel: np.ndarray, y: np.ndarray, params: dict) -> np.nd
     """5-fold stratified out-of-fold panel probabilities.
 
     ``colsample_bytree`` is re-expressed for the panel feature space: the value
-    in ``lgbm_top500_best_params.json`` was tuned on 500 features (~33 per tree)
+    of the selected classifier was tuned on 500 features (~25 per tree)
     and would otherwise floor to 1 feature per tree on a 25-gene panel. See
     ``cross_disease_specificity._adjust_colsample``.
     """
@@ -247,7 +247,6 @@ def _oof_panel_scores(X_panel: np.ndarray, y: np.ndarray, params: dict) -> np.nd
 
 def main() -> None:
     """Run all three TOP1-axis checks and write outputs."""
-    import json
 
     import pandas as pd
     from scipy.stats import spearmanr
@@ -282,7 +281,7 @@ def main() -> None:
     panel_cols = [name_to_col[f] for f in panel_features]
     X_panel = np.asarray(X_full[:, panel_cols], dtype=np.float32)
 
-    params = json.loads(_PARAMS_PATH.read_text())
+    params = selected_lgbm_params()
     print("\n[2] Computing 5-fold OOF panel scores ...")
     oof = _oof_panel_scores(X_panel, y, params)
     from sklearn.metrics import roc_auc_score

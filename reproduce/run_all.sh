@@ -7,7 +7,7 @@
 #   manuscript.tex
 #   supplementary.tex
 #
-# Usage (from coffeeBreak project root):
+# Usage (from the repository root):
 #   bash .../run_all.sh                     # run everything
 #   bash .../run_all.sh fast                # skip Step 2 (feature-matrix rebuild)
 #   bash .../run_all.sh from 24             # resume from step 24
@@ -25,8 +25,7 @@
 #
 # Each step writes its outputs to src/ alongside the script.
 # Step-by-step runtimes are indicated next to each invocation (wall-clock,
-# 24-core workstation). The two BayesianOptimizer steps (1, 2b) are not in this
-# repository; their tuned hyperparameters ship as src/lgbm_*best_params.json.
+# 24-core workstation).
 # =============================================================================
 set -euo pipefail
 
@@ -70,7 +69,7 @@ run_step() {
     fi
 
     # Resume gate: compare the numeric prefix as a base-10 integer, with a
-    # lexicographic tie-break on any letter suffix (step IDs look like 02, 02b,
+    # lexicographic tie-break on any letter suffix (step IDs look like 02, 02c,
     # 07aa, 24, ...). A bare string compare would mis-skip e.g. "10" < "5".
     if [[ -n "$RESUME_FROM" ]]; then
         local id="${step%%_*}"
@@ -117,8 +116,9 @@ run_step "03a_annotate_core25"        annotate_core25.py                    "<5m
 run_step "24_iterative_panel_elim"    iterative_panel_elimination.py        "~3.5h (pooled 5x10-fold CV per candidate; resumable)"
 run_step "24a_greedy_signif_stop"     greedy_significance_stop.py           "~20m full refit / seconds cached (writes panel_critical.csv)"
 run_step "24b_cohort_validation"    cohort_validation_table.py            "unmeasured (9 cohorts x 2 panels: zero-shot + pooled leave-one-donor-out)"
-run_step "24c_pooled_cv_random_null" pooled_cv_random_null.py             "~2h (25-gene pooled 10-fold CV vs 2 x 1,000 random 25-gene sets)"
+run_step "24c_pooled_cv_random_null" pooled_cv_random_null.py             "~1h (critical panel, pooled 10-fold CV on an unseen split, vs 1,000 random pre-filtered gene sets)"
 run_step "24d_cohort_validation_fig" cohort_validation_figure.py          "<1m (forest plot of 24b)"
+run_step "24e_lodo_trim"             lodo_trim.py                         "~26h (trim 25->1 without each held-out unit, then zero-shot on it; resumable)"
 run_step "03b_synergy_core25"         synergy_analysis.py                   "~15m"
 run_step "03c_synergy_top500"         synergy_top500.py                     "~30m"
 run_step "03d_pseudogene_audit"       pseudogene_artifact_check.py          "<5m"
@@ -287,7 +287,6 @@ run_step "30a_random_panel_null"      random_panel_null_cohorts.py          "~20
 # (S nested-CV section, Limitation 2). Within-cohort model of the main text.
 run_step "30b_nested_panel_cv"        nested_panel_cv.py                    "~8m (15 outer folds)"
 run_step "30c_nested_cv_decomp"       nested_cv_decomposition.py            "~13m"
-# IAMB Markov blanket (S IAMB section). Needs the coffeeBreak library (IAMBSelector).
 run_step "07ac_genetic_support"       genetic_support_opentargets.py        "~3m (OpenTargets ALS genetic_association)"
 # The two single-nucleus steps need .h5 matrices that download_geo_data.sh does
 # NOT fetch (they are per-GSM supplementary files, ~5.6 GB combined). They are
@@ -336,14 +335,6 @@ if [[ -f "$PROJ_ROOT/resources/NYGC_zenodo_20025792/NYGC_Flagship_ST_1_3_Metadat
 else
     echo "[38_nygc_clinical] SKIPPED — Zenodo 20025792 ST1 table not in resources/NYGC_zenodo_20025792/"
 fi
-# coffeeBreak-derived panel and its random gene-set baseline (S coffeeBreak section).
-# Needs the coffeeBreak search output (coffeebreak_equiv_run/deployment_mask.csv), which
-# is not reproduced here (see README: the coffeeBreak searches ship their outputs).
-if [[ -f "$SCRIPT_DIR/coffeebreak_equiv_run/deployment_mask.csv" ]]; then
-    :  # keeps this branch valid where the public-repo sync drops the coffeeBreak step
-else
-    echo "[39_coffeebreak_panel] SKIPPED — coffeebreak_equiv_run/deployment_mask.csv not present"
-fi
 # =============================================================================
 # P. INDEPENDENT SPINAL-CORD / MOTOR-CORTEX VALIDATION (Step 101)
 # Five cohorts the 25-gene discovery never saw (GSE255683, GSE287256, GSE26927,
@@ -356,9 +347,24 @@ run_step "40_new_cohort_validation"   new_cohort_validation.py              "~35
 run_step "41_snrna_spinal_cord"       snrna_spinal_cord.py                  "~5m (12 CellRanger .h5; extracts GSE287257_RAW.tar)"
 run_step "41a_snrna_cortex_percell"   snrna_cortex_percell.py               "~10m (GSE219280 + GSE212630 .h5; per-cell replication of 41 in independent donors)"
 run_step "42_multicohort_meta"         multicohort_meta_analysis.py          "unmeasured (random-effects Hedges' g over 9 donor-level units, raw + composition-adjusted)"
-run_step "07_drug_targets"            drug_targets.py                       "21s (needs 11, 41 and 41a; DGIdb + OpenTargets; network-bound)"
+run_step "27j_critical_replacement"    critical_replacement_pooled.py        "~3h (swap each critical gene within the critical panel; pooled CV on the unseen split; needs 27, 03e, 42)"
+run_step "27k_substitute_percell"      substitute_percell.py                 "~15m (spinal + cortex per-cell test of druggable substitutes; needs 27j, 41)"
+run_step "41b_spatial_spinal_cord"     spatial_spinal_cord.py                "~10m (GSE288365 Visium, 9 control / 9 ALS cervical cords; needs 41, 27k)"
+run_step "41c_snrna_percell_v2"        snrna_percell_v2.py                   "~20m (GSE190442 reference typing + count model; first run builds the reference cache)"
+run_step "07_drug_targets"            drug_targets.py                       "21s (needs 11, 41a and 41c (per-cell tiers from the reference-typed count model); DGIdb + OpenTargets; network-bound)"
 run_step "07b_gstm1_null_check"       gstm1_null_check.py                   "~2m (GSTM1 deletion vs disease effect, donor level)"
 run_step "07c_drug_direction_fig"      drug_direction_figure.py              "<1m (needs 07, 41, 41a and 42)"
+run_step "07d_cmap_direction_screen"   cmap_direction_screen.py              "<1m (LINCS L1000 via Enrichr; needs 07c; network on first run)"
+run_step "41e_snrna_typing_purity"     snrna_typing_purity.py                "~5m (marker vs reference endothelial typing; tests the 41 endothelial decrease for dilution)"
+# The Pineda 2024 cortex atlas sits behind a free Synapse login, so these two leaf steps
+# (nothing downstream reads them) are gated on the data, like 31/32.
+if [[ -d "$PROJ_ROOT/resources/Pineda2024/supplemental" ]]; then
+    run_step "41d_pineda_cortex_lookup"    pineda_cortex_lookup.py               "~2m (Pineda 2024 Table S6; needs reproduce/download_synapse_pineda.py and a Synapse token)"
+    run_step "41f_pineda_cortex_counts"    pineda_cortex_counts.py               "~30m first run (parses 147 Pineda libraries, then cached; count model on the authors' annotation; needs 41d)"
+else
+    echo "[41d/41f] SKIPPED — no resources/Pineda2024 (run reproduce/download_synapse_pineda.py; see README Provenance)"
+fi
+run_step "35a_cross_disease_genes"     cross_disease_gene_direction.py       "~1m (per-gene Hedges' g in the HD/PD/AD/FTLD-TDP cohorts against ALS; needs 35 downloads and 42)"
 # =============================================================================
 # Final check. Not an analysis: it reports any output that is older than the
 # panel_critical.csv it transitively depends on, which is how three separate

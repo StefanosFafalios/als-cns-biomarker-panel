@@ -10,6 +10,7 @@ reproduce/
 ├── FIGURE_MANIFEST.md         # figure / table -> producing script mapping
 ├── environment_als.yml        # conda environment (Python 3.13, LightGBM 4.5, etc.)
 ├── download_geo_data.sh       # one-shot GEO downloader (-> ../resources/)
+├── download_synapse_pineda.py # Pineda 2024 cortex atlas from Synapse (free account, token)
 ├── quantify_srp064478.sh      # Salmon quantification for SRP064478 (~1 h, optional)
 ├── run_all.sh                 # top-level entry point — runs every step
 └── logs/                      # per-step stdout/stderr written here at runtime
@@ -28,12 +29,25 @@ bash reproduce/download_geo_data.sh
 # 3. Optionally quantify SRP064478 with Salmon (~1 h; needed for Step 22)
 bash reproduce/quantify_srp064478.sh
 
-# 3b. Optional: place the two single-nucleus .h5 cohorts (GSE219280, GSE212630)
-#     under ../resources/<GSE>/suppl/ — see Provenance. Steps 31/32 skip without them.
+# 3b. Place the two single-nucleus .h5 cortex cohorts (GSE219280, GSE212630)
+#     under ../resources/<GSE>/suppl/ — see Provenance. Steps 31/32 skip without
+#     them, but step 41a and the drug steps that read it (07, 07c, 27k) need them.
+
+# 3c. Optional: the Pineda 2024 cortex atlas (Synapse syn51105515; free account and a
+#     Personal Access Token in ~/.synapseConfig or $SYNAPSE_AUTH_TOKEN). Steps 41d/41f
+#     skip without it; only the cortex-atlas paragraph and its supplementary table depend on them.
+python reproduce/download_synapse_pineda.py
 
 # 4. Run all manuscript-cited analyses (≈ 30 h end-to-end, single 24-core box)
 bash reproduce/run_all.sh
+
+# 5. Compare the regenerated *_statistics.txt files with the paper. FIGURE_MANIFEST.md
+#    names the file behind every figure and table.
 ```
+
+Step 99 (the staleness audit) runs last and lists any output older than the panel
+definition it depends on. Step 24 is listed by design, because 24a rewrites the panel
+after 24 runs.
 
 ## The critical panel is defined in exactly one place
 
@@ -70,7 +84,7 @@ this repository — targeted reruns use `only` rather than a second script:
 
 | Mode | Command | Effect |
 |---|---|---|
-| Full (default) | `bash run_all.sh` | Runs everything end-to-end. The two BayesianOptimizer steps (1, 2b) are not in this repository; their tuned hyperparameters ship as `src/lgbm_best_params.json` and `src/lgbm_top500_best_params.json`. |
+| Full (default) | `bash run_all.sh` | Runs everything end-to-end. |
 | Fast | `bash run_all.sh fast` | Skips Step 2 — needs `src/lgbm_prefilter_X.npy` and `src/lgbm_prefilter_names.txt` (~160 MB, not tracked). All downstream steps still rerun. |
 | Resume | `bash run_all.sh from 24` | Skips every step whose numeric prefix is below `24` (base-10 numeric compare; the argument may be a bare number like `24` or a full step ID like `02c`). **Read the warning below before using this.** |
 | Subset | `bash run_all.sh only 24a 25 07` | Runs **only** the listed step IDs, still in file order. Use after a bug fix invalidates part of the pipeline. This exists so a targeted rerun never needs a second script with its own copy of the dependency graph — `run_all.sh` is the only runnable pipeline definition in the repo. |
@@ -189,13 +203,13 @@ the `xr` LaTeX package (`\externaldocument{...}` in each preamble).
 
 | Manuscript section | Steps |
 |---|---|
-| 3.1 Discovery and the 25-gene panel | 02, 02c, 02d, 03, 30b, 30c (the Bayesian searches, 01 and 02b, are not in this repository) |
-| 3.2 Validation in nine external datasets | 04, 05, 05b, 22, 30a, 40, 24b, 24c, 24d |
-| 3.3 Trimming to the critical panel | 24, 24a |
-| 3.4 Composition, per-cell change, bulk direction | 11, 11a, 11b, 11c, 41, 41a, 42 |
+| 3.1 Discovery and the 25-gene panel | 02, 02c, 02d, 03, 30b, 30c |
+| 3.2 Validation in nine external datasets | 04, 05, 05b, 22, 30a, 40, 24b, 24d |
+| 3.3 Trimming to the critical panel | 24, 24a, 24c, 24e |
+| 3.4 Composition, per-cell change, spatial, cortex atlas, bulk direction | 11, 11a, 11b, 11c, 41, 41a, 41b, 41c, 41d, 41e, 41f, 42 |
 | 3.5 GSTM1 deletion | 07b |
-| 3.6 Specificity and clinical correlates | 10, 35, 38 (gated) |
-| 3.7 Drug direction | 07, 07ac, 07c |
+| 3.6 Specificity and clinical correlates; Discussion (Huntington's) | 10, 35, 35a, 38 (gated) |
+| 3.7 Drug direction, connectivity-map screen, replaceable genes | 07, 07ac, 07c, 07d, 27j, 27k (07 tiers on 41c, so it runs after it) |
 | Supplement: robustness, blood, context | 21a, 27, 27a, 28, 28aa, 28c, 14, 06, 07a, 08, 15a, 15b |
 
 See `FIGURE_MANIFEST.md` for a per-figure / per-table lookup table mapping
@@ -209,7 +223,7 @@ to `reproduce/logs/<step_id>.log`.
 
 | API | Used by | Notes |
 |---|---|---|
-| Enrichr | pathway_ora.py, upstream_regulators.py | Pathway ORA, TF inference |
+| Enrichr | pathway_ora.py, upstream_regulators.py, cmap_direction_screen.py | Pathway ORA, TF inference, LINCS L1000 gene-set libraries (cached in resources/LINCS) |
 | DGIdb v5 (GraphQL) | drug_targets.py, drug_targets_surrogates.py, druggable_replacement_targets.py | Drug-target interaction database |
 | OpenTargets (GraphQL) | drug_targets.py, drug_targets_surrogates.py | Tractability / neurodegeneration disease scoring |
 | MyGeneInfo | annotate_core25.py, cross_cohort_substitution.py, replaceability_figures.py, adaptive_panel_validation.py | Symbol / biotype resolution |
@@ -236,6 +250,9 @@ to `reproduce/logs/<step_id>.log`.
 | GSE26927 (Illumina arrays; ALS cervical SC + AD/PD/HD/MS/SCZ arms) | independent validation + specificity | GEO | `download_geo_data.sh` |
 | E-MTAB-8635 (spinal cord, Agilent, raw GenePix) | independent validation | ArrayExpress | `download_geo_data.sh` |
 | E-MTAB-2325 (motor cortex, Agilent; 35 donors shared with E-MTAB-8635) | independent validation | ArrayExpress | `download_geo_data.sh` |
+| GSE190442 (healthy adult spinal-cord snRNA atlas) | reference cell typing (41c) | GEO | `download_geo_data.sh` |
+| GSE288365 (ALS and control cervical SC, Visium) | spatial check (41b) | GEO | `download_geo_data.sh` |
+| syn51105515 (Pineda 2024 motor/prefrontal cortex atlas) | cortex per-cell (41d, 41f) | Synapse, free account | `download_synapse_pineda.py` |
 | GSE219280 (C9ALS snRNA, ~4.6 GB) | per-cell validation (step 31) | GEO, **manual** | — see below |
 | GSE212630 (non-C9 snRNA, ~1 GB) | per-cell validation (step 32) | GEO, **manual** | — see below |
 
