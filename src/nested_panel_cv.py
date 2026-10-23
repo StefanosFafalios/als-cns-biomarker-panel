@@ -19,7 +19,8 @@ hyperparameters (tuned once on all samples) and the greedy CORE_PANEL_SIZE -> k_
 selects on the external cohorts; "top k_crit by SHAP" stands in for it here).
 
 Outputs ``nested_panel_cv.csv`` (one row per seed x fold),
-``nested_panel_cv_selection.csv`` (per-gene re-selection frequency) and
+``nested_panel_cv_selection.csv`` (per-gene re-selection frequency),
+``nested_panel_cv_picks.csv`` (each fold's ranked picks) and
 ``nested_panel_cv_statistics.txt``.
 """
 
@@ -66,6 +67,7 @@ PANEL_SIZES = (CORE_PANEL_SIZE, K_CRIT)
 OUT_CSV = SCRIPT_DIR / "nested_panel_cv.csv"
 OUT_SEL = SCRIPT_DIR / "nested_panel_cv_selection.csv"
 OUT_TXT = SCRIPT_DIR / "nested_panel_cv_statistics.txt"
+OUT_PICKS = SCRIPT_DIR / "nested_panel_cv_picks.csv"
 
 
 def _fit_lgbm(X: np.ndarray, y: np.ndarray, params: dict):
@@ -181,6 +183,14 @@ def main(max_features: int | None = None, seeds: tuple[int, ...] = SEEDS) -> Non
         ]
     ).sort_values(["panel_size", "frequency"], ascending=[True, False])
     sel.to_csv(OUT_SEL.with_stem(OUT_SEL.stem + suffix), index=False)
+    pd.DataFrame(
+        [
+            dict(seed=r["seed"], fold=r["fold"], panel_size=k, rank=i + 1, feature=g)
+            for k in PANEL_SIZES
+            for r, p in zip(rows, picks[k])
+            for i, g in enumerate(p)
+        ]
+    ).to_csv(OUT_PICKS.with_stem(OUT_PICKS.stem + suffix), index=False)
 
     lines = [
         "Nested donor-grouped CV of the panel-discovery procedure",
