@@ -49,6 +49,8 @@ _READERS = re.compile(
 _TWENTYFIVE_GENE_ONLY = frozenset(
     {"top1_axis_check", "reciprocal_discovery", "incremental_over_composition"}
 )
+# Steps that run before 24a and feed it, so their outputs are older than panel_critical.csv by design.
+_UPSTREAM = frozenset({"iterative_panel_elimination"})
 
 
 def _pipeline_scripts() -> frozenset[str]:
@@ -245,6 +247,8 @@ def main() -> None:
         # directly (incremental_over_composition since Step 105g) is not exempt
         if stem in _TWENTYFIVE_GENE_ONLY and stem not in direct:
             flag, detail = "n/a  ", "keyed to lgbm_core25_panel.csv"
+        elif stem in _UPSTREAM:
+            flag, detail = "up   ", "upstream: feeds panel_critical.csv (step 24a)"
         elif stem not in pipeline:
             flag, detail = "expl ", "exploratory; not a run_all.sh step"
         elif age_h is None:
