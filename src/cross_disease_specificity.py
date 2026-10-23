@@ -88,11 +88,14 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import (
+    collapse_duplicate_rows,
     core_panel_entrez,
     critical_panel_label,
     critical_panel_symbols,
     load_dataset,
+    normalise_symbols,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 # Panel size is derived, so every reader-facing label must be too.
 from utils import selected_lgbm_params  # noqa: E402
@@ -436,6 +439,7 @@ def _load_gse13162() -> tuple["object", np.ndarray, "object"]:
     best = means.groupby(syms_series).idxmax()
     collapsed = probe_df.loc[best.values]
     collapsed.index = best.index
+    collapsed = collapse_duplicate_rows(normalise_symbols(collapsed, "GSE13162"))
 
     expr = collapsed.T  # samples x symbols
     expr = expr.loc[[g for g in expr.index if g in label]]
@@ -563,7 +567,7 @@ def _score(
     """
     from sklearn.linear_model import LogisticRegressionCV
     from sklearn.preprocessing import StandardScaler
-    from utils import TunedLGBMClassifier as LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     if mode not in ("canonical", "zscore"):  # pragma: no cover
         raise ValueError(mode)
@@ -725,8 +729,8 @@ def main() -> None:
     print("Cross-disease specificity — ALS panel vs AD / FTLD-TDP / HD / PD")
     print("=" * 74)
 
-    # the zero-shot model of every external validation: colsample_bytree 1.0
-    params = {**selected_lgbm_params(), "colsample_bytree": 1.0}
+    # the zero-shot model of every external validation
+    params = selected_lgbm_params()
     panel = pd.read_csv(_PANEL_CSV)
     panel_feats: list[str] = panel["feature"].tolist()
     panel_syms: list[str] = panel["symbol"].tolist()
@@ -740,7 +744,7 @@ def main() -> None:
     print(f"  training: n={len(y_tr)}  ALS={y_tr.sum()}  ctrl={(y_tr == 0).sum()}")
 
     panel_defs = {
-        "25-gene": list(zip(panel_feats, panel_syms)),
+        f"{CORE_PANEL_SIZE}-gene": list(zip(panel_feats, panel_syms)),
         _CRIT_LABEL: [
             (f, s) for f, s in zip(panel_feats, panel_syms) if s in CRITICAL_PANEL
         ],
@@ -964,7 +968,7 @@ def _write_report(
     add("")
     add("MODEL PROVENANCE")
     add("  Every cohort is scored by the zero-shot model of the main text: the")
-    add("  top-500 LightGBM with colsample_bytree 1.0, fit once on all GPL24676")
+    add("  top-500 LightGBM with colsample rescaled to ~25 genes per tree, fit once on all GPL24676")
     add("  ALS and control samples (LR-L2: LogisticRegressionCV as lr_baseline.py).")
     add("  Target AUCs are zero-shot: no target sample enters training or")
     add("  thresholding. The bootstrap CI covers target-sample variability.")

@@ -51,6 +51,7 @@ from scipy import stats
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 from utils import core_panel_ensg  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 RESOURCES_DIR = ALS_DIR / "resources"
@@ -125,7 +126,7 @@ def _match_feature(ensg_base: str, feature_names: list[str]) -> str | None:
 
 def main() -> None:
     print("=" * 60)
-    print("ALS progression proxy analysis — core 25-gene panel")
+    print(f"ALS progression proxy analysis — core {CORE_PANEL_SIZE}-gene panel")
     print("=" * 60)
 
     # ------------------------------------------------------------------
@@ -288,7 +289,7 @@ def main() -> None:
         gridspec_kw={"width_ratios": [2.5, 1, 1]},
     )
     fig.suptitle(
-        "ALS Progression Proxies — Core 25-gene Panel\nGSE153960 GPL24676",
+        f"ALS Progression Proxies — Core {CORE_PANEL_SIZE}-gene Panel\nGSE153960 GPL24676",
         fontsize=12,
     )
 
@@ -363,7 +364,7 @@ def main() -> None:
     )
 
     lines: list[str] = [
-        "ALS Progression Proxy Analysis — Core 25-gene Panel",
+        f"ALS Progression Proxy Analysis — Core {CORE_PANEL_SIZE}-gene Panel",
         "=" * 70,
         f"Dataset: GSE153960 GPL24676 (n={len(common)})",
         f"ALS: {als_mask.sum()}, ALS-FTD: {als_ftd_mask.sum()}, "

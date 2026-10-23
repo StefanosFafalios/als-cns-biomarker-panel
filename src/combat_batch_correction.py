@@ -47,6 +47,7 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 from calibration_analysis import _expected_calibration_error
 from external_validation_gpl16791 import (
@@ -171,7 +172,6 @@ def _fit_lgbm(X_tr: np.ndarray, y_train: np.ndarray):
 
     from utils import selected_lgbm_params  # noqa: E402
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -363,7 +363,7 @@ def main() -> None:
         f"Ctrl={int((y_train == 0).sum())}",
         f"Test : GPL16791 n={len(y_test)} ALS={int(y_test.sum())} "
         f"Ctrl={int((y_test == 0).sum())}",
-        "Panel: 25 genes; ComBat estimated across top-500 SHAP features.",
+        f"Panel: {CORE_PANEL_SIZE} genes; ComBat estimated across top-500 SHAP features.",
         "Correction is unsupervised in the class label (batch = platform only).",
         "",
         f"{'config':18s}{'AUC':>8s}{'95% CI':>18s}{'Brier':>9s}"

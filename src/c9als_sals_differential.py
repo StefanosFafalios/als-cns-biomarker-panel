@@ -65,6 +65,7 @@ from utils import (  # noqa: E402
     _parse_series_matrix,
     core_panel_symbols,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 from utils import selected_lgbm_params  # noqa: E402
 SCRIPT_DIR = Path(__file__).parent
@@ -232,7 +233,7 @@ def _plot(
     axes[2].set_ylabel("True Positive Rate")
     axes[2].set_title(
         "Within-ALS subtype classification\n"
-        "5-fold CV: ALS-FTD vs pure ALS (25-gene panel)",
+        f"5-fold CV: ALS-FTD vs pure ALS ({CORE_PANEL_SIZE}-gene panel)",
         fontsize=9,
     )
     axes[2].legend(fontsize=8, loc="lower right")
@@ -553,7 +554,7 @@ def main() -> None:
     lines += [
         "",
         "─" * 70,
-        "ANALYSIS 3: Within-ALS subtype classification (25-gene panel, donor-grouped 5-fold CV)",
+        f"ANALYSIS 3: Within-ALS subtype classification ({CORE_PANEL_SIZE}-gene panel, donor-grouped 5-fold CV)",
         "─" * 70,
         "Target: ALS-FTD (1) vs pure ALS (0)",
         f"AUC (donor-grouped 5-fold CV, sample level): {auc_cv:.4f}",

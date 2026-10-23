@@ -13,7 +13,7 @@ Also evaluates:
   - All pairwise combinations of the top-4 single-swap improvers.
 
 The paper's models: within-cohort LightGBM with donor-grouped CV, and the
-zero-shot LightGBM (top-500 params, colsample_bytree 1.0).
+zero-shot LightGBM (top-500 params, colsample rescaled to ~25 genes per tree).
 
 Outputs:
   panel_variant_greedy.png
@@ -22,11 +22,8 @@ Outputs:
 
 from __future__ import annotations
 
-import gzip
 import json
-import re
 import sys
-import tarfile
 import warnings
 from pathlib import Path
 
@@ -57,15 +54,6 @@ _VARIANT_STATS = SCRIPT_DIR / "panel_variant_cv_statistics.txt"
 RANDOM_STATE = 42
 N_FOLDS = 5
 
-_GSE122649_RAW_TAR = ALS_DIR_RES / "GSE122649" / "GSE122649_RAW.tar"
-_SOFT_URL_122649 = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/soft/"
-    "GSE122649_family.soft.gz"
-)
-_RAW_URL_122649 = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/suppl/"
-    "GSE122649_RAW.tar"
-)
 
 # Protein-coding single-swap results from panel_variant_cv.py
 # (panel_symbol, replacement_symbol, prefilter_base, cv_auc, zs_76220, zs_122649)
@@ -108,62 +96,11 @@ def _load_gse76220() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
 
 
 def _load_gse122649() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
-    from utils import cached_download
+    """GSE122649 log1p counts with current HGNC symbols -> (X, sym_to_col, y)."""
+    from iterative_panel_elimination import _load_gse122649 as load  # the one symbol-normalised loader
 
-    cached_download(_RAW_URL_122649, _GSE122649_RAW_TAR, "GSE122649_RAW.tar")
-
-    from utils import geo_soft_text
-
-    content = geo_soft_text("GSE122649")
-    samples = re.split(r"\^SAMPLE", content)[1:]
-    gsm_to_diag: dict[str, str] = {}
-    for s in samples:
-        acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
-        diag_m = re.search(r"!Sample_characteristics_ch1 = diagnosis: (.+)", s)
-        if acc_m and diag_m:
-            gsm_to_diag[acc_m.group(1)] = diag_m.group(1).strip()
-
-    gene_symbols: list[str] = []
-    sample_counts: dict[str, np.ndarray] = {}
-    with tarfile.open(_GSE122649_RAW_TAR, "r") as tf:
-        for member in tf.getmembers():
-            gsm_m = re.search(r"(GSM\d+)", member.name)
-            if not gsm_m or gsm_m.group(1) not in gsm_to_diag:
-                continue
-            gsm = gsm_m.group(1)
-            fobj = tf.extractfile(member)
-            if fobj is None:
-                continue
-            raw = fobj.read()
-            if member.name.endswith(".gz"):
-                raw = gzip.decompress(raw)
-            lines = raw.decode("utf-8", errors="ignore").splitlines()
-            rows = []
-            for line in lines[1:]:
-                parts = line.strip().split("\t")
-                if len(parts) < 2:
-                    continue
-                try:
-                    rows.append((parts[0].strip("\"'"), float(parts[1])))
-                except ValueError:
-                    continue
-            if not rows:
-                continue
-            syms = [r[0] for r in rows]
-            counts = np.array([r[1] for r in rows], dtype=np.float32)
-            if not gene_symbols:
-                gene_symbols = syms
-            elif len(syms) != len(gene_symbols):
-                continue
-            sample_counts[gsm] = counts
-
-    gsm_ids = list(sample_counts.keys())
-    X_raw = np.stack([sample_counts[g] for g in gsm_ids], axis=0)
-    diag_map = {"sALS": 1, "sALS/FTD": 1, "Non-neurological control": 0}
-    y = np.array([diag_map.get(gsm_to_diag[g], -1) for g in gsm_ids])
-    valid = y >= 0
-    X_log = np.log1p(X_raw[valid].astype(np.float32))
-    return X_log, {s: i for i, s in enumerate(gene_symbols)}, y[valid]
+    X, syms, y = load()
+    return X, {s: i for i, s in enumerate(syms)}, y
 
 
 # ---------------------------------------------------------------------------
@@ -296,9 +233,9 @@ def main() -> None:
     panel_df = pd.read_csv(_PANEL_CSV).reset_index(drop=True)
     base_params = selected_lgbm_params()
     # the paper's two models: within-cohort (top-500 params, colsample rescaled by
-    # PanelLGBMClassifier, donor-grouped folds) and zero-shot (colsample 1.0)
+    # PanelLGBMClassifier, donor-grouped folds) and zero-shot (same model)
     cv_params = {**base_params, "verbose": -1, "n_jobs": -1}
-    zs_params = {**base_params, "colsample_bytree": 1.0, "verbose": -1, "n_jobs": -1}
+    zs_params = {**base_params, "verbose": -1, "n_jobs": -1}
 
     print("\n[1] Loading data ...")
     X_pre, pre_b2c, y_pre, donors = _load_prefilter()

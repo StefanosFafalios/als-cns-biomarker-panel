@@ -31,7 +31,6 @@ from __future__ import annotations
 import gzip
 import re
 import sys
-import tarfile
 import warnings
 from pathlib import Path
 
@@ -50,6 +49,7 @@ from utils import (  # noqa: E402
     load_dataset,
     zero_shot_scale,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 # Panel size is derived, so every reader-facing denominator must be too.
 from utils import selected_lgbm_params  # noqa: E402
@@ -60,11 +60,6 @@ _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
 _SRP_FASTA = ALS_DIR / "resources" / "SRP064478" / "index" / "hg38_cdna.fa.gz"
-_GSE122649_RAW_TAR = ALS_DIR / "resources" / "GSE122649" / "GSE122649_RAW.tar"
-_GSE122649_SOFT_URL = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/"
-    "soft/GSE122649_family.soft.gz"
-)
 _GSE234297_COUNTS = (
     ALS_DIR / "resources" / "GSE234297" / "suppl" / "GSE234297_gene_raw_counts.txt.gz"
 )
@@ -172,56 +167,10 @@ def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
 
 
 def _load_gse122649() -> tuple[np.ndarray, list[str], np.ndarray]:
+    """GSE122649 log1p counts with current HGNC symbols -> (X, symbols, y)."""
+    from iterative_panel_elimination import _load_gse122649 as load  # the one symbol-normalised loader
 
-    from utils import geo_soft_text
-
-    content = geo_soft_text("GSE122649")
-    meta: dict[str, str] = {}
-    for s in re.split(r"\^SAMPLE", content)[1:]:
-        acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
-        diag_m = re.search(r"!Sample_characteristics_ch1 = diagnosis: (.+)", s)
-        if acc_m and diag_m:
-            meta[acc_m.group(1)] = diag_m.group(1).strip()
-    diag_map = {"sALS": 1, "sALS/FTD": 1, "Non-neurological control": 0}
-    gene_symbols: list[str] = []
-    sample_counts: dict[str, np.ndarray] = {}
-    with tarfile.open(_GSE122649_RAW_TAR, "r") as tf:
-        for member in tf.getmembers():
-            gsm_m = re.search(r"(GSM\d+)", member.name)
-            if not gsm_m or gsm_m.group(1) not in meta:
-                continue
-            gsm = gsm_m.group(1)
-            f_obj = tf.extractfile(member)
-            if f_obj is None:
-                continue
-            raw = f_obj.read()
-            if member.name.endswith(".gz"):
-                raw = gzip.decompress(raw)
-            rows = []
-            for line in raw.decode("utf-8", errors="ignore").splitlines()[1:]:
-                line = line.strip()
-                if not line or line.startswith("__"):
-                    continue
-                parts = line.split("\t")
-                if len(parts) < 2:
-                    continue
-                try:
-                    rows.append((parts[0].strip('"').strip("'"), float(parts[1])))
-                except ValueError:
-                    continue
-            if not rows:
-                continue
-            syms_here = [r[0] for r in rows]
-            if not gene_symbols:
-                gene_symbols = syms_here
-            elif len(syms_here) != len(gene_symbols):
-                continue
-            sample_counts[gsm] = np.array([r[1] for r in rows], dtype=np.float32)
-    gsm_ids = list(sample_counts.keys())
-    X_raw = np.stack([sample_counts[g] for g in gsm_ids])
-    y_full = np.array([diag_map.get(meta[g], -1) for g in gsm_ids])
-    valid = y_full >= 0
-    return np.log1p(X_raw[valid]), gene_symbols, y_full[valid]
+    return load()
 
 
 def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
@@ -388,7 +337,7 @@ def main() -> None:
     print("=" * 72)
 
     params_raw = selected_lgbm_params()
-    params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(params_raw, n_jobs=-1, verbose=-1)
 
     df_panel = pd.read_csv(_PANEL_CSV)
     feat_col = next(
@@ -435,7 +384,7 @@ def main() -> None:
         "GPL16791",
         "CNS multi-region",
         len(y16),
-        "25-gene",
+        f"{CORE_PANEL_SIZE}-gene",
         len(panel_cols),
         Xtr_ctd_25,
         y_train,
@@ -474,7 +423,7 @@ def main() -> None:
         "GSE76220",
         "Lumbar SC (LCM)",
         len(y76),
-        "25-gene",
+        f"{CORE_PANEL_SIZE}-gene",
         len(m76_25),
         Xtr76_25,
         y_train,
@@ -517,7 +466,7 @@ def main() -> None:
         "GSE122649",
         "Motor cortex",
         len(y122),
-        "25-gene",
+        f"{CORE_PANEL_SIZE}-gene",
         len(m122_25),
         Xtr122_25,
         y_train,
@@ -560,7 +509,7 @@ def main() -> None:
         "SRP064478",
         "Cervical SC",
         len(y_srp),
-        "25-gene",
+        f"{CORE_PANEL_SIZE}-gene",
         len(m_srp_25_idx),
         Xtr_srp_25,
         y_train,
@@ -607,7 +556,7 @@ def main() -> None:
         "GSE234297",
         "Blood",
         len(y_blood),
-        "25-gene",
+        f"{CORE_PANEL_SIZE}-gene",
         len(matched_e),
         Xtr_blood_25,
         y_train,
@@ -655,7 +604,7 @@ def main() -> None:
         f"LR-L2 vs LGBM — zero-shot, 25-gene and {_CRIT_LABEL} panels",
         "=" * 72,
         "Train  : GPL24676 (n=874, 684 ALS, 190 Control)",
-        "LGBM   : utils.SELECTED_LGBM_PARAMS, colsample_bytree=1.0",
+        "LGBM   : utils.SELECTED_LGBM_PARAMS, colsample per utils.PanelLGBMClassifier: about 25 genes per tree, 1.0 at 25 genes or fewer",
         "LR-L2  : LogisticRegressionCV(cv=5, penalty='l2', solver='liblinear')",
         "Scaler : StandardScaler fit on GPL24676 training columns (same for both models)",
         "Prepro : raw log1p for all cohorts (CTD is discovery-side only)",
@@ -669,7 +618,7 @@ def main() -> None:
         tissue = cohort_rows[0]["tissue"]
         n = cohort_rows[0]["n"]
         lines.append(f"\n{cohort} ({tissue}, n={n})")
-        for panel in ["25-gene", _CRIT_LABEL]:
+        for panel in [f"{CORE_PANEL_SIZE}-gene", _CRIT_LABEL]:
             panel_rows = [r for r in cohort_rows if r["panel"] == panel]
             if not panel_rows:
                 continue

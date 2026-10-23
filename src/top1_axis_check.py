@@ -44,6 +44,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
@@ -334,7 +335,7 @@ def main() -> None:
     df.to_csv(SCRIPT_DIR / f"{PREFIX}.csv", index=False)
 
     # --- check C: expression deciles ------------------------------------
-    print("\n[3] Expression-decile placement of the 25 panel genes ...")
+    print(f"\n[3] Expression-decile placement of the {CORE_PANEL_SIZE} panel genes ...")
     # Streamed over the memmap — avoids materialising the 874x47,822 matrix
     mean_expr = X_full.mean(axis=0)
     deciles = (
@@ -421,7 +422,7 @@ def _write_report(
         add("")
 
     add("-" * 69)
-    add("Expression-decile placement of the 25-gene panel")
+    add(f"Expression-decile placement of the {CORE_PANEL_SIZE}-gene panel")
     add("-" * 69)
     add("Zhou et al. report damage burden rising with transcriptional activity")
     add("genome-wide. A panel reading that axis should concentrate in decile 10.")
@@ -520,7 +521,7 @@ def _plot(df, panel_dec: dict[str, int]) -> None:
     ax.set_xticks(xs)
     ax.set_xlabel("Mean-expression decile (all 47,822 features)")
     ax.set_ylabel("Panel genes")
-    ax.set_title("(c) Where the 25-gene panel sits\non the expression axis")
+    ax.set_title(f"(c) Where the {CORE_PANEL_SIZE}-gene panel sits\non the expression axis")
     ax.legend(fontsize=8)
     ax.grid(axis="y", alpha=0.25)
 

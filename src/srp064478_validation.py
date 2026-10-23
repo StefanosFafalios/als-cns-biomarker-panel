@@ -374,7 +374,6 @@ def main() -> None:
     print("\n[5] Zero-shot prediction ...")
     params = selected_lgbm_params()
     params.pop("feature_names", None)
-    params["colsample_bytree"] = 1.0
     params["random_state"] = RANDOM_STATE
     params["verbosity"] = -1
     clf = LGBMClassifier(**params)

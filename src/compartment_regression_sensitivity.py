@@ -53,7 +53,6 @@ def _fit_lgbm(X, y):
 
     from utils import selected_lgbm_params  # noqa: E402
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")

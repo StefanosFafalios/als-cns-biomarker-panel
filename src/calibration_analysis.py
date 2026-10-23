@@ -31,6 +31,7 @@ matplotlib.use("Agg")
 ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -120,7 +121,6 @@ def _fit_lgbm(X_tr, y_train):
 
     from utils import selected_lgbm_params  # noqa: E402
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -162,7 +162,7 @@ def main() -> None:
     from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
 
     print("\n" + "=" * 70)
-    print("Calibration Analysis — 25-gene panel + critical panel (zero-shot)")
+    print(f"Calibration Analysis — {CORE_PANEL_SIZE}-gene panel + critical panel (zero-shot)")
     print("=" * 70)
 
     panel = pd.read_csv(_PANEL_CSV)
@@ -209,7 +209,7 @@ def main() -> None:
     # Calibration metrics for both panels on each cohort
     results = []
     for panel_name, sc_tr, sc_te in [
-        ("25-gene", train_cv_scores, test_scores),
+        (f"{CORE_PANEL_SIZE}-gene", train_cv_scores, test_scores),
         ("critical panel", train_cv_scores_c, test_scores_c),
     ]:
         for label, y, s in [
@@ -242,7 +242,7 @@ def main() -> None:
 
     # Reliability plots — 25-gene and critical overlaid per cohort
     panel_curves = [
-        ("25-gene panel", "#1f77b4", train_cv_scores, test_scores),
+        (f"{CORE_PANEL_SIZE}-gene panel", "#1f77b4", train_cv_scores, test_scores),
         ("critical panel", "#d62728", train_cv_scores_c, test_scores_c),
     ]
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
@@ -286,7 +286,7 @@ def main() -> None:
 
     # Statistics file
     lines = [
-        "Calibration analysis (25-gene panel + critical panel)",
+        f"Calibration analysis ({CORE_PANEL_SIZE}-gene panel + critical panel)",
         "=" * 60,
         "Discrimination + calibration on training and primary external cohort.",
         "Both panels use the same LightGBM model (top-500 hyperparameters) on",

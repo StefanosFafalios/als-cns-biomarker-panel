@@ -46,6 +46,7 @@ from utils import (  # noqa: E402
     critical_panel_symbols,
     zero_shot_scale,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 
 from utils import selected_lgbm_params  # noqa: E402
@@ -72,7 +73,7 @@ def main() -> None:
 
     crit = critical_panel_symbols()
     panels = {
-        "25-gene": list(range(len(sym25))),
+        f"{CORE_PANEL_SIZE}-gene": list(range(len(sym25))),
         f"critical ({len(crit)})": sorted(sym25.index(g) for g in crit),
     }
 

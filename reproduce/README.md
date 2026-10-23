@@ -72,9 +72,9 @@ Two consequences when resuming a partial run:
   2026-08-10, months after the panel became 18 — the literal it warns against,
   in the document warning against it.)
 
-The same rule covers derived *values*, not just membership: the 25-gene panel's
+The same rule covers derived *values*, not just membership: the core panel's
 within-cohort CV AUC comes from `utils.panel25_cv_auc()`, which reads the
-incremental curve at k=25. It was a hardcoded `0.9621` in four scripts and
+incremental curve at k = `utils.CORE_PANEL_SIZE`. It was a hardcoded `0.9621` in four scripts and
 reached the abstract one full run after the pipeline started producing 0.9611.
 
 ## Run modes
@@ -112,7 +112,7 @@ A silent no-op looks exactly like a successful run — check the log count.
 regenerates the report in seconds; scoring from scratch takes ~8 h. Because the cache keys on
 nothing, it will happily be reused after a change that should have invalidated it —
 **set `GREEDY_STOP_REFIT=1` to force a full refit** whenever the model, the cohorts, or the
-25-gene panel change:
+core panel change:
 
 ```bash
 GREEDY_STOP_REFIT=1 python greedy_significance_stop.py
@@ -139,7 +139,7 @@ un-actionable rows do not train you to ignore the column that matters:
 
 | flag | meaning |
 |---|---|
-| `n/a` | keyed to the 25-gene panel (`lgbm_core25_panel.csv`); a critical-panel redefinition does not affect it |
+| `n/a` | keyed to the core panel (`lgbm_core25_panel.csv`); a critical-panel redefinition does not affect it |
 | `expl` | exploratory script that `run_all.sh` never invokes, so it is permanently older than `panel_critical.csv` |
 | `?` | the script produces no artefact at all (only `panel_staleness_audit.py` itself should ever show this) |
 
@@ -199,18 +199,18 @@ the `xr` LaTeX package (`\externaldocument{...}` in each preamble).
 ## Step layout
 
 `run_all.sh` is grouped into sections A–P by pipeline stage. The manuscript
-(2026-10-05 rewrite) draws on these steps:
+(2026-10-23 rewrite) draws on these steps:
 
 | Manuscript section | Steps |
 |---|---|
-| 3.1 Discovery and the 25-gene panel | 02, 02c, 02d, 03, 30b, 30c |
-| 3.2 Validation in nine external datasets | 04, 05, 05b, 22, 30a, 40, 24b, 24d |
-| 3.3 Trimming to the critical panel | 24, 24a, 24c, 24e |
-| 3.4 Composition, per-cell change, spatial, cortex atlas, bulk direction | 11, 11a, 11b, 11c, 41, 41a, 41b, 41c, 41d, 41e, 41f, 42 |
-| 3.5 GSTM1 deletion | 07b |
-| 3.6 Specificity and clinical correlates; Discussion (Huntington's) | 10, 35, 35a, 38 (gated) |
-| 3.7 Drug direction, connectivity-map screen, replaceable genes | 07, 07ac, 07c, 07d, 27j, 27k (07 tiers on 41c, so it runs after it) |
-| Supplement: robustness, blood, context | 21a, 27, 27a, 28, 28aa, 28c, 14, 06, 07a, 08, 15a, 15b |
+| 3.1 Discovery and the 50-gene panel | 02, 02c, 02d, 03, 30b, 30c |
+| 3.2 The 50-gene panel in nine external datasets | 04, 05, 05b, 22, 30a, 40, 24b, 24d |
+| 3.3 Trimming, the critical panel and the stable core | 24, 24a, 24c, 24e, 27j, 27l |
+| 3.4 Core genes: bulk direction, donor covariates, other diseases | 42, 38a (gated), 35a |
+| 3.5 Composition, per-cell change, spatial, cortex atlas | 11, 11a, 11b, 11c, 41, 41a, 41b, 41c, 41d, 41e, 41f |
+| 3.6 Specificity and clinical correlates | 10, 35, 38 (gated) |
+| 3.7 Drug direction, connectivity-map screen, substitutes | 07, 07ac, 07c, 07d, 27j, 27k (07 tiers on 41c, so it runs after it) |
+| Supplement: robustness, blood, context | 21, 21a, 28, 28aa, 28c, 14, 06, 07a, 08, 15a, 15b |
 
 See `FIGURE_MANIFEST.md` for a per-figure / per-table lookup table mapping
 manuscript artifacts to producing scripts.

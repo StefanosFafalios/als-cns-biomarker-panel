@@ -21,6 +21,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from utils import core_panel_symbols  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 BASE = Path(__file__).parent
 
@@ -47,6 +48,11 @@ THEME = {
     "SLC37A2": "Mitochondria / metabolism",
     "ALDH1A2": "Vascular / BBB",  # provisional (Step 104), review with the manuscript
     "GSTM1": "Mitochondria / metabolism",  # provisional (Step 104), review with the manuscript
+    # provisional (Step 106, 50-gene panel; NCBI gene summaries), review with the manuscript
+    "CTSH": "Lysosomal", "NDUFB1": "Mitochondria / metabolism", "AKR1C2": "Mitochondria / metabolism",
+    "TNFRSF10D": "Immune / complement", "SLFN13": "Immune / complement",
+    "CNKSR1": "Other protein-coding", "TM4SF18": "Other protein-coding", "RGS11": "Other protein-coding",
+    "RPL23": "Other protein-coding", "OR4F16": "Other protein-coding", "TEX13D": "Other protein-coding",
 }
 # Themes are curated by hand: stop rather than draw an uncurated panel gene in grey.
 if _missing := sorted(set(_PC15) - set(THEME)):
@@ -58,6 +64,7 @@ PALETTE = {
     "Cell cycle / TF": "#4A90D9",  # blue
     "Immune / complement": "#27AE60",  # green
     "Lysosomal": "#8E44AD",  # purple
+    "Other protein-coding": "#8D6E63",  # brown
     "Non-coding / pseudogene": "#95A5A6",  # grey
 }
 
@@ -252,7 +259,7 @@ ax.legend(
     framealpha=0.9,
 )
 
-ax.set_xlabel("LOO Δ AUC  (within 25-gene panel context)", fontsize=11)
+ax.set_xlabel(f"LOO Δ AUC  (within {CORE_PANEL_SIZE}-gene panel context)", fontsize=11)
 ax.set_ylabel("Replaceability  (%)", fontsize=11)
 ax.set_title(
     "Replaceability vs LOO Δ — 15 Protein-Coding Panel Members\n"

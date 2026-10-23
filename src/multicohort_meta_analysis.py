@@ -19,7 +19,7 @@ Design, fixed before the run:
   * Subsets: spinal cord only, cortex only (NYGC tissue-specific donor means), and
     external only (no NYGC unit). Sensitivity: genes residualised within each unit on
     five marker-based cell-type scores (composition-adjusted).
-  * Genes the discovery pipeline excluded upfront (18 known ALS features and the
+  * Genes the discovery pipeline excluded upfront (known ALS genes and the
     contamination pool, which includes sex-chromosome genes) are flagged, not dropped.
 
 Outputs: multicohort_meta_analysis.csv, multicohort_meta_analysis_statistics.txt,
@@ -43,7 +43,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from lgbm_iterative_pipeline import KNOWN_ALS_FEATURES  # noqa: E402
+from lgbm_iterative_pipeline import KNOWN_ALS_BASES  # noqa: E402
 from new_cohort_validation import (  # noqa: E402
     _emtab,
     _gse26927_arms,
@@ -60,6 +60,7 @@ from random_panel_null_cohorts import _symbols  # noqa: E402
 from scipy.stats import norm  # noqa: E402
 from statsmodels.stats.multitest import multipletests  # noqa: E402
 from utils import critical_panel_symbols, load_dataset  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 RES = ALS_DIR / "resources"
 OUT = SCRIPT_DIR / "multicohort_meta_analysis"
@@ -231,7 +232,7 @@ def build_units() -> dict:
     pool = json.loads((SCRIPT_DIR / "lgbm_iter_contamination_pool.json").read_text())
     sym = _symbols(clean)
     sym.update({str(k).split(".")[0]: v for k, v in pool.get("symbol_map", {}).items() if v})
-    excluded = {sym.get(str(b).split(".")[0]) for b in list(pool["pool"]) + list(KNOWN_ALS_FEATURES)} - {None}
+    excluded = {sym.get(str(b).split(".")[0]) for b in list(pool["pool"]) + list(KNOWN_ALS_BASES)} - {None}
 
     print("Loading units ...")
     u24, donors24 = _nygc("GPL24676", sym, frozenset(), None)
@@ -289,7 +290,7 @@ def main() -> None:
     res["excluded_upfront"] = res.index.isin(excluded)
     panel25 = pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").symbol.tolist()
     crit = set(critical_panel_symbols())
-    res["panel"] = np.where(res.index.isin(crit), "critical", np.where(res.index.isin(panel25), "25-gene", ""))
+    res["panel"] = np.where(res.index.isin(crit), "critical", np.where(res.index.isin(panel25), f"{CORE_PANEL_SIZE}-gene", ""))
     res = res.join(G.add_prefix("g_"), how="left").sort_values("p")
     res.to_csv(OUT.with_suffix(".csv"), index_label="gene")
     _report(res, units, mc, panel25)
@@ -318,7 +319,7 @@ def _report(res: pd.DataFrame, units: list[Unit], mc: Unit, panel25: list[str]) 
     for gname, r in top.iterrows():
         lines.append(f"{gname:<12}{r.g:>7.2f}  [{r.lo:+.2f}, {r.hi:+.2f}]{r.q:>10.2e}{int(r.k):>3}{int(r.same_sign):>4}/{int(r.k)}"
                      f"{r.i2:>6.2f}{r.sc_g:>7.2f}{r.cortex_g:>7.2f}{r.ext_q:>9.2e}{r.adj_q:>9.2e}  {r.panel}")
-    lines += ["", "25-gene panel members:",
+    lines += ["", f"{CORE_PANEL_SIZE}-gene panel members:",
               f"{'gene':<18}{'g':>7}{'q':>10}{'k':>3}{'robust':>8}{'ext q':>10}{'adj q':>10}{'SC g':>7}{'ctx g':>7}"]
     for gname in panel25:
         if gname in res.index:
@@ -345,7 +346,7 @@ def _plot(res: pd.DataFrame, G: pd.DataFrame) -> None:
     rob = res.robust & ~res.excluded_upfront
     ax.scatter(res.g[rob], lq[rob], s=5, c="#1f77b4", label="robust")
     pan = res.panel != ""
-    ax.scatter(res.g[pan], lq[pan], s=30, c="#d62728", label="25-gene panel")
+    ax.scatter(res.g[pan], lq[pan], s=30, c="#d62728", label=f"{CORE_PANEL_SIZE}-gene panel")
     for gname in res.index[pan]:
         ax.annotate(gname, (res.g[gname], lq[gname]), fontsize=6)
     ax.axhline(-np.log10(0.05), color="grey", ls=":", lw=1)

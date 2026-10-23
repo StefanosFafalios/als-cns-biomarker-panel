@@ -16,6 +16,7 @@ Outputs:
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -25,6 +26,9 @@ import numpy as np
 matplotlib.use("Agg")
 
 SCRIPT_DIR = Path(__file__).parent
+sys.path.insert(0, str(SCRIPT_DIR.parent))
+from utils import CORE_PANEL_SIZE  # noqa: E402
+
 _SCORES = SCRIPT_DIR / "calibration_scores.npz"
 
 
@@ -63,7 +67,7 @@ def main() -> None:
         nb_model = [_net_benefit(y, s, p) for p in thresholds]
         nb_all = [_net_benefit_all(y, p) for p in thresholds]
         nb_none = [0.0] * len(thresholds)
-        ax.plot(thresholds, nb_model, "-", color="#1f77b4", lw=2, label="25-gene panel (LGBM)")
+        ax.plot(thresholds, nb_model, "-", color="#1f77b4", lw=2, label=f"{CORE_PANEL_SIZE}-gene panel (LGBM)")
         ax.plot(thresholds, nb_all, "--", color="#ff7f0e", lw=1.5, label="Treat-all")
         ax.plot(thresholds, nb_none, ":", color="gray", lw=1.5, label="Treat-none")
         ax.set_xlabel("Threshold probability")
@@ -93,11 +97,11 @@ def main() -> None:
         print(" ", r)
 
     lines = [
-        "Decision-curve analysis (DCA) — 25-gene panel (LGBM)",
+        f"Decision-curve analysis (DCA) — {CORE_PANEL_SIZE}-gene panel (LGBM)",
         "=" * 60,
         "Net benefit computed across threshold probabilities 0.05–0.95.",
         "",
-        "Strategies compared: model (25-gene LGBM), treat-all, treat-none.",
+        f"Strategies compared: model ({CORE_PANEL_SIZE}-gene LGBM), treat-all, treat-none.",
         "",
     ] + rows + [
         "",

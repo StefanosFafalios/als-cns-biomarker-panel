@@ -34,14 +34,15 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import adjust_colsample, gene_info, load_dataset
+from utils import adjust_colsample, drop_if_other_ranking, gene_info, load_dataset
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
 CV_FOLDS = 5
 CV_RANDOM_STATE = 42
-PANEL_SIZE = 25
+PANEL_SIZE = CORE_PANEL_SIZE
 PREFIX = "lgbm_core25_"
 
 _SHAP_RANKING_SRC = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
@@ -249,7 +250,7 @@ def _plot_curve(feature_names: list[str], sym_map: dict[str, str]) -> None:
     ax.set_title(
         f"Incremental CV curve — core {PANEL_SIZE}-gene panel (LightGBM top-500 model)\n"
         "ALS Spectrum MND vs Non-Neurological Control · GSE153960 GPL24676 · n=874\n"
-        f"Each tick = one gene added in SHAP rank order; panel cut at k={PANEL_SIZE} (91.5% of max AUC gain)",
+        f"Each tick = one gene added in SHAP rank order; panel cut at k={PANEL_SIZE} (fixed design)",
         fontsize=9,
     )
 
@@ -439,6 +440,7 @@ def main() -> None:
     baseline_auc = _cv_baseline(X, y_int)
 
     print(f"\n--- LOO within {PANEL_SIZE}-feature context ---")
+    drop_if_other_ranking(SCRIPT_DIR / f"{PREFIX}loo_features.txt", feature_names, LOO_CSV, LOO_CKPT)
     if LOO_CSV.exists() and not LOO_CKPT.exists():
         loo_results = pd.read_csv(LOO_CSV).to_dict("records")
         print(f"  Loaded completed LOO ({len(loo_results)} features)")

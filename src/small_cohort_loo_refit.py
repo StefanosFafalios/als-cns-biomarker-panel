@@ -36,7 +36,7 @@ _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
 
 def _loo_auc(X: np.ndarray, y: np.ndarray, params: dict) -> float:
     from sklearn.metrics import roc_auc_score
-    from utils import TunedLGBMClassifier as LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     n = len(y)
     scores = np.zeros(n)
@@ -92,7 +92,6 @@ def main() -> None:
     # Two hyperparameter regimes
     paranoid = {  # the tuned model; min_child_samples follows utils.scale_min_child
         **selected_lgbm_params(),
-        "colsample_bytree": 1.0,
         "objective": "binary",
         "random_state": 42,
         "verbosity": -1,

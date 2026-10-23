@@ -28,6 +28,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 PLATFORM = "GPL24676"
@@ -247,7 +248,7 @@ def _plot_auc(gene_rows: list[dict]) -> None:
         "colour shows direction — red = up in ALS, blue = down in ALS)"
     )
     ax.set_title(
-        "Per-gene univariate discriminative ability — core 25-gene panel\n"
+        f"Per-gene univariate discriminative ability — core {CORE_PANEL_SIZE}-gene panel\n"
         "ALS Spectrum MND vs Non-Neurological Control · GSE153960 GPL24676 · n=874",
         fontsize=10,
     )
@@ -314,7 +315,7 @@ def _plot_volcano(gene_rows: list[dict]) -> None:
     )
     ax.set_ylabel("−log₁₀(BH-adjusted p-value)  (Mann-Whitney U, two-sided)")
     ax.set_title(
-        "Volcano plot — core 25-gene panel\n"
+        f"Volcano plot — core {CORE_PANEL_SIZE}-gene panel\n"
         "ALS Spectrum MND vs Non-Neurological Control · GSE153960 GPL24676 · n=874",
         fontsize=10,
     )
@@ -371,7 +372,7 @@ def _plot_tissue_heatmap(
             )
 
     ax.set_title(
-        "Per-tissue univariate AUC — core 25-gene panel\n"
+        f"Per-tissue univariate AUC — core {CORE_PANEL_SIZE}-gene panel\n"
         "ALS Spectrum MND vs Non-Neurological Control · GSE153960 GPL24676\n"
         "Each cell: single-gene AUC within that tissue region (warm = strong signal)",
         fontsize=9,
@@ -394,7 +395,7 @@ def main() -> None:
     matplotlib.use("Agg")
 
     print("\n" + "=" * 60)
-    print("Gene Profiling — Core 25-gene Panel")
+    print(f"Gene Profiling — Core {CORE_PANEL_SIZE}-gene Panel")
     print("=" * 60)
 
     print("\nLoading data ...")

@@ -39,7 +39,6 @@ def _fit_lgbm(X, y):
     from utils import PanelLGBMClassifier as LGBMClassifier
 
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
     clf = LGBMClassifier(**params)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")

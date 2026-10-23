@@ -309,11 +309,50 @@ def _load_suppl_expression(
     return expr_df[gsm_cols]
 
 
+_HGNC_CACHE = RESOURCES_DIR / "platforms" / "symbol_to_current_hgnc.json"
+
+
+def _current_symbol_renames(labels: list[str]) -> dict[str, str]:
+    """Legacy symbol or ``LOC<Entrez>`` label -> current HGNC symbol (MyGeneInfo, cached).
+
+    Older annotations name a gene by a retired symbol, an alias or, before it had a
+    symbol, ``LOC`` plus its Entrez ID, so a symbol match misses the same gene. Only
+    unambiguous hits count; Ensembl IDs and labels that are already current map to
+    nothing. The cache is shared with multicohort_meta_analysis.py.
+    """
+    # LOC labels resolve through their Entrez ID, cached under their own key: the meta-analysis
+    # stored them as failed *symbol* lookups ("").
+    def key(lab: str) -> str:
+        return "@entrez:" + lab if re.fullmatch(r"LOC\d+", lab) else lab
+
+    cache = json.loads(_HGNC_CACHE.read_text()) if _HGNC_CACHE.exists() else {}
+    todo = sorted({lab for lab in labels if key(lab) not in cache and not lab.startswith("ENSG")})
+    if todo:
+        import mygene
+
+        loc = [lab for lab in todo if key(lab) != lab]
+        hits: dict[str, set[str]] = {}
+        for query, scopes in (([lab for lab in todo if lab not in set(loc)], "symbol,alias,retired"),
+                              ([lab[3:] for lab in loc], "entrezgene")):
+            if not query:
+                continue
+            for r in mygene.MyGeneInfo().querymany(query, scopes=scopes, fields="symbol", species="human",
+                                                   verbose=False):
+                if not r.get("notfound") and r.get("symbol"):
+                    lab = "LOC" + str(r["query"]) if scopes == "entrezgene" else r["query"]
+                    hits.setdefault(lab, set()).add(r["symbol"])
+        cache.update({key(lab): (next(iter(hits[lab])) if len(hits.get(lab, ())) == 1 else "") for lab in todo})
+        _HGNC_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        _HGNC_CACHE.write_text(json.dumps(cache))
+    return {lab: cache[key(lab)] for lab in labels if cache.get(key(lab)) and cache[key(lab)] != lab}
+
+
 def normalise_symbols(expr_df: "pd.DataFrame", gse_id: str) -> "pd.DataFrame":
     """Rewrite legacy gene symbols in a cohort's index to current HGNC symbols.
 
-    Applied once at load time so no consumer has to know about aliases. Silent
-    when the cohort has no alias entry or none of its aliases are present.
+    Applied once at load time so no consumer has to know about aliases: the
+    curated per-cohort table first, then any retired symbol, alias or
+    ``LOC<Entrez>`` label MyGeneInfo resolves to exactly one current symbol.
 
     Args:
         expr_df: Expression frame indexed by gene symbol.
@@ -323,17 +362,15 @@ def normalise_symbols(expr_df: "pd.DataFrame", gse_id: str) -> "pd.DataFrame":
         The frame, with any legacy symbols in the index renamed. The input is
         returned unchanged when there is nothing to do.
     """
-    aliases = _SYMBOL_ALIASES.get(gse_id)
-    if not aliases:
-        return expr_df
-    hits = [a for a in aliases if a in expr_df.index]
+    labels = [str(i) for i in expr_df.index]
+    renames = {**_current_symbol_renames(labels), **_SYMBOL_ALIASES.get(gse_id, {})}
+    hits = {a: b for a, b in renames.items() if a in expr_df.index}
     if not hits:
         return expr_df
-    print(
-        f"  [{gse_id}] normalised legacy symbols: "
-        + ", ".join(f"{a}->{aliases[a]}" for a in hits)
-    )
-    return expr_df.rename(index={a: aliases[a] for a in hits})
+    curated = [a for a in hits if a in _SYMBOL_ALIASES.get(gse_id, {})]
+    print(f"  [{gse_id}] normalised {len(hits)} legacy symbols"
+          + (": " + ", ".join(f"{a}->{hits[a]}" for a in curated) if curated else ""))
+    return expr_df.rename(index=hits)
 
 
 def collapse_duplicate_rows(expr_df: "pd.DataFrame") -> "pd.DataFrame":
@@ -582,6 +619,18 @@ def load_all(
 TUNED_FEATURE_SPACE = 500
 
 
+def drop_if_other_ranking(order_file: Path, names: list[str], *cached: Path) -> None:
+    """Delete cached results computed on another gene ranking, so they are only reused for this one.
+
+    A finished curve or LOO table used to be loaded whenever it existed; after the discovery changed
+    (2026-10-10) that silently reused the old genes' results. ``order_file`` records the ranking.
+    """
+    if not order_file.exists() or order_file.read_text().split() != list(names):
+        for path in cached:
+            path.unlink(missing_ok=True)
+        order_file.write_text("\n".join(names))
+
+
 def adjust_colsample(params: dict, n_features: int) -> dict:
     """Re-express ``colsample_bytree`` for a feature space of *n_features*.
 
@@ -611,15 +660,15 @@ def adjust_colsample(params: dict, n_features: int) -> dict:
 # constant columns, keep the genes that carry 99.9% of a LightGBM model's cumulative
 # gain, and classify with the LightGBM below. Every analysis uses this classifier.
 SELECTED_LGBM_PARAMS: dict = {
-    "n_estimators": 2000,
-    "learning_rate": 0.05034640340553723,
-    "num_leaves": 22,
+    "n_estimators": 1000,
+    "learning_rate": 0.1816023246650197,
+    "num_leaves": 207,
     "max_depth": -1,
-    "min_child_samples": 69,
-    "colsample_bytree": 0.050796217674041105,
-    "subsample": 0.7549150630443756,
-    "reg_lambda": 0.06500861623031677,
-    "reg_alpha": 0.0003507191729052032,
+    "min_child_samples": 80,
+    "colsample_bytree": 0.05029103244738423,
+    "subsample": 0.1562498984136434,
+    "reg_lambda": 0.013690003726503839,
+    "reg_alpha": 0.0005364794617175931,
     "random_state": 0,
     "verbose": -1,
 }
@@ -1093,7 +1142,7 @@ def break_even_k(auc: "np.ndarray | list[float]") -> int:
     return int(below[0]) + 2  # np.diff index i is the step from k = i + 1 to k = i + 2
 
 
-def panel25_cv_auc(k: int = 25) -> float:
+def panel25_cv_auc(k: int | None = None) -> float:
     """Return the within-cohort 5-fold CV AUC of the SHAP-ranked top-``k`` panel.
 
     Four scripts carried this as ``TRAIN_CV_AUC = 0.9621``, a literal copied from
@@ -1103,7 +1152,7 @@ def panel25_cv_auc(k: int = 25) -> float:
     current artefact contains. Read it; do not restate it.
 
     Args:
-        k: Panel size to read off the curve. Defaults to the 25-gene panel.
+        k: Panel size to read off the curve. Defaults to CORE_PANEL_SIZE.
 
     Returns:
         Mean 5-fold stratified CV AUC at ``k`` features.
@@ -1112,6 +1161,7 @@ def panel25_cv_auc(k: int = 25) -> float:
         FileNotFoundError: If the curve CSV is missing.
         SystemExit: If the curve has no row at ``k``.
     """
+    k = k or CORE_PANEL_SIZE
     if not _CURVE_CSV.exists():
         raise FileNotFoundError(
             f"{_CURVE_CSV} not found; regenerate it with "
@@ -1235,6 +1285,9 @@ def critical_panel_label(protein_coding_only: bool = False) -> str:
 
 
 CORE_PANEL_CSV = Path(__file__).parent / "GSE153960" / "lgbm_core25_panel.csv"
+# Genes kept from the top of the discovery SHAP ranking (known ALS genes excluded upstream);
+# the pooled trimming over the external datasets then reduces them.
+CORE_PANEL_SIZE = 50
 GENE_INFO_CACHE = Path(__file__).parent / "GSE153960" / "gene_info_cache.json"
 
 
@@ -1297,14 +1350,17 @@ def core_panel_ensg(protein_coding_only: bool = False) -> dict[str, str]:
 
 
 def core_panel_entrez() -> dict[str, int]:
-    """Return Entrez IDs of the 25-gene panel's protein-coding members.
+    """Return Entrez IDs of the panel members that have one, non-coding genes included.
+
+    Entrez-keyed cohorts list non-coding genes under their Entrez IDs too, so a
+    protein-coding restriction dropped genes those cohorts measure.
 
     Returns:
         ``{symbol: entrez}`` in SHAP rank order.
     """
-    syms = core_panel_symbols(protein_coding_only=True)
+    syms = core_panel_symbols()
     info = gene_info(syms)
-    return {s: int(info[s]["entrez"]) for s in syms}
+    return {s: int(info[s]["entrez"]) for s in syms if info[s]["entrez"]}
 
 
 GENE_PROFILING_CSV = Path(__file__).parent / "GSE153960" / "gene_profiling_summary.csv"

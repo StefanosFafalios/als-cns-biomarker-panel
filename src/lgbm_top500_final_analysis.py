@@ -33,7 +33,8 @@ import numpy as np
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
-from utils import adjust_colsample, load_dataset
+from utils import adjust_colsample, drop_if_other_ranking, load_dataset
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
@@ -329,7 +330,7 @@ def _plot_curve_top50(
         linewidth=1.2,
         label=f"Peak: k={best_k}, AUC={best_auc:.4f}",
     )
-    K_STAR = 25
+    K_STAR = CORE_PANEL_SIZE
     if len(auc50) >= K_STAR:
         ax.axvline(
             K_STAR,
@@ -539,6 +540,7 @@ def main() -> None:
 
     # Incremental curve
     print("\n--- Incremental CV curve ---")
+    drop_if_other_ranking(SCRIPT_DIR / f"{PREFIX}curve_features.txt", ranked_names, CURVE_CSV, CURVE_CKPT)
     if CURVE_CSV.exists() and not CURVE_CKPT.exists():
         curve_scores = pd.read_csv(CURVE_CSV)["mean_auc"].tolist()
         print(f"  Loaded completed curve ({len(curve_scores)} points)")
@@ -553,6 +555,7 @@ def main() -> None:
     # LOO
     print("\n--- LOO ---")
     top50 = ranked_names[:TOP_LOO]
+    drop_if_other_ranking(SCRIPT_DIR / f"{PREFIX}loo_features.txt", top50, LOO_CSV, LOO_CKPT)
     if LOO_CSV.exists() and not LOO_CKPT.exists():
         loo_results = pd.read_csv(LOO_CSV).to_dict("records")
         print(f"  Loaded completed LOO ({len(loo_results)} features)")

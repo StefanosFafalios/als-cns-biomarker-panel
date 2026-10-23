@@ -52,7 +52,8 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 from sklearn.metrics import roc_auc_score  # noqa: E402
-from utils import PanelLGBMClassifier, load_dataset  # noqa: E402
+from utils import PanelLGBMClassifier, collapse_duplicate_rows, load_dataset, normalise_symbols  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -407,7 +408,8 @@ def _load_gse122649() -> tuple[np.ndarray, list[str], np.ndarray]:
     X_raw = np.stack([sample_counts[g] for g in gsm_ids])
     y_full = np.array([diag_map.get(gsm_to_diag[g], -1) for g in gsm_ids])
     valid = y_full >= 0
-    return np.log1p(X_raw[valid]), gene_symbols, y_full[valid]
+    genes = collapse_duplicate_rows(normalise_symbols(pd.DataFrame(X_raw[valid].T, index=gene_symbols), "GSE122649"))
+    return np.log1p(genes.to_numpy().T), [str(g) for g in genes.index], y_full[valid]
 
 
 def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
@@ -658,7 +660,7 @@ def main() -> None:
     print("=" * 70)
 
     params_raw = selected_lgbm_params()
-    params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(params_raw, n_jobs=-1, verbose=-1)
 
     # -----------------------------------------------------------------------
     # Load panel
@@ -692,10 +694,10 @@ def main() -> None:
     _shared = dict(m=merged, fold=fold, params=params)
 
     # -----------------------------------------------------------------------
-    # Baseline: all 25 genes
+    # Baseline: the full panel
     # -----------------------------------------------------------------------
-    print("\nComputing baseline (25-gene panel) ...")
-    active: list[int] = list(range(25))
+    print(f"\nComputing baseline ({CORE_PANEL_SIZE}-gene panel) ...")
+    active: list[int] = list(range(CORE_PANEL_SIZE))
     baseline_wmean, baseline_cohort = _wmean_auc(active, **_shared)
     print(f"  Baseline W.mean AUC = {baseline_wmean:.4f}")
     for cname, auc in baseline_cohort.items():
@@ -710,7 +712,7 @@ def main() -> None:
     history.append(
         {
             "step": 0,
-            "panel_size": 25,
+            "panel_size": CORE_PANEL_SIZE,
             "dropped": None,
             "D_CV": None,
             "wmean": baseline_wmean,
@@ -873,7 +875,7 @@ def main() -> None:
             for c in names
         ],
         "",
-        "Baseline (25-gene panel):",
+        f"Baseline ({CORE_PANEL_SIZE}-gene panel):",
         f"  W.mean AUC = {baseline_wmean:.4f}",
         *[f"  {k}: {v:.4f}" for k, v in baseline_cohort.items()],
         "",

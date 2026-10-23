@@ -30,6 +30,7 @@ ALS_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import critical_panel_label, critical_panel_size, load_dataset  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 # Panel size is derived, so every reader-facing denominator must be too.
@@ -146,7 +147,6 @@ def main() -> None:
     params = selected_lgbm_params()
     params.update(
         {
-            "colsample_bytree": 1.0,
             "n_jobs": -1,
             "verbose": -1,
             "random_state": RANDOM_STATE,
@@ -192,7 +192,7 @@ def main() -> None:
     Xte_16 = Xsrp_log[:, m16_te_cols]
 
     # Train and predict
-    print("Training 25-gene LGBM ...")
+    print(f"Training {CORE_PANEL_SIZE}-gene LGBM ...")
     scores_25 = _train_predict(Xtr_25, y_train, Xte_25, params)
     auc_25 = float(roc_auc_score(y_srp, scores_25))
     ci_lo_25, ci_hi_25 = _bootstrap_auc(y_srp, scores_25)

@@ -44,9 +44,10 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from nested_panel_cv import _rank  # noqa: E402
 from utils import load_dataset  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 N_BOOTSTRAP = 100
-TOP_K = 25
+TOP_K = CORE_PANEL_SIZE
 RANDOM_STATE = 42
 BOOTSTRAPS_JSON = SCRIPT_DIR / "stability_selection_bootstraps.json"
 _SFM_RANKING = SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv"

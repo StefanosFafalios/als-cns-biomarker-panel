@@ -26,6 +26,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
@@ -87,7 +88,8 @@ COMPARTMENTS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-# Known ALS-associated features removed at iteration 0
+# The 18 features with published ALS association removed since the first pipeline (a literature
+# check of an early model's genes); KNOWN_ALS_BASES adds known_als_exclusion.csv to them.
 KNOWN_ALS_FEATURES: frozenset[str] = frozenset(
     {
         "ENSG00000133063.16",  # CHIT1
@@ -131,6 +133,17 @@ KNOWN_ALS_SYMBOLS: dict[str, str] = {
     "ENSG00000225972.1": "MTND1P23",
     "ENSG00000248527.1": "MTATP6P1",
 }
+
+# Known ALS genes removed before discovery (build_known_als_exclusion.py), by Ensembl base ID
+KNOWN_ALS_BASES: frozenset[str] = frozenset(
+    pd.read_csv(SCRIPT_DIR / "known_als_exclusion.csv").ensembl_id
+) | {f.split(".")[0] for f in KNOWN_ALS_FEATURES}
+
+
+def known_als_features(names: list[str]) -> frozenset[str]:
+    """The members of ``names`` (versioned Ensembl IDs) that are known ALS genes."""
+    return frozenset(n for n in names if n.split(".")[0] in KNOWN_ALS_BASES)
+
 
 CONTAMINATION_SYMBOLS: list[str] = [
     # Erythrocyte / reticulocyte
@@ -712,7 +725,7 @@ def main() -> None:
         # Drop known-ALS and contamination genes and cache the result, which every later
         # step reads. This is bit for bit the matrix the study used (874 x 47,822).
         pool, _ = _resolve_contamination_pool({n.split(".")[0]: n for n in names_cr})
-        keep = [i for i, n in enumerate(names_cr) if n not in (KNOWN_ALS_FEATURES | pool)]
+        keep = [i for i, n in enumerate(names_cr) if n not in (known_als_features(names_cr) | pool)]
         X_std, names_cr = X_std[:, keep], [names_cr[i] for i in keep]
         np.save(_PREFILTER_X_NPY, X_std)
         _PREFILTER_NAMES_TXT.write_text("\n".join(names_cr))
@@ -725,13 +738,13 @@ def main() -> None:
     print("=" * 65)
     contamination_pool, symbol_map = _resolve_contamination_pool(base_to_full)
     symbol_map.update(KNOWN_ALS_SYMBOLS)
-    discard_candidates: frozenset[str] = KNOWN_ALS_FEATURES | contamination_pool
+    discard_candidates: frozenset[str] = known_als_features(names_cr) | contamination_pool
 
     # =========================================================================
     # Load iteration log
     # =========================================================================
     iter_log: list[dict] = []
-    discard: set[str] = set(KNOWN_ALS_FEATURES)
+    discard: set[str] = set(known_als_features(names_cr))
 
     if ITER_LOG_CSV.exists():
         log_df = pd.read_csv(ITER_LOG_CSV)
@@ -753,8 +766,7 @@ def main() -> None:
         print("\n" + "=" * 65)
         print(
             f"ITERATION {iteration}  |  DISCARD={len(discard)}  "
-            f"(ALS={len(KNOWN_ALS_FEATURES)}, "
-            f"artifacts={len(discard) - len(KNOWN_ALS_FEATURES)})"
+            f"(known ALS genes excluded upfront: {len(KNOWN_ALS_BASES)})"
         )
         print("=" * 65)
 

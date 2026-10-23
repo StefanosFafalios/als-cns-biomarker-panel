@@ -22,11 +22,9 @@ Outputs
 
 from __future__ import annotations
 
-import gzip
 import json
 import re
 import sys
-import tarfile
 import time
 import warnings
 from pathlib import Path
@@ -57,16 +55,6 @@ _AUDIT_CSV = SCRIPT_DIR / "shap500_artifact_audit.csv"
 
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
-
-_GSE122649_RAW_TAR = ALS_DIR_RES / "GSE122649" / "GSE122649_RAW.tar"
-_SOFT_URL_122649 = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/soft/"
-    "GSE122649_family.soft.gz"
-)
-_RAW_URL_122649 = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/suppl/"
-    "GSE122649_RAW.tar"
-)
 
 
 # ---------------------------------------------------------------------------
@@ -261,72 +249,11 @@ def _download_if_needed(url: str, dest: Path) -> None:
     print(f"  Saved {dest.stat().st_size / 1e6:.0f} MB → {dest}")
 
 
-def _parse_122649_soft() -> dict[str, str]:
-    from utils import geo_soft_text
-
-    content = geo_soft_text("GSE122649")
-    samples = re.split(r"\^SAMPLE", content)[1:]
-    meta: dict[str, str] = {}
-    for s in samples:
-        acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
-        diag_m = re.search(r"!Sample_characteristics_ch1 = diagnosis: (.+)", s)
-        if acc_m and diag_m:
-            meta[acc_m.group(1)] = diag_m.group(1).strip()
-    return meta
-
-
 def _load_gse122649() -> tuple[np.ndarray, list[str], np.ndarray]:
-    """GSE122649 log1p raw counts — (X_log1p, gene_symbols, y)."""
-    _download_if_needed(_RAW_URL_122649, _GSE122649_RAW_TAR)
-    gsm_to_diag = _parse_122649_soft()
+    """GSE122649 log1p counts with current HGNC symbols -> (X, symbols, y)."""
+    from iterative_panel_elimination import _load_gse122649 as load  # the one symbol-normalised loader
 
-    gene_symbols: list[str] = []
-    sample_counts: dict[str, np.ndarray] = {}
-
-    with tarfile.open(_GSE122649_RAW_TAR, "r") as tf:
-        for member in tf.getmembers():
-            fname = member.name
-            gsm_m = re.search(r"(GSM\d+)", fname)
-            if not gsm_m or gsm_m.group(1) not in gsm_to_diag:
-                continue
-            gsm = gsm_m.group(1)
-            fobj = tf.extractfile(member)
-            if fobj is None:
-                continue
-            raw = fobj.read()
-            if fname.endswith(".gz"):
-                raw = gzip.decompress(raw)
-            lines = raw.decode("utf-8", errors="ignore").splitlines()
-            rows = []
-            for line in lines[1:]:
-                line = line.strip()
-                if not line or line.startswith("__"):
-                    continue
-                parts = line.split("\t")
-                if len(parts) < 2:
-                    continue
-                try:
-                    count = float(parts[1])
-                except ValueError:
-                    continue
-                rows.append((parts[0].strip('"').strip("'"), count))
-            if not rows:
-                continue
-            syms = [r[0] for r in rows]
-            counts = np.array([r[1] for r in rows], dtype=np.float32)
-            if not gene_symbols:
-                gene_symbols = syms
-            elif len(syms) != len(gene_symbols):
-                continue
-            sample_counts[gsm] = counts
-
-    gsm_ids = list(sample_counts.keys())
-    X_raw = np.stack([sample_counts[g] for g in gsm_ids], axis=0)
-    diag_map = {"sALS": 1, "sALS/FTD": 1, "Non-neurological control": 0}
-    y = np.array([diag_map.get(gsm_to_diag[g], -1) for g in gsm_ids])
-    valid = y >= 0
-    X_log = np.log1p(X_raw[valid].astype(np.float32))
-    return X_log, gene_symbols, y[valid]
+    return load()
 
 
 # ---------------------------------------------------------------------------
@@ -682,7 +609,6 @@ def main() -> None:
 
     panel_df = pd.read_csv(_PANEL_CSV)
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
     rng = np.random.default_rng(RANDOM_STATE)
 
     # Build clean replacement lookup

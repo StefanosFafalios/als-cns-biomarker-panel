@@ -34,6 +34,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import critical_panel_symbols, load_dataset  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
@@ -159,7 +160,7 @@ def main() -> None:
 
     rows = [
         ("A. Composition only (6 cell types)", auc_comp),
-        ("B. Panel only (25 genes)", auc_panel),
+        (f"B. Panel only ({CORE_PANEL_SIZE} genes)", auc_panel),
         ("C. Panel + composition", auc_both),
         ("D. Panel residualised on composition", auc_resid),
         (f"E. Critical panel only ({cgenes.shape[1]} genes)", auc_cpanel),

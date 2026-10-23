@@ -9,7 +9,7 @@ script measures both effects without touching any panel definition:
    incremental curve (``lgbm_top500_final_analysis.py``), scored with
    sample-level ``StratifiedKFold`` and with donor-grouped
    ``StratifiedGroupKFold`` over seeds 42..51.
-2. GPL16791 zero-shot -- the ``panel_critical_eval.py`` estimator, scored on the
+2. GPL16791 zero-shot -- Figure 3's estimator (combined_validation_roc.py), scored on the
    full cohort and on the samples whose donor is absent from GPL24676. The
    scaler is fit on training data, so dropping test samples needs no refit.
    The three- and four-cohort equal-weight means are recomputed with the
@@ -37,6 +37,8 @@ ALS_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(ALS_DIR))
 sys.path.insert(0, str(SCRIPT_DIR))
 
+from combined_validation_roc import N_SEEDS as FIG3_SEEDS  # noqa: E402
+from cross_cohort_substitution import _ensemble_scores  # noqa: E402
 from panel_critical_eval import _bootstrap_auc  # noqa: E402
 from utils import (  # noqa: E402
     PanelLGBMClassifier,
@@ -46,6 +48,7 @@ from utils import (  # noqa: E402
     load_dataset,
     zero_shot_scale,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 from utils import selected_lgbm_params  # noqa: E402
 PARAMS = selected_lgbm_params()
@@ -77,13 +80,13 @@ def _cv_auc(X: np.ndarray, y: np.ndarray, splitter, groups=None) -> float:
 
 def _published_zero_shot() -> dict[str, dict[str, float]]:
     """Read the per-cohort zero-shot AUCs (25-gene, critical) from Figure 3's artefact."""
-    out: dict[str, dict[str, float]] = {"25-gene": {}, "critical": {}}
+    out: dict[str, dict[str, float]] = {f"{CORE_PANEL_SIZE}-gene": {}, "critical": {}}
     for m in re.finditer(
         r"^(\S+)\s+\d+\s+([\d.]+)\s+\[[^\]]+\]\s+([\d.]+)",
         ROC_STATS.read_text(),
         re.MULTILINE,
     ):
-        out["25-gene"][m.group(1)] = float(m.group(2))
+        out[f"{CORE_PANEL_SIZE}-gene"][m.group(1)] = float(m.group(2))
         out["critical"][m.group(1)] = float(m.group(3))
     missing = set(FOUR) - set(out["critical"])
     if missing:
@@ -93,7 +96,7 @@ def _published_zero_shot() -> dict[str, dict[str, float]]:
 
 def main() -> None:
     panel25 = pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").feature.tolist()
-    panels = {"25-gene": panel25, "critical": critical_panel_features()}
+    panels = {f"{CORE_PANEL_SIZE}-gene": panel25, "critical": critical_panel_features()}
     crit_label = critical_panel_label()
     rows: list[dict] = []
 
@@ -137,17 +140,15 @@ def main() -> None:
     base_col = {c.split(".")[0]: j for j, c in enumerate(ds24.X.columns)}
     X24_log = np.log1p(ds24.X.to_numpy(dtype=np.float32))
     X16_log = np.log1p(ds16.X.to_numpy(dtype=np.float32))
-    zs_params = dict(PARAMS, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    zs_params = dict(PARAMS, n_jobs=-1, verbose=-1)
     published = _published_zero_shot()
 
     zs: dict[str, dict[str, float]] = {}
     for label, feats in panels.items():
         cols = [base_col[f.split(".")[0]] for f in feats]
         Ztr, Zte = zero_shot_scale(X24_log[:, cols], X16_log[:, cols], "GPL16791")
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            clf = PanelLGBMClassifier(**zs_params).fit(Ztr, y24)
-        scores = clf.predict_proba(Zte)[:, 1]
+        # Figure 3's seed ensemble: above 25 genes colsample < 1 makes the trees seed-dependent
+        scores = _ensemble_scores(Ztr, y24, Zte, zs_params, seeds=tuple(range(FIG3_SEEDS)))
         full = float(roc_auc_score(y16, scores))
         # The full-cohort value must reproduce Figure 3 before the subset means anything.
         if abs(full - published[label]["GPL16791"]) > 5e-5:
@@ -173,11 +174,11 @@ def main() -> None:
     cv = df[df.analysis == "internal_cv"]
     shared16 = np.unique(subj16[~disjoint])
     lines = [
-        "Donor-leakage sensitivity — 25-gene and critical panels",
+        f"Donor-leakage sensitivity — {CORE_PANEL_SIZE}-gene and critical panels",
         "=" * 64,
         f"GPL24676 (discovery): n={len(y24)} ({y24.sum()} ALS / {(y24 == 0).sum()} control) "
         f"from {len(np.unique(subj24))} donors",
-        f"Sample-level folds (seed 42, mean over folds): {leak['25-gene']:.1%} of test "
+        f"Sample-level folds (seed 42, mean over folds): {leak[f'{CORE_PANEL_SIZE}-gene']:.1%} of test "
         "samples have a same-donor sample in training",
         "",
         "1. Internal 5-fold CV AUC (discovery matrix, curve params)",
@@ -202,7 +203,7 @@ def main() -> None:
     zs_df = df[df.analysis == "gpl16791_zero_shot"]
     lines += [
         "",
-        "2. GPL16791 zero-shot (single LightGBM, as panel_critical_eval.py)",
+        f"2. GPL16791 zero-shot ({FIG3_SEEDS}-seed LightGBM ensemble, as Figure 3)",
         f"   {len(shared16)} of {len(np.unique(subj16))} GPL16791 donors also appear in GPL24676; "
         f"their {int((~disjoint).sum())} samples are removed in the donor-disjoint row",
         f"   donor-disjoint cohort: n={int(disjoint.sum())} "

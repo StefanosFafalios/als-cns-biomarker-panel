@@ -37,6 +37,14 @@ _THEME: dict[str, str] = {
     "MCEE": "Microglial", "SOHLH2": "Microglial",
     "ALDH1A2": "Vascular/BBB",  # provisional (Step 104), review with the manuscript
     "GSTM1": "Neurodegeneration",  # provisional (Step 104), review with the manuscript
+    # provisional (Step 106, 50-gene panel; NCBI gene summaries), review with the manuscript
+    "CTSH": "Microglial",  # lysosomal cysteine protease
+    "NDUFB1": "Neurodegeneration",  # mitochondrial complex I subunit
+    "AKR1C2": "Neurodegeneration",  # NAD(P)H aldo-keto reductase, detoxification (as GSTM1)
+    "TNFRSF10D": "Neuroinflammation",  # TRAIL decoy receptor
+    "SLFN13": "Neuroinflammation",  # schlafen family endoribonuclease
+    "CNKSR1": "Other", "TM4SF18": "Other", "RGS11": "Other",
+    "RPL23": "Other", "OR4F16": "Other", "TEX13D": "Other",
 }
 # Themes are curated by hand: stop rather than draw an uncurated panel gene in grey.
 if _missing := sorted(set(_PROTEIN_CODING) - set(_THEME)):
@@ -47,6 +55,7 @@ _COLOR_THEME = {
     "Neuroinflammation": "#C62828",
     "Neurodegeneration": "#6A1B9A",
     "Microglial": "#2E7D32",
+    "Other": "#8D6E63",  # curated as fitting none of the four (uncurated genes stop the script)
 }
 
 

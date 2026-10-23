@@ -13,7 +13,6 @@ from __future__ import annotations
 import gzip
 import re
 import sys
-import tarfile
 import warnings
 from pathlib import Path
 
@@ -34,15 +33,6 @@ RANDOM_STATE = 42
 # Entrez IDs for the 15 protein-coding panel genes (from blood_validation_gse234297.py)
 _PC_ENTREZ: dict[str, int] = core_panel_entrez()
 
-_GSE122649_TAR = ALS_DIR / "resources" / "GSE122649" / "GSE122649_RAW.tar"
-_GSE122649_SOFT_URL = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/soft/"
-    "GSE122649_family.soft.gz"
-)
-_GSE122649_RAW_URL = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/suppl/"
-    "GSE122649_RAW.tar"
-)
 _GSE234297_COUNTS = (
     ALS_DIR / "resources" / "GSE234297" / "suppl" / "GSE234297_gene_raw_counts.txt.gz"
 )
@@ -63,7 +53,6 @@ def _fit_models(X_tr: np.ndarray, y_tr: np.ndarray):
     from utils import PanelLGBMClassifier as LGBMClassifier
 
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
     lgbm = LGBMClassifier(**params)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
@@ -162,67 +151,10 @@ def _load_gpl24676_by_ensg(
 
 
 def _load_gse122649() -> tuple[np.ndarray, list[str], np.ndarray]:
-    """Load GSE122649 raw count tar + SOFT metadata. Return (X_log, gene_syms, y)."""
+    """GSE122649 log1p counts with current HGNC symbols -> (X, symbols, y)."""
+    from iterative_panel_elimination import _load_gse122649 as load  # the one symbol-normalised loader
 
-    from utils import cached_download
-
-    cached_download(_GSE122649_RAW_URL, _GSE122649_TAR, "GSE122649_RAW.tar")
-
-    print("  Fetching GSE122649 SOFT metadata ...")
-    from utils import geo_soft_text
-
-    content = geo_soft_text("GSE122649")
-    samples = re.split(r"\^SAMPLE", content)[1:]
-    gsm_to_diag: dict[str, str] = {}
-    for s in samples:
-        acc = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
-        diag = re.search(r"!Sample_characteristics_ch1 = diagnosis: (.+)", s)
-        if acc and diag:
-            gsm_to_diag[acc.group(1)] = diag.group(1).strip()
-
-    gene_symbols: list[str] = []
-    sample_counts: dict[str, np.ndarray] = {}
-
-    with tarfile.open(_GSE122649_TAR, "r") as tf:
-        for member in tf.getmembers():
-            gsm_m = re.search(r"(GSM\d+)", member.name)
-            if not gsm_m or gsm_m.group(1) not in gsm_to_diag:
-                continue
-            gsm = gsm_m.group(1)
-            fobj = tf.extractfile(member)
-            if fobj is None:
-                continue
-            raw = fobj.read()
-            if member.name.endswith(".gz"):
-                raw = gzip.decompress(raw)
-            rows = []
-            for line in raw.decode("utf-8", errors="ignore").splitlines()[1:]:
-                line = line.strip()
-                if not line or line.startswith("__"):
-                    continue
-                parts = line.split("\t")
-                if len(parts) < 2:
-                    continue
-                try:
-                    rows.append((parts[0].strip('"').strip("'"), float(parts[1])))
-                except ValueError:
-                    continue
-            if not rows:
-                continue
-            syms = [r[0] for r in rows]
-            counts = np.array([r[1] for r in rows], dtype=np.float32)
-            if not gene_symbols:
-                gene_symbols = syms
-            elif len(syms) != len(gene_symbols):
-                continue
-            sample_counts[gsm] = counts
-
-    gsm_ids = list(sample_counts.keys())
-    X_raw = np.stack([sample_counts[g] for g in gsm_ids])
-    diag_map = {"sALS": 1, "sALS/FTD": 1, "Non-neurological control": 0}
-    y = np.array([diag_map.get(gsm_to_diag[g], -1) for g in gsm_ids])
-    valid = y >= 0
-    return np.log1p(X_raw[valid].astype(np.float32)), gene_symbols, y[valid]
+    return load()
 
 
 # ---------------------------------------------------------------------------

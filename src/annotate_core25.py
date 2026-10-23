@@ -23,6 +23,7 @@ import requests
 
 ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -184,7 +185,7 @@ def main() -> None:
     ensg_only = [(i, s) for i, s in enumerate(symbols) if s.startswith("ENSG")]
 
     print("=" * 65)
-    print("Core-25 Gene Annotation")
+    print(f"Core-{CORE_PANEL_SIZE} Gene Annotation")
     print("=" * 65)
 
     print("\n[1/4] MyGeneInfo batch query ...")
@@ -252,7 +253,7 @@ def main() -> None:
     # Human-readable text summary
     txt_out = SCRIPT_DIR / "core25_annotations.txt"
     lines = [
-        "Core 25-gene Panel — Biological Annotations",
+        f"Core {CORE_PANEL_SIZE}-gene Panel — Biological Annotations",
         "=" * 65,
         "",
     ]

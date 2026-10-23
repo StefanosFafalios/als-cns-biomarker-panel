@@ -5,8 +5,8 @@ that become discriminative when combined.
 Pool: genes whose univariate AUC < AUC_THRESHOLD from gene_profiling_summary.csv.
 Tests all C(n,2), C(n,3), C(n,4) combinations of pool genes.
 
-Model: LightGBM with top-500 hyperparams, but colsample_bytree=1.0 so that all
-features in a k-gene combination participate in every tree split.
+Model: LightGBM with top-500 hyperparams; utils.PanelLGBMClassifier sets colsample_bytree to 1.0 for
+these small combinations, so all k genes participate in every tree split.
 
 Synergy score = combo_AUC − max(individual AUC of genes in combo).
 A positive synergy score means the combination adds information beyond the best
@@ -241,10 +241,8 @@ def main() -> None:
     print("Synergy Analysis — Non-predictive Gene Combinations")
     print("=" * 65)
 
-    # Load params — override colsample_bytree so all k features participate
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
-    print("\nModel: top-500 params with colsample_bytree=1.0")
+    print("\nModel: top-500 params, colsample per utils.PanelLGBMClassifier: about 25 genes per tree, 1.0 at 25 genes or fewer")
 
     print("\nLoading data ...")
     X, features, symbols, y_int = _load_data()

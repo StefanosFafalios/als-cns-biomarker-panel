@@ -14,6 +14,8 @@ Compares the critical panel with random gene sets of the same size drawn from th
     platform gaps, no more and no fewer. With every panel gene measured everywhere this is
     a draw from the genes measured in all nine datasets (the rule before 2026-10-08, when
     ENSG00000280893, which has no HGNC symbol, joined the panel and is absent from the arrays).
+    A pattern shared by few pool genes is still matched exactly, never widened to other
+    patterns; the statistics file gives each stratum's size.
 
 The critical panel was chosen on these datasets, so the comparison favours it: a
 fresh split removes split-selection optimism, not gene-selection optimism.
@@ -39,7 +41,6 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 B = 1000
 RANDOM_STATE = 42
-MIN_STRATUM = 20  # pool genes needed per measurement pattern for a meaningful draw
 
 
 Full = dict[str, tuple[np.ndarray, dict[str, int], np.ndarray, np.ndarray]]
@@ -141,7 +142,7 @@ def main(b: int = B) -> None:
     for g in pool:
         strata.setdefault(pattern(g), []).append(g)
     for p, n in need.items():
-        assert len(strata.get(p, [])) >= max(n, MIN_STRATUM), f"too few pool genes measured like {p}"
+        assert len(strata.get(p, [])) >= n, f"too few pool genes measured like {p}"  # small strata stay exact
     real, fold = score(pbases)  # donors/labels are gene-independent, so one split serves all sets
     print(f"critical panel W.mean {real:.4f}", flush=True)
     rng = np.random.default_rng(RANDOM_STATE)

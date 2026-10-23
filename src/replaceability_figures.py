@@ -291,7 +291,7 @@ def fig_substitution_roc() -> tuple[Path, dict]:
     """
     from sklearn.metrics import roc_auc_score, roc_curve
 
-    params = dict(selected_lgbm_params(), colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(selected_lgbm_params(), n_jobs=-1, verbose=-1)
     subs = json.loads(_SUB_JSON.read_text())  # {cohort: [[missing, symbol, ensg], ...]}
     panel = pd.read_csv(_PANEL_CSV)
     bases = dict(zip(panel["symbol"], panel["feature"].str.split(".").str[0]))

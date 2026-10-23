@@ -35,7 +35,6 @@ from __future__ import annotations
 import gzip
 import re
 import sys
-import tarfile
 import warnings
 from pathlib import Path
 
@@ -51,6 +50,7 @@ from utils import (  # noqa: E402
     load_dataset,
     zero_shot_scale,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 # Panel size is derived, so every reader-facing label must be too.
 from utils import selected_lgbm_params  # noqa: E402
@@ -104,12 +104,6 @@ def _parse_drop_steps(text: str) -> dict[str, int]:
 
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
-_GSE122649_DIR = ALS_DIR / "resources" / "GSE122649"
-_GSE122649_RAW_TAR = _GSE122649_DIR / "GSE122649_RAW.tar"
-_GSE122649_SOFT_URL = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/"
-    "soft/GSE122649_family.soft.gz"
-)
 
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2_000
@@ -268,63 +262,11 @@ def _load_gse76220() -> tuple[np.ndarray, list[str], np.ndarray]:
     )
 
 
-def _parse_gse122649_soft() -> dict[str, str]:
-    from utils import geo_soft_text
-
-    content = geo_soft_text("GSE122649")
-    meta: dict[str, str] = {}
-    for s in re.split(r"\^SAMPLE", content)[1:]:
-        acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
-        diag_m = re.search(r"!Sample_characteristics_ch1 = diagnosis: (.+)", s)
-        if acc_m and diag_m:
-            meta[acc_m.group(1)] = diag_m.group(1).strip()
-    return meta
-
-
 def _load_gse122649() -> tuple[np.ndarray, list[str], np.ndarray]:
-    if not _GSE122649_RAW_TAR.exists():
-        raise FileNotFoundError(f"GSE122649_RAW.tar not found at {_GSE122649_RAW_TAR}")
-    gsm_to_diag = _parse_gse122649_soft()
-    diag_map = {"sALS": 1, "sALS/FTD": 1, "Non-neurological control": 0}
-    gene_symbols: list[str] = []
-    sample_counts: dict[str, np.ndarray] = {}
-    with tarfile.open(_GSE122649_RAW_TAR, "r") as tf:
-        for member in tf.getmembers():
-            gsm_m = re.search(r"(GSM\d+)", member.name)
-            if not gsm_m or gsm_m.group(1) not in gsm_to_diag:
-                continue
-            gsm = gsm_m.group(1)
-            f_obj = tf.extractfile(member)
-            if f_obj is None:
-                continue
-            raw = f_obj.read()
-            if member.name.endswith(".gz"):
-                raw = gzip.decompress(raw)
-            rows = []
-            for line in raw.decode("utf-8", errors="ignore").splitlines()[1:]:
-                line = line.strip()
-                if not line or line.startswith("__"):
-                    continue
-                parts = line.split("\t")
-                if len(parts) < 2:
-                    continue
-                try:
-                    rows.append((parts[0].strip('"').strip("'"), float(parts[1])))
-                except ValueError:
-                    continue
-            if not rows:
-                continue
-            syms_here = [r[0] for r in rows]
-            if not gene_symbols:
-                gene_symbols = syms_here
-            elif len(syms_here) != len(gene_symbols):
-                continue
-            sample_counts[gsm] = np.array([r[1] for r in rows], dtype=np.float32)
-    gsm_ids = list(sample_counts.keys())
-    X_raw = np.stack([sample_counts[g] for g in gsm_ids])
-    y_full = np.array([diag_map.get(gsm_to_diag[g], -1) for g in gsm_ids])
-    valid = y_full >= 0
-    return np.log1p(X_raw[valid]), gene_symbols, y_full[valid]
+    """GSE122649 log1p counts with current HGNC symbols -> (X, symbols, y)."""
+    from iterative_panel_elimination import _load_gse122649 as load  # the one symbol-normalised loader
+
+    return load()
 
 
 def _load_srp064478() -> tuple[np.ndarray, list[str], np.ndarray]:
@@ -479,9 +421,8 @@ def main() -> None:
     print("=" * 70)
 
     params_raw = selected_lgbm_params()
-    # colsample_bytree=1.0: with 24-25 features, fractional column sampling would
-    # subsample to ~1.6 features per tree. n_jobs handled by LGBM internal threading.
-    params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    # n_jobs handled by LGBM internal threading
+    params = dict(params_raw, n_jobs=-1, verbose=-1)
     # random_state in params_raw is overridden per-seed inside _ensemble_scores
 
     # Sample-size weighted scheme (sensitivity)
@@ -565,7 +506,7 @@ def main() -> None:
     }
     n_per_cohort = {c: len(y_per_cohort[c]) for c in _N_COHORT}
     avail_per_cohort = {
-        "GPL16791": list(range(25)),
+        "GPL16791": list(range(len(sym25))),
         "GSE76220": avail76,
         "GSE122649": avail122,
         "SRP064478": avail_srp,
@@ -588,7 +529,7 @@ def main() -> None:
 
     # ---- Baseline: all 25 genes (seed-averaged ensemble scores per cohort) ----
     print(f"\nComputing baseline ensemble scores ({N_SEEDS} seeds × 4 cohorts) ...")
-    full_idx = list(range(25))
+    full_idx = list(range(len(sym25)))
     baseline_scores = _panel_ensemble_scores(full_idx, **score_kwargs)
     baseline_aucs = {
         c: float(roc_auc_score(y_per_cohort[c], baseline_scores[c])) for c in _N_COHORT
@@ -604,7 +545,7 @@ def main() -> None:
     print(f"\nComputing LOO ensemble scores for {len(sym25)} genes ...")
     loo_scores: dict[int, dict[str, np.ndarray]] = {}
     avail_in_cohort: dict[int, dict[str, bool]] = {}
-    for g in range(25):
+    for g in range(len(sym25)):
         trial_idx = [i for i in full_idx if i != g]
         # Decide which cohorts need retraining: only those where g is in avail_idx.
         needs_retrain = {c: (g in avail_per_cohort[c]) for c in _N_COHORT}
@@ -655,9 +596,9 @@ def main() -> None:
         base_wmean_n_b += _W_N[c] * base_aucs_b[c]
 
     # Per-gene per-bootstrap D_ZS
-    d_zs_eq_boot = np.zeros((25, N_BOOTSTRAP), dtype=np.float32)
-    d_zs_n_boot = np.zeros((25, N_BOOTSTRAP), dtype=np.float32)
-    for g in range(25):
+    d_zs_eq_boot = np.zeros((len(sym25), N_BOOTSTRAP), dtype=np.float32)
+    d_zs_n_boot = np.zeros((len(sym25), N_BOOTSTRAP), dtype=np.float32)
+    for g in range(len(sym25)):
         loo_wmean_eq_b = np.zeros(N_BOOTSTRAP, dtype=np.float32)
         loo_wmean_n_b = np.zeros(N_BOOTSTRAP, dtype=np.float32)
         for c in _N_COHORT:
@@ -678,13 +619,13 @@ def main() -> None:
             c: float(roc_auc_score(y_per_cohort[c], loo_scores[g][c]))
             for c in _N_COHORT
         }
-        for g in range(25)
+        for g in range(len(sym25))
     }
     point_d_zs_eq = {
-        g: _wmean_aucs(point_aucs[g], _W) - baseline_wmean_eq for g in range(25)
+        g: _wmean_aucs(point_aucs[g], _W) - baseline_wmean_eq for g in range(len(sym25))
     }
     point_d_zs_n = {
-        g: _wmean_aucs(point_aucs[g], _W_N) - baseline_wmean_n for g in range(25)
+        g: _wmean_aucs(point_aucs[g], _W_N) - baseline_wmean_n for g in range(len(sym25))
     }
 
     ci_eq = {
@@ -692,26 +633,26 @@ def main() -> None:
             float(np.percentile(d_zs_eq_boot[g], 2.5)),
             float(np.percentile(d_zs_eq_boot[g], 97.5)),
         )
-        for g in range(25)
+        for g in range(len(sym25))
     }
     ci_n = {
         g: (
             float(np.percentile(d_zs_n_boot[g], 2.5)),
             float(np.percentile(d_zs_n_boot[g], 97.5)),
         )
-        for g in range(25)
+        for g in range(len(sym25))
     }
 
     # Critical set: equal-weight CI upper bound < 0
-    critical_eq = [g for g in range(25) if ci_eq[g][1] < 0]
-    critical_n = [g for g in range(25) if ci_n[g][1] < 0]
+    critical_eq = [g for g in range(len(sym25)) if ci_eq[g][1] < 0]
+    critical_n = [g for g in range(len(sym25)) if ci_n[g][1] < 0]
     # Intersection / union with sensitivity scheme
     critical_intersect = sorted(set(critical_eq) & set(critical_n))
     critical_union = sorted(set(critical_eq) | set(critical_n))
 
     # ---- Results table sorted by point D_ZS (equal) ascending ----
     results = []
-    for g in range(25):
+    for g in range(len(sym25)):
         results.append(
             {
                 "g": g,
@@ -757,10 +698,10 @@ def main() -> None:
         f"  Total N = {_TOTAL_N}",
         "",
         "Gene availability (matched in cohort vocabulary):",
-        f"  GSE76220 = {len(avail76)}/25  GSE122649 = {len(avail122)}/25  "
-        f"SRP064478 = {len(avail_srp)}/25  (GPL16791 = 25/25)",
+        f"  GSE76220 = {len(avail76)}/{len(sym25)}  GSE122649 = {len(avail122)}/{len(sym25)}  "
+        f"SRP064478 = {len(avail_srp)}/{len(sym25)}  (GPL16791 = {len(sym25)}/{len(sym25)})",
         "",
-        "Baseline W.mean AUC (all 25 genes):",
+        f"Baseline W.mean AUC (all {CORE_PANEL_SIZE} genes):",
         f"  equal-weighted    : {baseline_wmean_eq:.4f}",
         f"  size-weighted     : {baseline_wmean_n:.4f}",
         *[f"  {c}: {baseline_aucs[c]:.4f}" for c in _N_COHORT],

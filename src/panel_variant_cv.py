@@ -22,10 +22,7 @@ Outputs
 
 from __future__ import annotations
 
-import gzip
-import re
 import sys
-import tarfile
 import time
 import warnings
 from pathlib import Path
@@ -37,6 +34,7 @@ sys.path.insert(0, str(ALS_DIR))
 
 import matplotlib  # noqa: E402
 from utils import load_dataset, zero_shot_scale  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 matplotlib.use("Agg")
@@ -58,16 +56,6 @@ _AUDIT_CSV = SCRIPT_DIR / "shap500_artifact_audit.csv"
 
 RANDOM_STATE = 42
 N_FOLDS = 5
-
-_GSE122649_RAW_TAR = ALS_DIR_RES / "GSE122649" / "GSE122649_RAW.tar"
-_SOFT_URL_122649 = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/soft/"
-    "GSE122649_family.soft.gz"
-)
-_RAW_URL_122649 = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/suppl/"
-    "GSE122649_RAW.tar"
-)
 
 
 # ---------------------------------------------------------------------------
@@ -223,61 +211,11 @@ def _download_if_needed(url: str, dest: Path) -> None:
 
 
 def _load_gse122649() -> tuple[np.ndarray, dict[str, int], np.ndarray]:
-    """GSE122649 log1p raw counts → (X, sym_to_col, y)."""
-    _download_if_needed(_RAW_URL_122649, _GSE122649_RAW_TAR)
-    from utils import geo_soft_text
+    """GSE122649 log1p counts with current HGNC symbols -> (X, sym_to_col, y)."""
+    from iterative_panel_elimination import _load_gse122649 as load  # the one symbol-normalised loader
 
-    content = geo_soft_text("GSE122649")
-    samples = re.split(r"\^SAMPLE", content)[1:]
-    gsm_to_diag: dict[str, str] = {}
-    for s in samples:
-        acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
-        diag_m = re.search(r"!Sample_characteristics_ch1 = diagnosis: (.+)", s)
-        if acc_m and diag_m:
-            gsm_to_diag[acc_m.group(1)] = diag_m.group(1).strip()
-
-    gene_symbols: list[str] = []
-    sample_counts: dict[str, np.ndarray] = {}
-    with tarfile.open(_GSE122649_RAW_TAR, "r") as tf:
-        for member in tf.getmembers():
-            gsm_m = re.search(r"(GSM\d+)", member.name)
-            if not gsm_m or gsm_m.group(1) not in gsm_to_diag:
-                continue
-            gsm = gsm_m.group(1)
-            fobj = tf.extractfile(member)
-            if fobj is None:
-                continue
-            raw = fobj.read()
-            if member.name.endswith(".gz"):
-                raw = gzip.decompress(raw)
-            lines = raw.decode("utf-8", errors="ignore").splitlines()
-            rows = []
-            for line in lines[1:]:
-                parts = line.strip().split("\t")
-                if len(parts) < 2:
-                    continue
-                try:
-                    rows.append((parts[0].strip("\"'"), float(parts[1])))
-                except ValueError:
-                    continue
-            if not rows:
-                continue
-            syms = [r[0] for r in rows]
-            counts = np.array([r[1] for r in rows], dtype=np.float32)
-            if not gene_symbols:
-                gene_symbols = syms
-            elif len(syms) != len(gene_symbols):
-                continue
-            sample_counts[gsm] = counts
-
-    gsm_ids = list(sample_counts.keys())
-    X_raw = np.stack([sample_counts[g] for g in gsm_ids], axis=0)
-    diag_map = {"sALS": 1, "sALS/FTD": 1, "Non-neurological control": 0}
-    y = np.array([diag_map.get(gsm_to_diag[g], -1) for g in gsm_ids])
-    valid = y >= 0
-    X_log = np.log1p(X_raw[valid].astype(np.float32))
-    sym_to_col = {s: i for i, s in enumerate(gene_symbols)}
-    return X_log, sym_to_col, y[valid]
+    X, syms, y = load()
+    return X, {s: i for i, s in enumerate(syms)}, y
 
 
 # ---------------------------------------------------------------------------
@@ -529,10 +467,10 @@ def _write_stats(
     lines = [
         "Panel Variant CV and Zero-Shot Comparison",
         "=" * 80,
-        f"Within-cohort model (top-500 params, colsample rescaled), donor-grouped 5-fold CV, random_state={RANDOM_STATE}; zero-shot model colsample 1.0",
+        f"Within-cohort model (top-500 params, colsample rescaled), donor-grouped 5-fold CV, random_state={RANDOM_STATE}; zero-shot model colsample rescaled to ~25 genes per tree",
         "Artifact-free pool: 41 confirmed artifacts excluded.",
         "",
-        "BASELINE (original 25-gene panel)",
+        f"BASELINE (original {CORE_PANEL_SIZE}-gene panel)",
         "-" * 80,
         f"  Donor-grouped 5-fold CV AUC : {baseline_cv[0]:.4f} ± {baseline_cv[1]:.4f}",
     ]
@@ -609,9 +547,9 @@ def main() -> None:
     panel_df = pd.read_csv(_PANEL_CSV).reset_index(drop=True)
     base_params = selected_lgbm_params()
     # the paper's two models: within-cohort (top-500 params, colsample rescaled by
-    # PanelLGBMClassifier, donor-grouped folds) and zero-shot (colsample 1.0)
+    # PanelLGBMClassifier, donor-grouped folds) and zero-shot (same model)
     cv_params = {**base_params, "verbose": -1, "n_jobs": -1}
-    zs_params = {**base_params, "colsample_bytree": 1.0, "verbose": -1, "n_jobs": -1}
+    zs_params = {**base_params, "verbose": -1, "n_jobs": -1}
 
     # Build replacement lookup
     print("\n[1] Building clean replacement lookup ...")
@@ -676,7 +614,7 @@ def main() -> None:
     print(f"  {len(variants)} variants to evaluate")
 
     # Evaluate baseline
-    print("\n[8] Evaluating baseline (original 25-gene panel) ...")
+    print(f"\n[8] Evaluating baseline (original {CORE_PANEL_SIZE}-gene panel) ...")
     baseline_pre_cols = baseline_info["pre_cols"]
     baseline_cv_auc, baseline_cv_std = _cv_auc(
         X_pre, y_pre, donors, baseline_pre_cols, cv_params

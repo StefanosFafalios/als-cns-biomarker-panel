@@ -29,10 +29,11 @@ import sys
 import numpy as np
 import pandas as pd
 from nested_panel_cv import (
+    CORE_PANEL_SIZE,
     ALS_DIR,
     FOLDS,
     K_CRIT,
-    KNOWN_ALS_FEATURES,
+    known_als_features,
     PANEL_SIZES,
     SCRIPT_DIR,
     SEEDS,
@@ -70,15 +71,15 @@ def main(
     assert X_all.shape == (len(y), len(all_names)), X_all.shape
 
     published = {
-        25: pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").feature.tolist(),
+        CORE_PANEL_SIZE: pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv").feature.tolist(),
         K_CRIT: critical_panel_features(),
     }
     pub_pool = pd.read_csv(SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv").feature.tolist()
     pool, _ = _resolve_contamination_pool({n.split(".")[0]: n for n in all_names})
-    discard = KNOWN_ALS_FEATURES | pool
+    discard = known_als_features(all_names) | pool
     keep = [i for i, n in enumerate(all_names) if n not in discard]
     if max_features:  # smoke: a slice plus the published genes and pool
-        must = set(published[25]) | set(published[K_CRIT]) | set(pub_pool[:600])
+        must = set(published[CORE_PANEL_SIZE]) | set(published[K_CRIT]) | set(pub_pool[:600])
         keep = sorted(set(keep[:max_features]) | {i for i in keep if all_names[i] in must})
     names = [all_names[i] for i in keep]
     X = np.asarray(X_all[:, keep], dtype=np.float32)
@@ -119,7 +120,7 @@ def main(
                     [auc(list(rng.choice(names, k, replace=False))) for _ in range(n_random)]
                 )
                 row[f"overlap_pool_fixed_{k}"] = len(set(pool_ranked[:k]) & set(published[k]))
-            print("    " + " ".join(f"{a} {row[f'{a}_25']:.4f}" for a in ARMS), flush=True)
+            print("    " + " ".join(f"{a} {row[f'{a}_{CORE_PANEL_SIZE}']:.4f}" for a in ARMS), flush=True)
             rows.append(row)
 
     suffix = "_smoke" if max_features else ""

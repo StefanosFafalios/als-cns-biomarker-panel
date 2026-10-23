@@ -15,7 +15,7 @@ Per cohort, the real panel is its genes available in that cohort, and each rando
 panel has the same size, drawn from (a) the 47,822 clean candidate genes or (b) the
 3,704-gene SFM pool, restricted to genes available in that cohort. Every panel, real or
 random, is scored with the manuscript's zero-shot model: the top-500 LightGBM parameters
-with ``colsample_bytree = 1.0`` (as in ``panel_critical_eval.py`` and
+with ``colsample_bytree`` set by ``utils.PanelLGBMClassifier`` (as in ``panel_critical_eval.py`` and
 ``external_validation_gpl16791.py``), trained on all GPL24676 samples (raw log1p), with
 ``zero_shot_scale``. The panel defaults to the published 25 genes; a second argument names
 another panel CSV (``feature``/``symbol`` columns), e.g. ``lgbm_core25_panel_annotated.csv``. The critical panel
@@ -53,7 +53,7 @@ B = 1000
 # the manuscript's zero-shot model; one thread per fit, parallel across random panels
 _ZS_PARAMS = dict(
     selected_lgbm_params(),
-    colsample_bytree=1.0, verbose=-1, n_jobs=1,
+    verbose=-1, n_jobs=1,
 )
 RANDOM_STATE = 42
 _SYMBOL_CACHE = SCRIPT_DIR / "ensg_symbol_cache.json"
@@ -66,7 +66,7 @@ FIG_COHORTS = ("GPL16791 donor-disjoint", "GSE122649", "SRP064478", "GSE76220")
 
 def _auc(xtr: np.ndarray, ytr: np.ndarray, xte: np.ndarray, yte: np.ndarray, gse: str) -> float:
     from sklearn.metrics import roc_auc_score
-    from utils import TunedLGBMClassifier as LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     ztr, zte = zero_shot_scale(xtr, xte, gse)
     with warnings.catch_warnings():
@@ -161,7 +161,7 @@ def main(b: int = B, panel_csv: str = "lgbm_core25_panel.csv") -> None:
         f"Random-panel null per cohort ({panel_csv}, {len(panel)} genes), GPL16791 split by donor overlap",
         "=" * 72,
         f"Train GPL24676 n={len(ytr)} (raw log1p, all samples); manuscript zero-shot LightGBM "
-        f"(top-500 params, colsample_bytree 1.0); zero_shot_scale; B={b} per cohort and pool.",
+        f"(top-500 params, colsample rescaled to ~25 genes per tree); zero_shot_scale; B={b} per cohort and pool.",
         f"GPL16791: {int((~disjoint).sum())} samples from "
         f"{len(set(subj16[~disjoint]))} shared donors removed in the donor-disjoint row.",
         "",

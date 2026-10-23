@@ -28,6 +28,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from utils import core_panel_directions, core_panel_symbols  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
 _PREFILTER_X   = SCRIPT_DIR / "lgbm_prefilter_X.npy"
@@ -36,27 +37,9 @@ _PANEL_CSV     = SCRIPT_DIR / "lgbm_core25_panel.csv"
 
 ALPHA = 0.01  # CI test significance level
 
-_THEME = {
-    "MECOM": "Vascular/BBB", "SERTAD1": "Neurodegeneration",
-    "FCN3": "Neuroinflammation", "PROS1": "Neuroinflammation",
-    "ANGPT2": "Vascular/BBB", "EMP1": "Neuroinflammation",
-    "TINAGL1": "Vascular/BBB", "CKMT2": "Neurodegeneration",
-    "VWF": "Vascular/BBB", "CLDN5": "Vascular/BBB",
-    "NR4A1": "Neuroinflammation", "SOHLH2": "Microglial",
-    "HEXB": "Microglial", "MCEE": "Microglial", "SLC37A2": "Microglial",
-    "ALDH1A2": "Vascular/BBB",  # provisional (Step 104), review with the manuscript
-    "GSTM1": "Neurodegeneration",  # provisional (Step 104), review with the manuscript
-}
-# Themes are curated by hand: stop rather than draw an uncurated panel gene in grey.
-if _missing := sorted(set(core_panel_symbols(protein_coding_only=True)) - set(_THEME)):
-    raise SystemExit(f"no curated theme for panel genes {_missing}; add them to _THEME")
+from string_network import _COLOR_THEME, _THEME  # noqa: E402  (one curated copy; it stops on uncurated genes)
+
 _DIRECTION = core_panel_directions(protein_coding_only=True)
-_COLOR_THEME = {
-    "Vascular/BBB": "#1565C0",
-    "Neuroinflammation": "#C62828",
-    "Neurodegeneration": "#6A1B9A",
-    "Microglial": "#2E7D32",
-}
 # STRING medium-confidence edges (combined score >= 0.4) among the panel genes, as written
 # by string_network.py (step 12a), which this step follows.
 _STRING_EDGES = {
@@ -169,7 +152,7 @@ def _plot(G: nx.Graph, symbols: list[str], string_edges: set[frozenset]) -> None
     ax.grid(axis="x", alpha=0.3)
 
     plt.suptitle(
-        "Data-driven causal network — 25-gene ALS panel (protein-coding)\n"
+        f"Data-driven causal network — {CORE_PANEL_SIZE}-gene ALS panel (protein-coding)\n"
         "GSE153960 GPL24676 · n=874 samples",
         fontsize=12,
     )

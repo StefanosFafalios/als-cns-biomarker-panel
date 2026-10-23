@@ -12,7 +12,7 @@ the resulting panel on data that took no part in choosing it:
   * pick the size with step 24a's rule: the smallest k whose class-stratified paired
     bootstrap (B=2000) upper 95% bound of the loss against the peak lies below 0.01;
   * score that panel on the held-out datasets zero-shot (discovery model trained on all
-    GPL24676 samples, utils.zero_shot_scale), next to the 25-gene panel and the final
+    GPL24676 samples, utils.zero_shot_scale), next to the CORE_PANEL_SIZE-gene panel and the final
     (in-sample) critical panel on the same data.
 
 Resumable: lodo_trim_ckpt.json is rewritten after every greedy step.
@@ -44,6 +44,7 @@ from utils import (  # noqa: E402
     critical_panel_symbols,
     zero_shot_scale,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 from utils import selected_lgbm_params  # noqa: E402
 MARGIN, N_BOOT, ALPHA, RANDOM_STATE = 0.01, 2000, 0.05, 42
@@ -128,7 +129,7 @@ def _panel_at(path: list[dict], n_genes: int, k: int) -> list[int]:
 def main(smoke: bool = False) -> None:
     warnings.filterwarnings("ignore")
     params = dict(selected_lgbm_params(),
-                  colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+                  n_jobs=-1, verbose=-1)
     ipe = SCRIPT_DIR / "iterative_panel_elimination.py"
     ns: dict = {"__name__": "notmain", "__file__": str(ipe)}
     exec(compile(ipe.read_text().split("def main(")[0], "ipe", "exec"), ns)  # noqa: S102
@@ -188,7 +189,7 @@ def main(smoke: bool = False) -> None:
         genes = [sym25[i] for i in pidx]
         _log(f"{unit} held out: peak k={peak}, rule k={core_k}: {', '.join(genes)}")
         for cname in held:
-            for pname, idx in (("LODO panel", pidx), ("25-gene", list(range(len(sym25)))),
+            for pname, idx in (("LODO panel", pidx), (f"{CORE_PANEL_SIZE}-gene", list(range(len(sym25)))),
                                ("final critical (in-sample)", [sym25.index(g) for g in crit])):
                 auc, lo, hi, n_used = zero_shot(cname, idx)
                 rows.append({"held_out": unit, "cohort": cname, "panel": pname, "k": len(idx),
@@ -209,18 +210,18 @@ def _report(df: pd.DataFrame, W: dict[str, float], sym25: list[str], crit: list[
     lines = ["Leave-one-dataset-out trimming: zero-shot AUC on the held-out datasets", "=" * 72,
              "Each panel was trimmed (step 24 greedy + step 24a rule, margin 0.01) without the held-out",
              "unit; scored zero-shot from the discovery model. 'final critical' is in-sample (reference).", "",
-             f"{'held out':<11}{'cohort':<13}{'k':>3}  {'LODO panel':<22}{'25-gene':<22}{'final critical':<16}"]
+             f"{'held out':<11}{'cohort':<13}{'k':>3}  {'LODO panel':<22}{f'{CORE_PANEL_SIZE}-gene':<22}{'final critical':<16}"]
     for (unit, cname), g in df.groupby(["held_out", "cohort"], sort=False):
         r = g.set_index("panel")
         cell = lambda p: f"{r.loc[p, 'auc']:.4f} [{r.loc[p, 'ci_lo']:.3f}, {r.loc[p, 'ci_hi']:.3f}]"  # noqa: E731
         lines.append(f"{unit:<11}{cname:<13}{int(r.loc['LODO panel', 'k']):>3}  {cell('LODO panel'):<22}"
-                     f"{cell('25-gene'):<22}{r.loc['final critical (in-sample)', 'auc']:.4f}")
+                     f"{cell(f'{CORE_PANEL_SIZE}-gene'):<22}{r.loc['final critical (in-sample)', 'auc']:.4f}")
     lines.append("")
     wm = {p: sum(W[c] * a for c, a in zip(g.cohort, g.auc)) for p, g in df.groupby("panel")}
     lines += [f"Weighted mean (unit-equal) {p:<28} {v:.4f}" for p, v in wm.items()]
     piv = df.pivot_table(index="cohort", columns="panel", values="auc")
-    better = int((piv["LODO panel"] > piv["25-gene"]).sum())
-    lines += [f"LODO panel above the 25-gene panel in {better} of {len(piv)} datasets", ""]
+    better = int((piv["LODO panel"] > piv[f"{CORE_PANEL_SIZE}-gene"]).sum())
+    lines += [f"LODO panel above the {CORE_PANEL_SIZE}-gene panel in {better} of {len(piv)} datasets", ""]
     lodo = df[df.panel == "LODO panel"].drop_duplicates("held_out")
     freq = {g: sum(g in m.split(";") for m in lodo.members) for g in sym25}
     lines += [f"Gene re-selection over {len(lodo)} held-out units (* = final critical panel):"]

@@ -12,7 +12,7 @@ Strategy
 3. For matched genes: log1p the GPL24676 raw RSEM only. GSE76220 is already log2-scale.
 4. Per-gene standardise each cohort within itself (absorbs log-base and
    length-normalisation differences between log1p counts and log2 RPKM).
-5. Train LightGBM (top-500 params, colsample_bytree=1.0) on all 874 GPL24676
+5. Train LightGBM (top-500 best params; colsample per utils.PanelLGBMClassifier) on all 874 GPL24676
    samples with the matched genes.
 6. Zero-shot predict on the 20 GSE76220 samples.
 7. Report AUC, LOO-CV AUC on GSE76220 alone (n=20), feature coverage.
@@ -288,7 +288,6 @@ def main() -> None:
     X_te_sc = _te.astype(np.float32)
 
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
 
     print(f"\nZero-shot A: {len(matched)} native genes ...")
     clf = LGBMClassifier(**params)

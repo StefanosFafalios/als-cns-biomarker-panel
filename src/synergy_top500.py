@@ -336,8 +336,7 @@ def main() -> None:
     print("=" * 68)
 
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
-    print("Model: top-500 params, colsample_bytree=1.0")
+    print("Model: top-500 params, colsample per utils.PanelLGBMClassifier: about 25 genes per tree, 1.0 at 25 genes or fewer")
 
     print("\nLoading data ...")
     X, features, y_int = _load_top500()

@@ -9,7 +9,7 @@ Strategy
 --------
 1. Resolve 15 protein-coding panel gene symbols via core25_annotations.tsv
    and map to versioned ENSG IDs in the GPL24676 training matrix.
-2. Train LightGBM (top-500 best params, colsample_bytree=1.0) on all 874
+2. Train LightGBM (top-500 best params; colsample per utils.PanelLGBMClassifier) on all 874
    GPL24676 samples using the matched protein-coding genes.
 3. Load GSE67196 raw counts; apply log1p; match to protein-coding panel
    genes by gene symbol.
@@ -147,10 +147,14 @@ def _load_gse67196(
     """
     import pandas as pd
 
+    from utils import collapse_duplicate_rows, normalise_symbols
+
     with gzip.open(_RAWCOUNT, "rt") as fh:
         counts = pd.read_csv(fh, sep="\t", index_col="GeneID").drop(
             columns=["Chr"], errors="ignore"
         )
+    # current HGNC symbols, one row per gene (as every other symbol-keyed cohort)
+    counts = collapse_duplicate_rows(normalise_symbols(counts, "GSE67196"))
 
     sample_ids = list(counts.columns)
     region_labels = ["FCX" if "_fcx" in s else "Cereb" for s in sample_ids]
@@ -378,7 +382,6 @@ def main() -> None:
 
     params = selected_lgbm_params()
     params.pop("feature_names", None)
-    params["colsample_bytree"] = 1.0  # override to use all matched genes
     params["random_state"] = RANDOM_STATE
     params["verbosity"] = -1
     clf = LGBMClassifier(**params)

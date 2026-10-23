@@ -12,7 +12,7 @@ Strategy
    is discovery-side only).
 4. Standardise with the training-set scaler (``utils.zero_shot_scale``), as the
    Figure-validations estimator in ``panel_critical_eval.py`` does.
-5. Train LightGBM (top-500 best params, colsample_bytree=1.0) on all 874
+5. Train LightGBM (top-500 best params; colsample per utils.PanelLGBMClassifier) on all 874
    GPL24676 samples.
 6. Zero-shot predict on all 636 GPL16791 samples.
 7. Report AUC, bootstrap 95 % CI, confusion matrix at Youden threshold,
@@ -36,6 +36,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset, panel25_cv_auc, zero_shot_scale
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).parent
@@ -305,7 +306,7 @@ def main() -> None:
     # CTD compartment regression is discovery-side only; the GPL16791 transfer is
     # evaluated on raw log1p, uniform with the symbol-matched cohorts (the
     # configuration that transfers best; see compartment-regression sensitivity).
-    print("\nExtracting 25-gene panel (raw log1p; no CTD) ...")
+    print(f"\nExtracting {CORE_PANEL_SIZE}-gene panel (raw log1p; no CTD) ...")
     X_tr = _extract_panel(X_train_log, feat_train, panel_features)
     X_te = _extract_panel(X_test_log, feat_test, panel_features)
     print(f"  Train: {X_tr.shape}  Test: {X_te.shape}")
@@ -316,7 +317,7 @@ def main() -> None:
     X_tr, X_te = zero_shot_scale(X_tr, X_te, "GPL16791")
 
     params = dict(
-        selected_lgbm_params(), colsample_bytree=1.0, n_jobs=-1, verbose=-1
+        selected_lgbm_params(), n_jobs=-1, verbose=-1
     )
 
     print("\nTraining on GPL24676 (all 874 samples) ...")

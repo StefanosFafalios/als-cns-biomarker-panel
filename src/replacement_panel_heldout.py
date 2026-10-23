@@ -22,7 +22,7 @@ swapped slot it counts the protein-coding candidates whose replacement-screen AU
 (gene_replacement.py) is within MARGIN of the chosen gene, and reports the
 training-set Spearman correlation between the panel gene and its replacement.
 
-Model: the paper's zero-shot LightGBM (top-500 params, colsample_bytree 1.0,
+Model: the paper's zero-shot LightGBM (top-500 params, colsample rescaled to ~25 genes per tree,
 utils.zero_shot_scale), trained on GPL24676 log1p with the genes each cohort carries.
 
 Outputs:
@@ -34,7 +34,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-import warnings
 from pathlib import Path
 
 import numpy as np
@@ -58,7 +57,10 @@ from panel_variant_cv import (  # noqa: E402
 )
 from scipy.stats import spearmanr  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
-from utils import PanelLGBMClassifier, load_dataset, zero_shot_scale  # noqa: E402
+from combined_validation_roc import N_SEEDS as FIG3_SEEDS  # noqa: E402
+from cross_cohort_substitution import _ensemble_scores  # noqa: E402
+from utils import load_dataset, zero_shot_scale  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -101,10 +103,8 @@ def _scores(
     params: dict,
 ) -> np.ndarray:
     Z_tr, Z_te = zero_shot_scale(X_train, X_test, cohort)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        clf = PanelLGBMClassifier(**params).fit(Z_tr, y_train)
-    return clf.predict_proba(Z_te)[:, 1]
+    # Figure 3's seed ensemble, so the original panel reproduces combined_validation_roc.py
+    return _ensemble_scores(Z_tr, y_train, Z_te, params, seeds=tuple(range(FIG3_SEEDS)))
 
 
 def _reference_auc25() -> dict[str, float]:
@@ -114,7 +114,7 @@ def _reference_auc25() -> dict[str, float]:
 
 
 def main() -> None:
-    params = dict(selected_lgbm_params(), colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(selected_lgbm_params(), n_jobs=-1, verbose=-1)
     panel = pd.read_csv(_PANEL_CSV)
     base_panel = list(zip(panel["symbol"], panel["feature"].str.split(".").str[0]))
     swaps: dict[str, list[str]] = json.loads(_SWAPS_JSON.read_text())
@@ -122,7 +122,7 @@ def main() -> None:
     def _swap(sw: dict[str, list[str]]) -> list[tuple[str, str]]:
         return [tuple(sw[s]) if s in sw else (s, b) for s, b in base_panel]
 
-    variants = {"original 25": base_panel}
+    variants = {f"original {CORE_PANEL_SIZE}": base_panel}
     variants |= {f"{s}->{r} only": _swap({s: [r, b]}) for s, (r, b) in swaps.items()}
     variants[f"all {len(swaps)} swaps"] = _swap(swaps)
 
@@ -165,17 +165,17 @@ def main() -> None:
             scores[vname] = _scores(X_tr, y24, X_te, gse, params)
             n_genes[vname] = len(avail)
         for vname in variants:
-            (lo, hi), (dlo, dhi) = _paired_bootstrap(y, scores["original 25"], scores[vname], clusters)
+            (lo, hi), (dlo, dhi) = _paired_bootstrap(y, scores[f"original {CORE_PANEL_SIZE}"], scores[vname], clusters)
             auc = roc_auc_score(y, scores[vname])
             results.append(dict(
                 cohort=cname, variant=vname, genes=n_genes[vname], auc=auc, lo=lo, hi=hi,
-                delta=auc - roc_auc_score(y, scores["original 25"]), dlo=dlo, dhi=dhi,
+                delta=auc - roc_auc_score(y, scores[f"original {CORE_PANEL_SIZE}"]), dlo=dlo, dhi=dhi,
             ))
         print(f"  {cname} done")
     res = pd.DataFrame(results)
 
     ref = _reference_auc25()
-    base_rows = res[res.variant == "original 25"].set_index("cohort").auc
+    base_rows = res[res.variant == f"original {CORE_PANEL_SIZE}"].set_index("cohort").auc
     mismatch = {c: (round(base_rows[c], 4), ref[c]) for c in ref if round(base_rows[c], 4) != ref[c]}
 
     print("Replacement-screen near-ties ...")
@@ -195,7 +195,7 @@ def main() -> None:
         "=" * 78,
         "Swaps (panel_variant_greedy.py, selected on GSE122649 zero-shot AUC): "
         + ", ".join(f"{s}->{r}" for s, (r, _) in swaps.items()),
-        "Model: zero-shot LightGBM, top-500 params, colsample_bytree 1.0, trained on",
+        "Model: zero-shot LightGBM, top-500 params, colsample rescaled to ~25 genes per tree, trained on",
         "  GPL24676 log1p (n=874) with the genes each cohort carries; zero_shot_scale.",
         f"Paired bootstrap B={N_BOOTSTRAP}, seed {RANDOM_STATE}: GPL16791 rows resample donors, "
         "the others resample samples.",
@@ -213,7 +213,7 @@ def main() -> None:
             f"{r.delta:>+9.4f}  [{r.dlo:+.4f}, {r.dhi:+.4f}]"
         )
     lines += ["", f"Verdict on {PRIMARY}:"]
-    for r in res[(res.cohort == PRIMARY) & (res.variant != "original 25")].itertuples():
+    for r in res[(res.cohort == PRIMARY) & (res.variant != f"original {CORE_PANEL_SIZE}")].itertuples():
         verdict = "non-inferior" if r.dlo > -MARGIN else "not shown non-inferior"
         lines.append(f"  {r.variant:<22} dAUC {r.delta:+.4f} [{r.dlo:+.4f}, {r.dhi:+.4f}]  {verdict}")
     lines += [

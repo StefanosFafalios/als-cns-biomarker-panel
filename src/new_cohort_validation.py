@@ -65,6 +65,7 @@ from cross_disease_specificity import (  # noqa: E402
     _sample_char_rows,
     _series_matrix_meta,
 )
+from probe_reannotation import probe_labels  # noqa: E402
 from random_panel_null_cohorts import _ZS_PARAMS, _null, _symbols  # noqa: E402
 from sklearn.metrics import roc_auc_score  # noqa: E402
 from utils import (  # noqa: E402
@@ -74,6 +75,7 @@ from utils import (  # noqa: E402
     normalise_symbols,
     zero_shot_scale,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 RES = ALS_DIR / "resources"
 B_NULL = 1000
@@ -105,7 +107,8 @@ class Cohort:
 
 
 def _platform_symbols(gpl: str) -> dict[str, str]:
-    """Probe -> first HGNC symbol from the GEO platform table (cached)."""
+    """Probe -> gene label: the exact re-annotation (probe_reannotation.py) where a probe has one
+    exact gene, else the first symbol of the GEO platform table (cached)."""
     path = _download(_ANNOT_URL.format(gpl), RES / "platforms" / f"{gpl}_annot.txt", f"{gpl} annotation")
     txt = path.read_text(errors="ignore").splitlines()
     head = next(i for i, ln in enumerate(txt) if ln.startswith("ID\t"))
@@ -116,7 +119,10 @@ def _platform_symbols(gpl: str) -> dict[str, str]:
         f = ln.split("\t")
         if len(f) > col and f[col].strip():
             out[f[0]] = re.split(r"\s*///\s*", f[col].strip())[0]
-    return out
+    exact = probe_labels(gpl)
+    if not exact:
+        print(f"  [{gpl}] no exact probe re-annotation (run probe_reannotation.py); platform symbols only")
+    return {**out, **exact}
 
 
 def _to_genes(probes: pd.DataFrame, probe_sym: dict[str, str], cohort: str) -> pd.DataFrame:
@@ -250,7 +256,7 @@ def _emtab(acc: str) -> Cohort:
 def _scores(xtr: np.ndarray, ytr: np.ndarray, xte: np.ndarray, scale_id: str, within: bool = False) -> np.ndarray:
     """Zero-shot probabilities; the same model and scaling as random_panel_null_cohorts._auc."""
     from sklearn.preprocessing import StandardScaler
-    from utils import TunedLGBMClassifier as LGBMClassifier
+    from utils import PanelLGBMClassifier as LGBMClassifier
 
     if within:
         ztr, zte = StandardScaler().fit_transform(xtr), StandardScaler().fit_transform(xte)
@@ -280,7 +286,7 @@ def main() -> None:
     pool = [f.split(".")[0] for f in pd.read_csv(SCRIPT_DIR / "lgbm_iter_final_shap_ranking.csv").feature]
     p25 = pd.read_csv(SCRIPT_DIR / "lgbm_core25_panel.csv")
     panels = {
-        "25-gene": [f.split(".")[0] for f in p25.feature],
+        f"{CORE_PANEL_SIZE}-gene": [f.split(".")[0] for f in p25.feature],
         "critical": [f.split(".")[0] for f in critical_panel_features()],
     }
     sym = _symbols(clean)
@@ -357,7 +363,7 @@ def _report(res: pd.DataFrame, pooled: dict, arm_df: pd.DataFrame) -> None:
     lines = [
         "Panel validation in independent spinal-cord and motor-cortex cohorts",
         "=" * 78,
-        "Zero-shot LightGBM (top-500 params, colsample 1.0) trained on all GPL24676; counts log1p +",
+        "Zero-shot LightGBM (top-500 params, colsample rescaled to ~25 genes per tree) trained on all GPL24676; counts log1p +",
         "training scaler, arrays log2 + within-cohort standardisation. CI: stratified donor bootstrap",
         f"B={B_BOOT}. p: empirical, {B_NULL} random gene sets of equal size (broad = all candidates,",
         "SFM = pre-filtered pool). E-MTAB-2325 shares 35 donors with E-MTAB-8635 and is not pooled.",
@@ -396,7 +402,7 @@ def _plot(res: pd.DataFrame, pooled: dict, arm_df: pd.DataFrame) -> None:
 
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(14, 5.2), gridspec_kw={"width_ratios": [1.4, 1]})
     names = list(dict.fromkeys(res.cohort)) + ["Pooled (4 independent)"]
-    for k, (pname, colour) in enumerate((("25-gene", "#d62728"), ("critical", "#1f77b4"))):
+    for k, (pname, colour) in enumerate(((f"{CORE_PANEL_SIZE}-gene", "#d62728"), ("critical", "#1f77b4"))):
         sub = res[res.panel == pname].set_index("cohort")
         auc = [*sub.auc, pooled[pname]["auc"]]
         lo = [*sub.lo, pooled[pname]["lo"]]

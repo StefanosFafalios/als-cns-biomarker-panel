@@ -12,7 +12,7 @@ Strategy
    counts would confound depth with disease); apply log1p; extract genes by Entrez ID.
 4. Standardise each cohort within itself (blood barely expresses most CNS panel genes,
    so the CNS scaler would place every blood sample far outside the training range).
-5. Train LightGBM (top-500 best params, colsample_bytree=1.0) on all 874
+5. Train LightGBM (top-500 best params; colsample per utils.PanelLGBMClassifier) on all 874
    GPL24676 samples with the matched genes.
 6. Zero-shot predict on 144 GSE234297 samples; report AUC + bootstrap CI.
 7. Within-cohort LOO-CV on GSE234297 to estimate blood-intrinsic
@@ -311,7 +311,6 @@ def main() -> None:
     X_blood_sc = StandardScaler().fit_transform(X_blood_raw).astype(np.float32)
 
     params = selected_lgbm_params()
-    params["colsample_bytree"] = 1.0
     params["verbose"] = -1
 
     # -----------------------------------------------------------------------

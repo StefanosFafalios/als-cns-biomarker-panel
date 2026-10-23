@@ -64,6 +64,7 @@ sys.path.insert(0, str(ALS_DIR))
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedGroupKFold
 from utils import PanelLGBMClassifier, adjust_colsample, core_panel_ensg, load_dataset
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -197,7 +198,7 @@ def _corr_candidates(
 def main() -> None:
     n_cpus = os.cpu_count() or 1
     print("=" * 72)
-    print("Gene Replacement Analysis — Core 25-Gene ALS Panel")
+    print(f"Gene Replacement Analysis — Core {CORE_PANEL_SIZE}-Gene ALS Panel")
     print(f"CPUs: {n_cpus}  |  DELTA={DELTA}  |  ALPHA_FWER={ALPHA_FWER}"
           f"  |  R_MIN={R_MIN}")
     print("=" * 72)
@@ -239,7 +240,7 @@ def main() -> None:
         panel_pre_cols.append(pre_base_to_col[b])
 
     # --- baseline AUC ------------------------------------------------------
-    print("\nComputing baseline AUC (full 25-gene panel) ...")
+    print(f"\nComputing baseline AUC (full {CORE_PANEL_SIZE}-gene panel) ...")
     X_panel = X_pre[:, panel_pre_cols].astype(np.float32)
     baseline_auc = _cv_auc(X_panel, y, groups)
     threshold    = baseline_auc - DELTA
@@ -432,7 +433,7 @@ def main() -> None:
     r_crit     = t_crit / np.sqrt(t_crit ** 2 + (n_samples - 2))
 
     lines = [
-        "Gene Replacement Analysis — Core 25-Gene ALS Panel",
+        f"Gene Replacement Analysis — Core {CORE_PANEL_SIZE}-Gene ALS Panel",
         "=" * 72,
         f"Baseline panel AUC (donor-grouped 5-fold CV): {baseline_auc:.4f}",
         f"Non-inferiority tolerance DELTA:   {DELTA}",
@@ -458,7 +459,7 @@ def main() -> None:
         )
 
     n_replaceable   = sum(1 for r in summary_rows if r["n_replacements"] > 0)
-    n_irreplaceable = 25 - n_replaceable
+    n_irreplaceable = CORE_PANEL_SIZE - n_replaceable
     lines += [
         "",
         f"Panel genes with ≥1 valid replacement: {n_replaceable}/25",
@@ -512,7 +513,7 @@ def main() -> None:
         ax.grid(True, axis="x", alpha=0.3)
 
         plt.suptitle(
-            "Gene Replacement Analysis — Core 25-Gene ALS Panel  (n=874, 5-fold CV)\n"
+            f"Gene Replacement Analysis — Core {CORE_PANEL_SIZE}-Gene ALS Panel  (n=874, 5-fold CV)\n"
             f"Baseline AUC={baseline_auc:.4f}  |  Threshold={threshold:.4f}  "
             f"|  Bonferroni |r|≥{r_crit:.3f}  |  R_MIN={R_MIN}  |  DELTA={DELTA}",
             fontsize=10,

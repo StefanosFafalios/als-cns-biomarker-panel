@@ -22,6 +22,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
 
 from utils import load_dataset  # noqa: E402
+from utils import CORE_PANEL_SIZE  # noqa: E402
 from utils import selected_lgbm_params  # noqa: E402
 _SHAP_RANK_CSV = SCRIPT_DIR / "lgbm_top500_final_shap_ranking.csv"
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -32,7 +33,7 @@ _OUT_TXT = SCRIPT_DIR / "multi_algorithm_robustness_statistics.txt"
 
 PLATFORM = "GPL24676"
 RANDOM_STATE = 42
-TOP_K = 25  # panel size and comparison rank cut-off
+TOP_K = CORE_PANEL_SIZE  # panel size and comparison rank cut-off
 
 
 def main() -> None:
@@ -266,7 +267,7 @@ def main() -> None:
     ax.bar(methods, bars, color=["#2196F3", "#4CAF50", "#FF9800", "#9C27B0"])
     ax.axhline(TOP_K, color="gray", linestyle="--", linewidth=0.8, label=f"Max={TOP_K}")
     ax.set_ylim(0, TOP_K + 2)
-    ax.set_ylabel("Panel genes in top-25")
+    ax.set_ylabel(f"Panel genes in top-{CORE_PANEL_SIZE}")
     ax.set_title(f"25-gene panel recovery (top-{TOP_K})", fontsize=10)
     for i, (bar_h, count) in enumerate(zip(bars, bars)):
         ax.text(i, count + 0.3, str(count), ha="center", va="bottom", fontsize=10)
@@ -305,14 +306,14 @@ def main() -> None:
         "Methods compared: SHAP (primary), LightGBM-gain, LR-L1 (CV), RF",
         f"Comparison cut-off: top-{TOP_K} features per method",
         "",
-        "Pairwise Jaccard overlap (top-25):",
+        f"Pairwise Jaccard overlap (top-{CORE_PANEL_SIZE}):",
     ]
     for label, (inter, jac) in pairs.items():
         lines.append(f"  {label:<25}  n_shared={inter}  Jaccard={jac:.3f}")
 
     lines += [
         "",
-        "25-gene panel recovery per method:",
+        f"{CORE_PANEL_SIZE}-gene panel recovery per method:",
         f"  SHAP (primary):  {panel_in_shap}/{TOP_K}",
         f"  LGBM gain:       {panel_in_lgbm}/{TOP_K}",
         f"  LR-L1:           {panel_in_lr}/{TOP_K}",

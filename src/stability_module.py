@@ -37,6 +37,7 @@ matplotlib.use("Agg")
 ALS_DIR = Path(__file__).parents[1]
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(ALS_DIR))
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 
 _PANEL_CSV = SCRIPT_DIR / "lgbm_core25_panel.csv"
@@ -101,9 +102,9 @@ def main() -> None:
     lines = [
         "Module-aware stability selection",
         "=" * 60,
-        "single_freq = fraction of bootstraps where the panel gene itself is in top-25.",
+        f"single_freq = fraction of bootstraps where the panel gene itself is in top-{CORE_PANEL_SIZE}.",
         "module_freq = fraction of bootstraps where the panel gene OR ANY of its",
-        "              valid replacements (Step 27, non-inferiority criterion) is in top-25.",
+        f"              valid replacements (Step 27, non-inferiority criterion) is in top-{CORE_PANEL_SIZE}.",
         "",
         df.to_string(index=False),
         "",

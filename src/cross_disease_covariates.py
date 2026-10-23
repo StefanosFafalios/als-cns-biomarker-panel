@@ -43,7 +43,7 @@ ALS_DIR = Path(__file__).parents[1]
 sys.path.insert(0, str(ALS_DIR))
 
 import cross_disease_specificity as cds
-from utils import critical_panel_label, load_dataset
+from utils import critical_panel_label, load_dataset, selected_lgbm_params
 
 # Panel size is derived, so every reader-facing label must be too.
 _CRIT_LABEL = critical_panel_label()
@@ -153,7 +153,6 @@ def _panel_scores_for(gse: str, cfg: dict, params: dict, X_tr_all, y_tr, panel_d
 
 def main() -> None:
     """Run the covariate-sensitivity analysis and write all outputs."""
-    import json
 
     import pandas as pd
     from scipy.stats import mannwhitneyu, spearmanr
@@ -162,7 +161,7 @@ def main() -> None:
     print("Cross-disease covariate sensitivity (PMI / RIN / age) — HD and PD")
     print("=" * 74)
 
-    params = json.loads(cds._PARAMS_PATH.read_text())
+    params = selected_lgbm_params()  # the presented model, as cross_disease_specificity.main
     panel = pd.read_csv(cds._PANEL_CSV)
     panel_def = [
         (f, s)

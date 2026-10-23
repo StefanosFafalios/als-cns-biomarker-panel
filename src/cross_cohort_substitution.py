@@ -40,7 +40,6 @@ import gzip
 import json
 import re
 import sys
-import tarfile
 import warnings
 from pathlib import Path
 
@@ -63,11 +62,6 @@ _PREFILTER_NAMES = SCRIPT_DIR / "lgbm_prefilter_names.txt"
 _PREFILTER_X = SCRIPT_DIR / "lgbm_prefilter_X.npy"
 _SRP_QUANT_DIR = ALS_DIR / "resources" / "SRP064478" / "quant"
 _SRP_META = ALS_DIR / "resources" / "SRP064478" / "srr_metadata.tsv"
-_GSE122649_RAW_TAR = ALS_DIR / "resources" / "GSE122649" / "GSE122649_RAW.tar"
-_GSE122649_SOFT_URL = (
-    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE122nnn/GSE122649/"
-    "soft/GSE122649_family.soft.gz"
-)
 
 RANDOM_STATE = 42
 N_SEEDS = 5  # ensemble seeds (lighter than panel_loo to keep runtime tight)
@@ -224,61 +218,11 @@ def _load_gse76220():
     )
 
 
-def _parse_gse122649_soft():
-    from utils import geo_soft_text
-
-    content = geo_soft_text("GSE122649")
-    meta: dict[str, str] = {}
-    for s in re.split(r"\^SAMPLE", content)[1:]:
-        acc_m = re.search(r"!Sample_geo_accession = (GSM\d+)", s)
-        diag_m = re.search(r"!Sample_characteristics_ch1 = diagnosis: (.+)", s)
-        if acc_m and diag_m:
-            meta[acc_m.group(1)] = diag_m.group(1).strip()
-    return meta
-
-
 def _load_gse122649():
-    gsm_to_diag = _parse_gse122649_soft()
-    diag_map = {"sALS": 1, "sALS/FTD": 1, "Non-neurological control": 0}
-    gene_symbols: list[str] = []
-    sample_counts: dict[str, np.ndarray] = {}
-    with tarfile.open(_GSE122649_RAW_TAR, "r") as tf:
-        for member in tf.getmembers():
-            gsm_m = re.search(r"(GSM\d+)", member.name)
-            if not gsm_m or gsm_m.group(1) not in gsm_to_diag:
-                continue
-            gsm = gsm_m.group(1)
-            f_obj = tf.extractfile(member)
-            if f_obj is None:
-                continue
-            raw = f_obj.read()
-            if member.name.endswith(".gz"):
-                raw = gzip.decompress(raw)
-            rows = []
-            for line in raw.decode("utf-8", errors="ignore").splitlines()[1:]:
-                line = line.strip()
-                if not line or line.startswith("__"):
-                    continue
-                parts = line.split("\t")
-                if len(parts) < 2:
-                    continue
-                try:
-                    rows.append((parts[0].strip('"').strip("'"), float(parts[1])))
-                except ValueError:
-                    continue
-            if not rows:
-                continue
-            syms_here = [r[0] for r in rows]
-            if not gene_symbols:
-                gene_symbols = syms_here
-            elif len(syms_here) != len(gene_symbols):
-                continue
-            sample_counts[gsm] = np.array([r[1] for r in rows], dtype=np.float32)
-    gsm_ids = list(sample_counts.keys())
-    X_raw = np.stack([sample_counts[g] for g in gsm_ids])
-    y_full = np.array([diag_map.get(gsm_to_diag[g], -1) for g in gsm_ids])
-    valid = y_full >= 0
-    return np.log1p(X_raw[valid]), gene_symbols, y_full[valid]
+    """GSE122649 log1p counts with current HGNC symbols -> (X, symbols, y)."""
+    from iterative_panel_elimination import _load_gse122649 as load  # the one symbol-normalised loader
+
+    return load()
 
 
 def _load_srp064478():
@@ -363,7 +307,7 @@ def main() -> None:
     print("=" * 70)
 
     params_raw = selected_lgbm_params()
-    params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(params_raw, n_jobs=-1, verbose=-1)
 
     # ---- Panel ----
     df_panel = pd.read_csv(_PANEL_CSV)

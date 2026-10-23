@@ -357,7 +357,6 @@ def main() -> None:
     params = selected_lgbm_params()
     params.update(
         {
-            "colsample_bytree": 1.0,
             "random_state": RANDOM_STATE,
             "n_jobs": -1,
             "verbose": -1,

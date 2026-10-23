@@ -43,6 +43,10 @@ ONLY_STEPS=""
 if [[ "$MODE" == "from" && -n "${2:-}" ]]; then
     RESUME_FROM="$2"
     MODE="full"
+    if ! grep -q "run_step \"${RESUME_FROM}_" "$0"; then
+        echo "run_all.sh: no step $RESUME_FROM" >&2
+        exit 2
+    fi
 elif [[ "$MODE" == "only" ]]; then
     shift
     if [[ $# -eq 0 ]]; then
@@ -68,20 +72,15 @@ run_step() {
         fi
     fi
 
-    # Resume gate: compare the numeric prefix as a base-10 integer, with a
-    # lexicographic tie-break on any letter suffix (step IDs look like 02, 02c,
-    # 07aa, 24, ...). A bare string compare would mis-skip e.g. "10" < "5".
+    # Resume gate: skip every step above the first one with ID RESUME_FROM, in
+    # file order. IDs are not in file order (03b and 05 run after 24e), so
+    # comparing IDs would skip steps that come later in the file.
     if [[ -n "$RESUME_FROM" ]]; then
-        local id="${step%%_*}"
-        local id_digits="${id//[!0-9]/}"
-        local from_digits="${RESUME_FROM//[!0-9]/}"
-        local id_num=$((10#${id_digits:-0}))
-        local from_num=$((10#${from_digits:-0}))
-        if (( id_num < from_num )) ||
-           { (( id_num == from_num )) && [[ "$id" < "$RESUME_FROM" ]]; }; then
+        if [[ "${step%%_*}" != "$RESUME_FROM" ]]; then
             echo "[SKIP] $step  (resuming from $RESUME_FROM)"
             return 0
         fi
+        RESUME_FROM=""
     fi
 
     echo "======================================================"
@@ -96,8 +95,11 @@ cd "$PROJ_ROOT"
 # A. CORE MODEL DEVELOPMENT (Methods + Results §3.1)
 # =============================================================================
 if [[ "$MODE" != "fast" ]]; then
+    run_step "01b_known_als_exclusion" build_known_als_exclusion.py        "<2m (Open Targets, MyGeneInfo)"
+    run_step "01c_probe_reannotation"  probe_reannotation.py               "~15m (downloads GENCODE v50 once)"
     run_step "02_iterative_decontam"  lgbm_iterative_pipeline.py            "~2h"
     run_step "02_iter_plots"          lgbm_iter_plots.py                    "<5m"
+    run_step "02a_known_als_literature" known_als_literature_screen.py    "~5m (Europe PMC); flagged genes are checked by hand"
 else
     echo "[FAST MODE] Skipping Step 2 — needs lgbm_prefilter_X.npy from a previous full run"
 fi
@@ -332,6 +334,7 @@ run_step "37_explainability_figs"     explainability_figures.py             "<1m
 # consortium donor table (Zenodo 20025792, NYGC_Flagship_ST_1_3_Metadata.xlsx).
 if [[ -f "$PROJ_ROOT/resources/NYGC_zenodo_20025792/NYGC_Flagship_ST_1_3_Metadata.xlsx" ]]; then
     run_step "38_nygc_clinical"       nygc_clinical_association.py          "<1m (needs the Zenodo ST1 table)"
+    run_step "38a_core_covariates"    core_gene_covariates.py               "<1m (LODO core genes vs sex/age/cause of death/site; needs 24e)"
 else
     echo "[38_nygc_clinical] SKIPPED — Zenodo 20025792 ST1 table not in resources/NYGC_zenodo_20025792/"
 fi
@@ -348,6 +351,7 @@ run_step "41_snrna_spinal_cord"       snrna_spinal_cord.py                  "~5m
 run_step "41a_snrna_cortex_percell"   snrna_cortex_percell.py               "~10m (GSE219280 + GSE212630 .h5; per-cell replication of 41 in independent donors)"
 run_step "42_multicohort_meta"         multicohort_meta_analysis.py          "unmeasured (random-effects Hedges' g over 9 donor-level units, raw + composition-adjusted)"
 run_step "27j_critical_replacement"    critical_replacement_pooled.py        "~3h (swap each critical gene within the critical panel; pooled CV on the unseen split; needs 27, 03e, 42)"
+run_step "27l_substitute_reselection"  substitute_reselection.py             "<1m (nested folds pick substitutes in place of critical genes? needs 27j, 30b)"
 run_step "27k_substitute_percell"      substitute_percell.py                 "~15m (spinal + cortex per-cell test of druggable substitutes; needs 27j, 41)"
 run_step "41b_spatial_spinal_cord"     spatial_spinal_cord.py                "~10m (GSE288365 Visium, 9 control / 9 ALS cervical cords; needs 41, 27k)"
 run_step "41c_snrna_percell_v2"        snrna_percell_v2.py                   "~20m (GSE190442 reference typing + count model; first run builds the reference cache)"

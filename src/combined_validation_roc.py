@@ -44,6 +44,7 @@ from utils import (  # noqa: E402
     load_dataset,
     zero_shot_scale,
 )
+from utils import CORE_PANEL_SIZE  # noqa: E402
 
 # Panel size is derived, so every reader-facing denominator must be too.
 from utils import selected_lgbm_params  # noqa: E402
@@ -81,8 +82,8 @@ _COMPARTMENTS: dict[str, tuple[str, ...]] = {
 RANDOM_STATE = 42
 N_BOOTSTRAP = 2000
 # Point estimates in Figure 3 are averaged over this many seeds. That averaging is a
-# no-op in practice: with colsample_bytree=1 and no row subsampling LightGBM is
-# deterministic, so every seed fits the same trees and these AUCs match
+# no-op for panels of 25 genes or fewer: there colsample_bytree is 1 and, with no row subsampling,
+# LightGBM is deterministic, so every seed fits the same trees and these AUCs match
 # panel_critical_eval.py's single-model values exactly. A caption that once showed
 # them differing (0.8075 vs 0.8269 on GPL16791) was stale, not a second estimator.
 N_SEEDS = 5
@@ -140,7 +141,7 @@ def main() -> None:
     warnings.filterwarnings("ignore")
 
     params_raw = selected_lgbm_params()
-    params = dict(params_raw, colsample_bytree=1.0, n_jobs=-1, verbose=-1)
+    params = dict(params_raw, n_jobs=-1, verbose=-1)
 
     df_panel = pd.read_csv(_PANEL_CSV)
     feat_col = next(
@@ -260,7 +261,7 @@ def main() -> None:
     summary = []
     for ax, cohort in zip(axes_flat, cohort_data):
         # 25-gene
-        tr25, te25 = _panel_cols(cohort, list(range(25)))
+        tr25, te25 = _panel_cols(cohort, list(range(CORE_PANEL_SIZE)))
         scores25 = _train_predict(
             cohort["X_train_use"][:, tr25], y_train, cohort["X_te"][:, te25], params,
             cohort["name"]
@@ -322,7 +323,7 @@ def main() -> None:
         )
 
     fig.suptitle(
-        "External-validation ROC across four CNS cohorts — 25-gene panel "
+        f"External-validation ROC across four CNS cohorts — {CORE_PANEL_SIZE}-gene panel "
         f"(blue) vs {_CRIT_LABEL} critical panel (red)\n"
         "GPL24676-trained LGBM, zero-shot transfer; shaded bands = 95% paired bootstrap CI ($B = 2000$).",
         fontsize=10,
@@ -340,15 +341,15 @@ def main() -> None:
     # checkable (see test_manuscript_numbers.py).
     stats_out = SCRIPT_DIR / "combined_validation_roc_statistics.txt"
     lines = [
-        "Combined external-validation ROC — 25-gene vs critical panel",
+        f"Combined external-validation ROC — {CORE_PANEL_SIZE}-gene vs critical panel",
         "=" * 66,
         "Estimator: 5-seed LightGBM ensemble, zero-shot (no retraining).",
         "These are the values quoted in the Figure 3 caption. They match",
         "panel_critical_eval_statistics.txt exactly (seeding is a no-op here:",
-        "colsample_bytree=1 and no row subsampling make LightGBM deterministic),",
+        "colsample_bytree=1 at 25 genes or fewer and no row subsampling make LightGBM deterministic),",
         "and their equal-weight mean is that file's W.mean.",
         "",
-        f"{'cohort':<14}{'n':>5}{'25-gene AUC':>14}{'95% CI':>18}"
+        f"{'cohort':<14}{'n':>5}{f'{CORE_PANEL_SIZE}-gene AUC':>14}{'95% CI':>18}"
         f"{_CRIT_LABEL + ' AUC':>14}{'95% CI':>18}",
         "-" * 83,
     ]
